@@ -8,17 +8,20 @@ event in {running, waiting, done, end}. The helper reflects each session's
 status in the tray menu; clicking a session focuses its tmux pane and raises
 the Ghostty window.
 """
-import os
+
 import json
-import time
+import os
 import socket
-import threading
 import subprocess
+import threading
+import time
 
 import gi
+
 gi.require_version("Gtk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
-from gi.repository import Gtk, GLib, AyatanaAppIndicator3 as AppIndicator
+from gi.repository import AyatanaAppIndicator3 as AppIndicator
+from gi.repository import GLib, Gtk
 
 SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.sock")
 # Icon name from your theme; override with CLAUDE_TRAY_ICON. "claude-desktop"
@@ -42,8 +45,8 @@ PLAN = os.environ.get("CLAUDE_TRAY_PLAN", "custom")
 try:
     POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "15"))
 except ValueError:
-    POLL_INTERVAL = 15                                          # bad env -> default
-POLL_TIMEOUT = 15                                               # subprocess seconds
+    POLL_INTERVAL = 15  # bad env -> default
+POLL_TIMEOUT = 15  # subprocess seconds
 # High-usage badge threshold (percent). Hardcoded on purpose: env-configurability
 # is deferred (ALERT-F1). Do NOT add an env lookup here.
 USAGE_THRESHOLD = 80
@@ -75,8 +78,9 @@ def parse_usage(stdout):
     # string values (e.g. a just-reset window) would otherwise pass here and then
     # crash the Gtk-thread menu redraw (round()/epoch math) inside a GLib callback,
     # silently killing the countdown timer source. Degrade to "unavailable" instead.
-    if not all(isinstance(v, (int, float)) and not isinstance(v, bool)
-               for v in u.values()):
+    if not all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) for v in u.values()
+    ):
         return None
     return u
 
@@ -92,8 +96,7 @@ def fetch_usage():
     if PLAN:
         cmd += ["--plan", PLAN]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=POLL_TIMEOUT)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=POLL_TIMEOUT)
     except (subprocess.SubprocessError, OSError):
         # timeout, missing CLI (FileNotFoundError), non-executable
         # (PermissionError) and other OS errors all degrade to unavailable.
@@ -135,12 +138,14 @@ def build_label(usage, attention):
 def demo():
     """Assert-based self-check for the pure usage logic (run via --selfcheck)."""
     sample = {
-        "limits": {"five_hour": {
-            "tokens_used": 417000,
-            "token_limit": 88000,
-            "used_percentage": 473.5,
-            "resets_at_epoch": int(time.time()) + 7380,
-        }},
+        "limits": {
+            "five_hour": {
+                "tokens_used": 417000,
+                "token_limit": 88000,
+                "used_percentage": 473.5,
+                "resets_at_epoch": int(time.time()) + 7380,
+            }
+        },
         "local": {"burn_rate_tokens_per_minute": 315615.2},
         "status": {"code": 11, "label": "limit_hit"},
     }
@@ -151,12 +156,40 @@ def demo():
     assert parse_usage("not json") is None
     assert parse_usage(json.dumps({"limits": {}})) is None
     # structurally valid but non-numeric fields -> unavailable, not a crash (WR-01).
-    assert parse_usage(json.dumps({"limits": {"five_hour": {
-        "tokens_used": 1, "token_limit": 1,
-        "used_percentage": None, "resets_at_epoch": 1}}})) is None
-    assert parse_usage(json.dumps({"limits": {"five_hour": {
-        "tokens_used": 1, "token_limit": 1,
-        "used_percentage": 50.0, "resets_at_epoch": "later"}}})) is None
+    assert (
+        parse_usage(
+            json.dumps(
+                {
+                    "limits": {
+                        "five_hour": {
+                            "tokens_used": 1,
+                            "token_limit": 1,
+                            "used_percentage": None,
+                            "resets_at_epoch": 1,
+                        }
+                    }
+                }
+            )
+        )
+        is None
+    )
+    assert (
+        parse_usage(
+            json.dumps(
+                {
+                    "limits": {
+                        "five_hour": {
+                            "tokens_used": 1,
+                            "token_limit": 1,
+                            "used_percentage": 50.0,
+                            "resets_at_epoch": "later",
+                        }
+                    }
+                }
+            )
+        )
+        is None
+    )
     assert fmt_tokens(417000) == "417k"
     assert fmt_tokens(88000) == "88k"
     assert fmt_tokens(18936912) == "18.9M"
@@ -176,12 +209,12 @@ def demo():
 
 class Monitor:
     def __init__(self):
-        self.sessions = {}     # session_id -> {dir,status,pane,tmux,cwd}
-        self.usage = None      # latest parse_usage() dict, or None if unavailable
+        self.sessions = {}  # session_id -> {dir,status,pane,tmux,cwd}
+        self.usage = None  # latest parse_usage() dict, or None if unavailable
 
         self.ind = AppIndicator.Indicator.new(
-            "claude-monitor", ICON,
-            AppIndicator.IndicatorCategory.APPLICATION_STATUS)
+            "claude-monitor", ICON, AppIndicator.IndicatorCategory.APPLICATION_STATUS
+        )
         self.ind.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         self.menu = Gtk.Menu()
         self.ind.set_menu(self.menu)
@@ -193,12 +226,21 @@ class Monitor:
             env = dict(os.environ)
             if tmux:
                 env["TMUX"] = tmux
-            subprocess.run(["tmux", "select-window", "-t", pane],
-                           env=env, stderr=subprocess.DEVNULL)
-            subprocess.run(["tmux", "select-pane", "-t", pane],
-                           env=env, stderr=subprocess.DEVNULL)
-        subprocess.run(["wmctrl", "-x", "-a", GHOSTTY_CLASS],
-                       stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["tmux", "select-window", "-t", pane],
+                env=env,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["tmux", "select-pane", "-t", pane], env=env, stderr=subprocess.DEVNULL
+            )
+        subprocess.run(["wmctrl", "-x", "-a", GHOSTTY_CLASS], stderr=subprocess.DEVNULL)
+
+    # menu click: acknowledge (clears the session's "!" attention) and focus it.
+    def on_click(self, s):
+        s["acked"] = True
+        self.rebuild_menu()
+        self.focus(s["pane"], s["tmux"])
 
     def rebuild_menu(self):
         for c in self.menu.get_children():
@@ -209,10 +251,8 @@ class Monitor:
             self.menu.append(mi)
         else:
             for s in self.sessions.values():
-                mi = Gtk.MenuItem.new_with_label(
-                    "%s  [%s]" % (s["dir"], s["status"]))
-                mi.connect("activate",
-                           lambda _w, s=s: self.focus(s["pane"], s["tmux"]))
+                mi = Gtk.MenuItem.new_with_label("%s  [%s]" % (s["dir"], s["status"]))
+                mi.connect("activate", lambda _w, s=s: self.on_click(s))
                 self.menu.append(mi)
         for row in self.usage_rows():
             mi = Gtk.MenuItem.new_with_label(row)
@@ -224,9 +264,13 @@ class Monitor:
         self.menu.append(q)
         self.menu.show_all()
 
-        # sessions that need you: waiting on input, or finished (your turn) -> "N!"
-        attention = sum(1 for s in self.sessions.values()
-                        if s["status"] in ("waiting", "done"))
+        # sessions that need you: waiting on input, or finished (your turn), and
+        # not yet acknowledged by clicking the row -> "N!"
+        attention = sum(
+            1
+            for s in self.sessions.values()
+            if s["status"] in ("waiting", "done") and not s.get("acked")
+        )
         self.ind.set_label(build_label(self.usage, attention), "")
 
     def usage_rows(self):
@@ -236,9 +280,12 @@ class Monitor:
         if u is None:
             return ["usage unavailable"]
         return [
-            "%s / %s (%d%%)" % (fmt_tokens(u["tokens_used"]),
-                                fmt_tokens(u["token_limit"]),
-                                round(u["used_percentage"])),
+            "%s / %s (%d%%)"
+            % (
+                fmt_tokens(u["tokens_used"]),
+                fmt_tokens(u["token_limit"]),
+                round(u["used_percentage"]),
+            ),
             fmt_countdown(u["resets_at_epoch"] - time.time()),
             "burn: %s tok/hr" % fmt_tokens(round(u["burn_rate_per_min"] * 60)),
         ]
@@ -263,7 +310,8 @@ class Monitor:
         pane = msg.get("pane") or ""
         tmux = msg.get("tmux") or ""
         s = self.sessions.setdefault(sid, {})
-        s.update(dir=d, status=event, pane=pane, tmux=tmux, cwd=cwd)
+        # acked=False re-arms the "!" so a fresh done/waiting event alerts again.
+        s.update(dir=d, status=event, pane=pane, tmux=tmux, cwd=cwd, acked=False)
         self.rebuild_menu()
         return False
 
@@ -310,6 +358,7 @@ def main():
     def tick():
         mon.rebuild_menu()
         return True
+
     GLib.timeout_add_seconds(POLL_INTERVAL, tick)
 
     Gtk.main()
@@ -317,6 +366,7 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     if "--selfcheck" in sys.argv:
         demo()
     else:
