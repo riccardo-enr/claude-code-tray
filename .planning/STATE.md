@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 01
 current_phase_name: usage-quota-monitoring-in-the-tray
-status: verifying
-stopped_at: ROADMAP.md and STATE.md created; REQUIREMENTS.md traceability filled.
+status: verified
+stopped_at: Phase 01 UAT passed 4/4; POLL-02 stale-usage defect found and fixed during testing.
 last_updated: "2026-07-11T16:14:23.854Z"
 last_activity: 2026-07-11
 last_activity_desc: Phase 01 execution started
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 ## Current Position
 
-Phase: 01 (usage-quota-monitoring-in-the-tray) — EXECUTING
+Phase: 01 (usage-quota-monitoring-in-the-tray) — VERIFIED
 Plan: 1 of 1
-Status: Phase complete — ready for verification
-Last activity: 2026-07-11 — Phase 01 execution started
+Status: UAT passed 4/4 — ready to ship
+Last activity: 2026-07-11 — Phase 01 verified (UAT 4/4; POLL-02 defect fixed)
 
 Progress: [░░░░░░░░░░] 0%
 
