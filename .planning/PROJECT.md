@@ -60,7 +60,7 @@ it resets** — without launching a separate terminal monitor.
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Consume `claude-monitor --output json` for usage data | Purpose-built, already installed, computes window+limit+burn; avoids reinventing | — Pending |
-| Assume Max 5x plan | User's plan tier; drives % and reset math | — Pending |
+| Query the CLI's `custom` dynamic limits (P90), not static `max5` | `max5`'s fixed 88k limit mismatched the real ~926k ceiling and inflated % ~10x ("148%" vs real ~15%); `custom` matches the CLI's own TUI. Override via `CLAUDE_TRAY_PLAN` | Corrected in Phase 1 |
 | Background-thread polling on an interval | CLI is slow (~seconds); must not block Gtk main loop | — Pending |
 | Show tokens+%, reset time, burn rate, high-usage badge | The at-a-glance signals the user wants | — Pending |
 
