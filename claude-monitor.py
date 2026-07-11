@@ -396,10 +396,39 @@ def poll_loop(mon):
         time.sleep(POLL_INTERVAL)
 
 
+def watch_focus(mon):
+    """Auto-clear the "!" when you switch to a finished/waiting session's pane.
+
+    Polls only while an un-acked attention session exists (idle-cheap), so the
+    badge clears within ~2s of you looking at it -- tmux window switches send us
+    no event. Runs off the Gtk main thread; the redraw is marshaled via idle_add.
+    """
+    while True:
+        time.sleep(2)
+        try:
+            pending = [
+                s
+                for s in list(mon.sessions.values())
+                if s.get("status") in ("waiting", "done") and not s.get("acked")
+            ]
+            if not pending or not terminal_focused():
+                continue
+            changed = False
+            for s in pending:
+                if pane_onscreen(s.get("pane", ""), s.get("tmux", "")):
+                    s["acked"] = True
+                    changed = True
+            if changed:
+                GLib.idle_add(mon.rebuild_menu)
+        except Exception:
+            continue
+
+
 def main():
     mon = Monitor()
     threading.Thread(target=serve, args=(mon,), daemon=True).start()
     threading.Thread(target=poll_loop, args=(mon,), daemon=True).start()
+    threading.Thread(target=watch_focus, args=(mon,), daemon=True).start()
 
     # Light Gtk timer: recompute the reset countdown locally from the cached
     # resets_at_epoch between polls, so it stays live without re-shelling the CLI.
