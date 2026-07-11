@@ -61,7 +61,9 @@ read-side trend views that depend on it.
   2. Samples older than the retention window (default 30 days, env-configurable via `CLAUDE_TRAY_HISTORY_DAYS`) are pruned on startup and periodically, so the file stays bounded instead of growing without limit. (HIST-02)
   3. A missing, unwritable, or partially-corrupt history file never crashes or freezes the tray — writes happen off the Gtk main loop and the reader skips bad lines; usage rows and session status keep working in every failure mode. (HIST-03)
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+- [ ] 02-01-PLAN.md — Extend claude-monitor.py: append each successful poll to ~/.claude/usage-history.jsonl, prune past the retention window atomically at startup + periodically, with defensive OSError-swallowing I/O and a corruption-tolerant reader
 
 ### Phase 3: Usage Trends in the Tray
 
