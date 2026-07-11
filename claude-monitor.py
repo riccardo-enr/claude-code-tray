@@ -145,6 +145,7 @@ def demo():
 class Monitor:
     def __init__(self):
         self.sessions = {}     # session_id -> {dir,status,pane,tmux,cwd}
+        self.usage = None      # latest parse_usage() dict, or None if unavailable
 
         self.ind = AppIndicator.Indicator.new(
             "claude-monitor", ICON,
@@ -181,6 +182,10 @@ class Monitor:
                 mi.connect("activate",
                            lambda _w, s=s: self.focus(s["pane"], s["tmux"]))
                 self.menu.append(mi)
+        for row in self.usage_rows():
+            mi = Gtk.MenuItem.new_with_label(row)
+            mi.set_sensitive(False)
+            self.menu.append(mi)
         self.menu.append(Gtk.SeparatorMenuItem.new())
         q = Gtk.MenuItem.new_with_label("Quit monitor")
         q.connect("activate", lambda _w: Gtk.main_quit())
@@ -189,7 +194,27 @@ class Monitor:
 
         waiting = sum(1 for s in self.sessions.values()
                       if s["status"] == "waiting")
-        self.ind.set_label(("%d!" % waiting) if waiting else "", "")
+        self.ind.set_label(build_label(self.usage, waiting), "")
+
+    def usage_rows(self):
+        """Insensitive menu-row label strings from self.usage (one 'unavailable'
+        row when None, else the USAGE-01/02/03 lines)."""
+        u = self.usage
+        if u is None:
+            return ["usage unavailable"]
+        return [
+            "%s / %s (%d%%)" % (fmt_tokens(u["tokens_used"]),
+                                fmt_tokens(u["token_limit"]),
+                                round(u["used_percentage"])),
+            fmt_countdown(u["resets_at_epoch"] - time.time()),
+            "burn: %s tok/hr" % fmt_tokens(round(u["burn_rate_per_min"] * 60)),
+        ]
+
+    # idle_add target on the Gtk main thread: store usage, redraw once.
+    def apply_usage(self, usage):
+        self.usage = usage
+        self.rebuild_menu()
+        return False
 
     # runs on the Gtk main thread (via idle_add)
     def handle(self, msg):
@@ -233,9 +258,27 @@ def serve(mon):
             GLib.idle_add(mon.handle, msg)
 
 
+def poll_loop(mon):
+    """Daemon-thread loop: fetch usage off the Gtk main loop, marshal the result
+    back via GLib.idle_add (mirrors serve()'s pattern), then sleep."""
+    while True:
+        usage = fetch_usage()
+        GLib.idle_add(mon.apply_usage, usage)
+        time.sleep(POLL_INTERVAL)
+
+
 def main():
     mon = Monitor()
     threading.Thread(target=serve, args=(mon,), daemon=True).start()
+    threading.Thread(target=poll_loop, args=(mon,), daemon=True).start()
+
+    # Light Gtk timer: recompute the reset countdown locally from the cached
+    # resets_at_epoch between polls, so it stays live without re-shelling the CLI.
+    def tick():
+        mon.rebuild_menu()
+        return True
+    GLib.timeout_add_seconds(POLL_INTERVAL, tick)
+
     Gtk.main()
 
 
