@@ -53,6 +53,13 @@ exact command). It auto-starts on future logins via the installed
 | `CLAUDE_TRAY_ICON` | `claude-desktop` | Tray icon name from your theme |
 | `CLAUDE_TRAY_WM_CLASS` | `com.mitchellh.ghostty` | Terminal WM_CLASS to raise on click |
 
+## Honesty
+
+This project is heavily vibe-coded — built interactively with Claude Code in a
+single session, then organized with the [Get Shit Done (GSD)](https://github.com/opengsd/gsd-core)
+framework. It works on my setup (Ubuntu GNOME / X11 / tmux / Ghostty) but hasn't
+been battle-tested elsewhere. No tests, no CI. PRs and bug reports welcome.
+
 ## License
 
 MIT
