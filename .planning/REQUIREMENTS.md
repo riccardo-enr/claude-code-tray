@@ -33,9 +33,9 @@ existing tray, sourced from the `claude-monitor` CLI.
 
 | Requirement | Phase |
 |-------------|-------|
-| POLL-01 | _(filled by roadmap)_ |
-| POLL-02 | _(filled by roadmap)_ |
-| USAGE-01 | _(filled by roadmap)_ |
-| USAGE-02 | _(filled by roadmap)_ |
-| USAGE-03 | _(filled by roadmap)_ |
-| ALERT-01 | _(filled by roadmap)_ |
+| POLL-01 | Phase 1 |
+| POLL-02 | Phase 1 |
+| USAGE-01 | Phase 1 |
+| USAGE-02 | Phase 1 |
+| USAGE-03 | Phase 1 |
+| ALERT-01 | Phase 1 |
