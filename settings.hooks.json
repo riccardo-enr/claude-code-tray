@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-send.py\" running" } ] }
+    ],
+    "Notification": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-send.py\" waiting" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-send.py\" done" } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-send.py\" end" } ] }
+    ]
+  }
+}
