@@ -30,7 +30,8 @@ single vertical slice on a small app, so it ships as one phase.
   3. The tray menu shows the current burn rate, e.g. "burn: 12.4k tok/hr". (USAGE-03)
   4. The top-bar icon shows a badge/label when usage crosses the high threshold (default >80%) and clears when it drops back below. (ALERT-01)
   5. Usage refreshes on a background interval and the menu never freezes during the multi-second CLI call; a failed, timed-out, or unparseable call shows a "usage unavailable" state while session status and click-to-focus keep working. (POLL-01, POLL-02)
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 01-01-PLAN.md — Extend claude-monitor.py: background-polled usage rows (tokens/percent, reset countdown, burn rate), high-usage icon badge, graceful "usage unavailable" degradation
 **UI hint**: yes
 
 ## Progress
@@ -40,4 +41,4 @@ Phases execute in numeric order: 1
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Usage & Quota Monitoring in the Tray | 0/TBD | Not started | - |
+| 1. Usage & Quota Monitoring in the Tray | 0/1 | Not started | - |
