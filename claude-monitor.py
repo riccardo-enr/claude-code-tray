@@ -310,10 +310,54 @@ class Monitor:
         pane = msg.get("pane") or ""
         tmux = msg.get("tmux") or ""
         s = self.sessions.setdefault(sid, {})
-        # acked=False re-arms the "!" so a fresh done/waiting event alerts again.
-        s.update(dir=d, status=event, pane=pane, tmux=tmux, cwd=cwd, acked=False)
+        # a fresh event re-arms the "!" -- unless serve() found you were already
+        # looking at this pane, in which case pre-acknowledge it (no alert).
+        s.update(
+            dir=d, status=event, pane=pane, tmux=tmux, cwd=cwd,
+            acked=bool(msg.get("_onscreen")),
+        )
         self.rebuild_menu()
         return False
+
+
+def terminal_focused():
+    """Best-effort: is the active X window our terminal? (X11 only, never raises)."""
+    try:
+        root = subprocess.run(
+            ["xprop", "-root", "_NET_ACTIVE_WINDOW"],
+            capture_output=True, text=True, timeout=1).stdout
+        wid = root.split()[-1]
+        if not wid.startswith("0x"):
+            return False
+        cls = subprocess.run(
+            ["xprop", "-id", wid, "WM_CLASS"],
+            capture_output=True, text=True, timeout=1).stdout
+        return GHOSTTY_CLASS in cls
+    except Exception:
+        return False
+
+
+def pane_onscreen(pane, tmux):
+    """Best-effort: is this tmux pane the one currently displayed? (never raises)."""
+    if not pane:
+        return False
+    cmd = ["tmux"]
+    if tmux:
+        cmd += ["-S", tmux.split(",")[0]]
+    cmd += ["display-message", "-t", pane, "-p", "#{pane_active}#{window_active}"]
+    try:
+        out = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=1).stdout.strip()
+        return out == "11"
+    except Exception:
+        return False
+
+
+def looking_at(pane, tmux):
+    """True when the user is very likely watching this pane now: terminal focused
+    AND it is the on-screen tmux pane. Best-effort -- 'can't tell' errs toward
+    alerting. Runs off the Gtk main thread (shells out to xprop/tmux)."""
+    return terminal_focused() and pane_onscreen(pane, tmux)
 
 
 def serve(mon):
@@ -336,6 +380,10 @@ def serve(mon):
                 msg = json.loads(line)
             except Exception:
                 continue
+            # decide "already looking" here (background thread) so the xprop/tmux
+            # shell-outs never block the Gtk main loop.
+            if msg.get("event") in ("done", "waiting"):
+                msg["_onscreen"] = looking_at(msg.get("pane", ""), msg.get("tmux", ""))
             GLib.idle_add(mon.handle, msg)
 
 
