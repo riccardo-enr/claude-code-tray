@@ -292,7 +292,13 @@ class Monitor:
 
     # idle_add target on the Gtk main thread: store usage, redraw once.
     def apply_usage(self, usage):
-        self.usage = usage
+        # Retain the last-known usage on a transient poll failure (usage is None):
+        # a single slow/timed-out CLI invocation would otherwise wipe the badge and
+        # show "usage unavailable" for the whole interval. Slightly-stale data beats
+        # an empty readout for an at-a-glance quota indicator (WR-03). Only startup
+        # (before the first successful poll) shows "unavailable".
+        if usage is not None:
+            self.usage = usage
         self.rebuild_menu()
         return False
 
