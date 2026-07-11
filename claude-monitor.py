@@ -30,7 +30,12 @@ GHOSTTY_CLASS = os.environ.get("CLAUDE_TRAY_WM_CLASS", "com.mitchellh.ghostty")
 # Absolute path to the installed claude-monitor CLI. Absolute on purpose: the
 # CLI shares the bare name "claude-monitor" with this helper (claude-monitor.py).
 USAGE_CLI = os.path.expanduser("~/.local/bin/claude-monitor")
-PLAN_TIER = "max5"                                              # --plan value
+# Which claude-monitor plan to query, passed as --plan. Default "custom" =
+# session-based dynamic limits (P90), matching claude-monitor's own default view.
+# An explicit plan is deterministic; the CLI's saved default (CLAUDE_TRAY_PLAN="")
+# is NOT — it flips as different --plan values are used, so avoid relying on it.
+# Override with CLAUDE_TRAY_PLAN (max5, max20, custom, pro, or "" for saved default).
+PLAN = os.environ.get("CLAUDE_TRAY_PLAN", "custom")
 try:
     POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "30"))
 except ValueError:
@@ -80,10 +85,12 @@ def fetch_usage():
     missing or non-executable CLI, ...) so the daemon poll thread can never die.
     stdout is parsed regardless of returncode (exit 11 == limit-hit carries JSON).
     """
+    cmd = [USAGE_CLI, "--output", "json", "--once"]
+    if PLAN:
+        cmd += ["--plan", PLAN]
     try:
-        r = subprocess.run(
-            [USAGE_CLI, "--plan", PLAN_TIER, "--output", "json", "--once"],
-            capture_output=True, text=True, timeout=POLL_TIMEOUT)
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           timeout=POLL_TIMEOUT)
     except (subprocess.SubprocessError, OSError):
         # timeout, missing CLI (FileNotFoundError), non-executable
         # (PermissionError) and other OS errors all degrade to unavailable.
