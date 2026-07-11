@@ -36,9 +36,9 @@ point-in-time usage monitoring. Reuses the existing background poll; no new poll
 
 | Requirement | Phase |
 |-------------|-------|
-| HIST-01 | TBD (roadmap) |
-| HIST-02 | TBD (roadmap) |
-| HIST-03 | TBD (roadmap) |
-| TREND-01 | TBD (roadmap) |
-| TREND-02 | TBD (roadmap) |
-| TREND-03 | TBD (roadmap) |
+| HIST-01 | Phase 2 |
+| HIST-02 | Phase 2 |
+| HIST-03 | Phase 2 |
+| TREND-01 | Phase 3 |
+| TREND-02 | Phase 3 |
+| TREND-03 | Phase 3 |
