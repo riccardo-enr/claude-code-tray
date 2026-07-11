@@ -211,6 +211,7 @@ class Monitor:
     def __init__(self):
         self.sessions = {}  # session_id -> {dir,status,pane,tmux,cwd}
         self.usage = None  # latest parse_usage() dict, or None if unavailable
+        self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
 
         self.ind = AppIndicator.Indicator.new(
             "claude-monitor", ICON, AppIndicator.IndicatorCategory.APPLICATION_STATUS
@@ -291,14 +292,22 @@ class Monitor:
         ]
 
     # idle_add target on the Gtk main thread: store usage, redraw once.
+    USAGE_MISS_LIMIT = 2  # consecutive failed polls tolerated before showing "unavailable"
+
     def apply_usage(self, usage):
-        # Retain the last-known usage on a transient poll failure (usage is None):
-        # a single slow/timed-out CLI invocation would otherwise wipe the badge and
-        # show "usage unavailable" for the whole interval. Slightly-stale data beats
-        # an empty readout for an at-a-glance quota indicator (WR-03). Only startup
-        # (before the first successful poll) shows "unavailable".
+        # Retain last-known usage across a transient poll failure so a single slow/
+        # timed-out CLI call doesn't wipe a good readout (WR-03) -- slightly-stale data
+        # beats an empty one for an at-a-glance indicator. But sustained failure must
+        # surface as "usage unavailable" rather than silently showing hours-old numbers
+        # (POLL-02): after USAGE_MISS_LIMIT consecutive misses, drop to the unavailable
+        # state. A successful poll resets the counter.
         if usage is not None:
             self.usage = usage
+            self.usage_misses = 0
+        else:
+            self.usage_misses += 1
+            if self.usage_misses >= self.USAGE_MISS_LIMIT:
+                self.usage = None
         self.rebuild_menu()
         return False
 
