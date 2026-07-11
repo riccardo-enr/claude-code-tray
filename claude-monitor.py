@@ -36,10 +36,13 @@ USAGE_CLI = os.path.expanduser("~/.local/bin/claude-monitor")
 # is NOT — it flips as different --plan values are used, so avoid relying on it.
 # Override with CLAUDE_TRAY_PLAN (max5, max20, custom, pro, or "" for saved default).
 PLAN = os.environ.get("CLAUDE_TRAY_PLAN", "custom")
+# Seconds to sleep between CLI polls. The CLI itself takes ~5-10s (it re-parses
+# the jsonl history), so effective refresh is roughly that + POLL_INTERVAL; going
+# much below ~10 mostly just burns CPU. Override with CLAUDE_TRAY_POLL_INTERVAL.
 try:
-    POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "30"))
+    POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "15"))
 except ValueError:
-    POLL_INTERVAL = 30                                          # bad env -> default
+    POLL_INTERVAL = 15                                          # bad env -> default
 POLL_TIMEOUT = 15                                               # subprocess seconds
 # High-usage badge threshold (percent). Hardcoded on purpose: env-configurability
 # is deferred (ALERT-F1). Do NOT add an env lookup here.
