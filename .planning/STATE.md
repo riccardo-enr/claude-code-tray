@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-current_phase: 01
-current_phase_name: usage-quota-monitoring-in-the-tray
-status: verified
-stopped_at: Phase 01 UAT passed 4/4; POLL-02 stale-usage defect found and fixed during testing.
-last_updated: "2026-07-11T16:14:23.854Z"
+milestone: v1.1
+milestone_name: Usage History & Trends
+status: planning
+last_updated: "2026-07-11T18:38:29.955Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 01 execution started
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,12 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 ## Current Position
 
-Phase: 01 (usage-quota-monitoring-in-the-tray) — VERIFIED
-Plan: 1 of 1
-Status: UAT passed 4/4 — ready to ship
-Last activity: 2026-07-11 — Phase 01 verified (UAT 4/4; POLL-02 defect fixed)
-
-Progress: [░░░░░░░░░░] 0%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-11 — Milestone v1.1 started
 
 ## Performance Metrics
 

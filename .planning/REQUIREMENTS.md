@@ -1,44 +1,44 @@
-# Requirements — claude-code-tray usage monitoring
+# Requirements — claude-code-tray v1.1 (Usage History & Trends)
 
-Milestone goal: surface Claude Code token usage and quota-reset info in the
-existing tray, sourced from the `claude-monitor` CLI.
+Milestone goal: persist usage samples over time and surface trends in the tray —
+a sparkline, daily/weekly burn, and peak-usage hours — building on v1.0's
+point-in-time usage monitoring. Reuses the existing background poll; no new polling.
 
-## v1 Requirements
+## v1.1 Requirements
 
-### Data (POLL)
+### Persistence (HIST)
 
-- [x] **POLL-01**: The helper polls `claude-monitor --plan max5 --output json --once` on a background thread at a fixed interval, so the Gtk UI never blocks on the multi-second CLI call.
-- [x] **POLL-02**: A failed, timed-out, or unparseable `claude-monitor` call degrades gracefully — the usage rows show a "usage unavailable" state and the tray keeps working.
+- [ ] **HIST-01**: Each successful usage poll appends one sample (timestamp + used_percentage + tokens_used + token_limit + burn rate) as a single JSON line to a history store under `~/.claude/` (e.g. `usage-history.jsonl`). Failed/degraded polls are not recorded.
+- [ ] **HIST-02**: On startup and periodically, samples older than the retention window (default 30 days, env-configurable via `CLAUDE_TRAY_HISTORY_DAYS`) are pruned so the file stays bounded.
+- [ ] **HIST-03**: History I/O is defensive — a missing file, unwritable path, or corrupt/partial line never crashes or blocks the helper. Writes happen off the Gtk main loop; the reader tolerantly skips bad lines.
 
-### Usage display (USAGE)
+### Trends display (TREND)
 
-- [x] **USAGE-01**: The tray menu shows current tokens used and percentage of the Max 5x five-hour limit (e.g. "72k / 88k (82%)").
-- [x] **USAGE-02**: The tray menu shows time remaining until the five-hour window resets (derived from `resets_at_epoch`).
-- [x] **USAGE-03**: The tray menu shows the current burn rate (tokens per hour).
-
-### Alerting (ALERT)
-
-- [x] **ALERT-01**: The top-bar icon shows a badge/label when usage crosses a high threshold (default >80% of limit).
+- [ ] **TREND-01**: The tray menu shows a sparkline of usage % over a recent window (default last 24h) rendered from history.
+- [ ] **TREND-02**: The tray menu shows aggregate burn for today and the current week, derived from history.
+- [ ] **TREND-03**: The tray menu surfaces peak-usage hour(s) — the hour-of-day with the highest mean usage/burn over the retained history.
 
 ## Future Requirements (deferred)
 
-- **USAGE-F1**: Seven-day / weekly limit display — deferred until the CLI reports non-null seven_day data for this account.
-- **ALERT-F1**: Configurable threshold via env var — add if the fixed 80% proves wrong.
+- **HIST-F1**: Raw data export (CSV/JSON dump) for external analysis — deferred; add if the in-tray views prove insufficient.
+- **TREND-F1**: Configurable sparkline window / aggregation period beyond the default.
 
 ## Out of Scope
 
-- Cost/dollar tracking in the tray — usage %, not billing, is the goal.
-- Reimplementing rolling-window / plan-limit math — consumed from the CLI, not rebuilt.
-- Wayland support — app remains X11-only this milestone.
-- Vendoring or replacing the `claude-monitor` CLI — consumed as an external dependency.
+- Cost/dollar tracking — usage %, not billing, remains the goal.
+- Data export (CSV/JSON) this milestone — see HIST-F1.
+- Charting GUI / separate window — trends live inside the existing tray menu.
+- 7-day / weekly *limit* display — still null from the CLI for this account (v1.0 deferral stands).
+- Wayland support — app remains X11-only.
+- Replacing/vendoring the `claude-monitor` CLI — consumed, not rebuilt.
 
 ## Traceability
 
 | Requirement | Phase |
 |-------------|-------|
-| POLL-01 | Phase 1 |
-| POLL-02 | Phase 1 |
-| USAGE-01 | Phase 1 |
-| USAGE-02 | Phase 1 |
-| USAGE-03 | Phase 1 |
-| ALERT-01 | Phase 1 |
+| HIST-01 | TBD (roadmap) |
+| HIST-02 | TBD (roadmap) |
+| HIST-03 | TBD (roadmap) |
+| TREND-01 | TBD (roadmap) |
+| TREND-02 | TBD (roadmap) |
+| TREND-03 | TBD (roadmap) |
