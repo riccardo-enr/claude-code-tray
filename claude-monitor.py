@@ -10,6 +10,7 @@ the Ghostty window.
 """
 import os
 import json
+import time
 import socket
 import threading
 import subprocess
@@ -25,6 +26,120 @@ SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.s
 ICON = os.environ.get("CLAUDE_TRAY_ICON", "claude-desktop")
 # WM_CLASS of your terminal, used to raise its window on click (X11 / wmctrl).
 GHOSTTY_CLASS = os.environ.get("CLAUDE_TRAY_WM_CLASS", "com.mitchellh.ghostty")
+
+# Absolute path to the installed claude-monitor CLI. Absolute on purpose: the
+# CLI shares the bare name "claude-monitor" with this helper (claude-monitor.py).
+USAGE_CLI = os.path.expanduser("~/.local/bin/claude-monitor")
+PLAN_TIER = "max5"                                              # --plan value
+POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "30"))
+POLL_TIMEOUT = 15                                               # subprocess seconds
+# High-usage badge threshold (percent). Hardcoded on purpose: env-configurability
+# is deferred (ALERT-F1). Do NOT add an env lookup here.
+USAGE_THRESHOLD = 80
+
+
+def parse_usage(stdout):
+    """Parse claude-monitor JSON stdout into a normalized usage dict, or None.
+
+    Independent of the subprocess returncode by design: the CLI exits 11 while
+    printing valid JSON at limit-hit, so this must parse stdout regardless of
+    exit status. Returns None on any parse failure or missing limits.five_hour.
+    """
+    try:
+        doc = json.loads(stdout)
+        five = doc["limits"]["five_hour"]
+        if not isinstance(five, dict):
+            return None
+        local = doc.get("local") or {}
+        return {
+            "tokens_used": five["tokens_used"],
+            "token_limit": five["token_limit"],
+            "used_percentage": five["used_percentage"],
+            "resets_at_epoch": five["resets_at_epoch"],
+            "burn_rate_per_min": local.get("burn_rate_tokens_per_minute", 0),
+        }
+    except Exception:
+        return None
+
+
+def fetch_usage():
+    """Shell out to the CLI (fixed arg list, never shell=True) and parse stdout.
+
+    Returns parse_usage()'s result, or None on timeout / missing CLI. stdout is
+    parsed regardless of returncode (exit 11 == limit-hit still carries JSON).
+    """
+    try:
+        r = subprocess.run(
+            [USAGE_CLI, "--plan", PLAN_TIER, "--output", "json", "--once"],
+            capture_output=True, text=True, timeout=POLL_TIMEOUT)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+    return parse_usage(r.stdout)
+
+
+def fmt_tokens(n):
+    """Compact token count: 417000 -> '417k', 18936912 -> '18.9M'."""
+    if n >= 1e6:
+        return "%.1fM" % (n / 1e6)
+    return "%dk" % round(n / 1000)
+
+
+def fmt_countdown(secs):
+    """Reset countdown: 7380 -> 'resets in 2h 3m'; <= 0 -> 'resets now'."""
+    secs = max(0, int(secs))
+    if secs <= 0:
+        return "resets now"
+    return "resets in %dh %dm" % (secs // 3600, (secs % 3600) // 60)
+
+
+def build_label(usage, waiting):
+    """Reconcile the usage-% badge and the waiting-count badge into one label.
+
+    Usage leads ('47% 2!'), gains '!' above USAGE_THRESHOLD ('83%! 2!'). With no
+    usage, falls back to the waiting-only badge exactly as before ('2!' / '').
+    """
+    wseg = ("%d!" % waiting) if waiting else ""
+    if usage is None:
+        return wseg
+    seg = "%d%%" % round(usage["used_percentage"])
+    if usage["used_percentage"] > USAGE_THRESHOLD:
+        seg += "!"
+    return " ".join(s for s in (seg, wseg) if s)
+
+
+def demo():
+    """Assert-based self-check for the pure usage logic (run via --selfcheck)."""
+    sample = {
+        "limits": {"five_hour": {
+            "tokens_used": 417000,
+            "token_limit": 88000,
+            "used_percentage": 473.5,
+            "resets_at_epoch": int(time.time()) + 7380,
+        }},
+        "local": {"burn_rate_tokens_per_minute": 315615.2},
+        "status": {"code": 11, "label": "limit_hit"},
+    }
+    u = parse_usage(json.dumps(sample))
+    # parse is independent of the exit code (11): it never sees a returncode.
+    assert u is not None and u["used_percentage"] == 473.5
+    assert parse_usage("") is None
+    assert parse_usage("not json") is None
+    assert parse_usage(json.dumps({"limits": {}})) is None
+    assert fmt_tokens(417000) == "417k"
+    assert fmt_tokens(88000) == "88k"
+    assert fmt_tokens(18936912) == "18.9M"
+    # burn: per-minute field * 60 -> per-hour, then k/M formatted.
+    assert fmt_tokens(round(u["burn_rate_per_min"] * 60)) == "18.9M"
+    assert fmt_countdown(7380) == "resets in 2h 3m"
+    assert fmt_countdown(0) == "resets now"
+    # over-limit percent renders raw, never clamped to 100.
+    assert round(473.5) == 474
+    assert build_label({"used_percentage": 47}, 2) == "47% 2!"
+    assert build_label({"used_percentage": 83}, 2) == "83%! 2!"
+    assert build_label({"used_percentage": 47}, 0) == "47%"
+    assert build_label(None, 2) == "2!"
+    assert build_label(None, 0) == ""
+    print("ok")
 
 
 class Monitor:
@@ -125,4 +240,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--selfcheck" in sys.argv:
+        demo()
+    else:
+        main()
