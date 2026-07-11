@@ -31,7 +31,10 @@ GHOSTTY_CLASS = os.environ.get("CLAUDE_TRAY_WM_CLASS", "com.mitchellh.ghostty")
 # CLI shares the bare name "claude-monitor" with this helper (claude-monitor.py).
 USAGE_CLI = os.path.expanduser("~/.local/bin/claude-monitor")
 PLAN_TIER = "max5"                                              # --plan value
-POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "30"))
+try:
+    POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "30"))
+except ValueError:
+    POLL_INTERVAL = 30                                          # bad env -> default
 POLL_TIMEOUT = 15                                               # subprocess seconds
 # High-usage badge threshold (percent). Hardcoded on purpose: env-configurability
 # is deferred (ALERT-F1). Do NOT add an env lookup here.
@@ -51,7 +54,7 @@ def parse_usage(stdout):
         if not isinstance(five, dict):
             return None
         local = doc.get("local") or {}
-        return {
+        u = {
             "tokens_used": five["tokens_used"],
             "token_limit": five["token_limit"],
             "used_percentage": five["used_percentage"],
@@ -60,19 +63,30 @@ def parse_usage(stdout):
         }
     except Exception:
         return None
+    # Require numeric usage fields. A structurally valid payload carrying null or
+    # string values (e.g. a just-reset window) would otherwise pass here and then
+    # crash the Gtk-thread menu redraw (round()/epoch math) inside a GLib callback,
+    # silently killing the countdown timer source. Degrade to "unavailable" instead.
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+               for v in u.values()):
+        return None
+    return u
 
 
 def fetch_usage():
     """Shell out to the CLI (fixed arg list, never shell=True) and parse stdout.
 
-    Returns parse_usage()'s result, or None on timeout / missing CLI. stdout is
-    parsed regardless of returncode (exit 11 == limit-hit still carries JSON).
+    Returns parse_usage()'s result, or None on any subprocess/OS error (timeout,
+    missing or non-executable CLI, ...) so the daemon poll thread can never die.
+    stdout is parsed regardless of returncode (exit 11 == limit-hit carries JSON).
     """
     try:
         r = subprocess.run(
             [USAGE_CLI, "--plan", PLAN_TIER, "--output", "json", "--once"],
             capture_output=True, text=True, timeout=POLL_TIMEOUT)
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    except (subprocess.SubprocessError, OSError):
+        # timeout, missing CLI (FileNotFoundError), non-executable
+        # (PermissionError) and other OS errors all degrade to unavailable.
         return None
     return parse_usage(r.stdout)
 
@@ -125,6 +139,13 @@ def demo():
     assert parse_usage("") is None
     assert parse_usage("not json") is None
     assert parse_usage(json.dumps({"limits": {}})) is None
+    # structurally valid but non-numeric fields -> unavailable, not a crash (WR-01).
+    assert parse_usage(json.dumps({"limits": {"five_hour": {
+        "tokens_used": 1, "token_limit": 1,
+        "used_percentage": None, "resets_at_epoch": 1}}})) is None
+    assert parse_usage(json.dumps({"limits": {"five_hour": {
+        "tokens_used": 1, "token_limit": 1,
+        "used_percentage": 50.0, "resets_at_epoch": "later"}}})) is None
     assert fmt_tokens(417000) == "417k"
     assert fmt_tokens(88000) == "88k"
     assert fmt_tokens(18936912) == "18.9M"
