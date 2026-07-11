@@ -113,13 +113,14 @@ def fmt_countdown(secs):
     return "resets in %dh %dm" % (secs // 3600, (secs % 3600) // 60)
 
 
-def build_label(usage, waiting):
-    """Reconcile the usage-% badge and the waiting-count badge into one label.
+def build_label(usage, attention):
+    """Reconcile the usage-% badge and the attention-count badge into one label.
 
-    Usage leads ('47% 2!'), gains '!' above USAGE_THRESHOLD ('83%! 2!'). With no
-    usage, falls back to the waiting-only badge exactly as before ('2!' / '').
+    `attention` is the number of sessions that need you (waiting on input, or
+    just finished -> your turn). Usage leads ('47% 2!'), gains '!' above
+    USAGE_THRESHOLD ('83%! 2!'). With no usage, falls back to the badge ('2!'/'').
     """
-    wseg = ("%d!" % waiting) if waiting else ""
+    wseg = ("%d!" % attention) if attention else ""
     if usage is None:
         return wseg
     seg = "%d%%" % round(usage["used_percentage"])
@@ -220,9 +221,10 @@ class Monitor:
         self.menu.append(q)
         self.menu.show_all()
 
-        waiting = sum(1 for s in self.sessions.values()
-                      if s["status"] == "waiting")
-        self.ind.set_label(build_label(self.usage, waiting), "")
+        # sessions that need you: waiting on input, or finished (your turn) -> "N!"
+        attention = sum(1 for s in self.sessions.values()
+                        if s["status"] in ("waiting", "done"))
+        self.ind.set_label(build_label(self.usage, attention), "")
 
     def usage_rows(self):
         """Insensitive menu-row label strings from self.usage (one 'unavailable'
