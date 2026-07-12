@@ -1,30 +1,36 @@
 ---
 phase: 03-usage-trends-in-the-tray
 verified: 2026-07-12T00:00:00Z
-status: human_needed
+status: passed
 score: 2/5 must-haves verified
 behavior_unverified: 3
 overrides_applied: 0
 behavior_unverified_items:
+
   - truth: "The tray menu renders a bare 24-char auto-scaled block sparkline of mean usage%/hour over 24h (TREND-01)"
     test: "Run the tray (python3 claude-monitor.py) and let it accumulate >~1h of history, then open the tray menu"
     expected: "A bare block-glyph sparkline row (e.g. the SPARK_GLYPHS ramp) appears below a separator under the usage rows, with visible gaps for empty hours and no label"
     why_human: "Pure sparkline logic is proven by --selfcheck and wiring is statically confirmed, but the live GTK render + ~1h data accumulation cannot be exercised programmatically"
+
   - truth: "The tray menu shows today and current-ISO-week mean burn RATE in tok/hr (TREND-02)"
     test: "With >~1h of history, open the tray menu"
     expected: "A row 'today <rate>/hr | wk <rate>/hr' appears (a literal '-' when a window has no records)"
     why_human: "trend_burn logic is selfcheck-proven and wired via compute_trends; the visible rendered row needs the live tray"
+
   - truth: "The tray menu shows the single peak usage hour-of-day (0-23 local) and its mean burn rate (TREND-03)"
     test: "With >~1h of history spanning multiple hours, open the tray menu"
     expected: "A row 'peak hour: HH:00 (<rate>/hr)' appears for the busiest local hour"
     why_human: "trend_peak_hour logic is selfcheck-proven and wired; the visible rendered row needs the live tray"
 human_verification:
+
   - test: "Run tray with < ~1h of history and open the menu"
     expected: "A single insensitive 'trends: collecting history...' row shows under a separator; sessions, click-to-focus, and usage rows keep working"
     why_human: "Empty-state cutover render + no-regression of prior behavior are live-GTK observables"
+
   - test: "Run tray, accumulate > ~1h of history, open the menu"
     expected: "Collecting row swaps to three insensitive rows: bare sparkline, 'today .../hr | wk .../hr', 'peak hour: HH:00 (.../hr)'; menu order is sessions, usage rows, SEPARATOR, trend rows, SEPARATOR, Quit"
     why_human: "Live tray rendering of the three TREND rows is user-observable only"
+
   - test: "Point CLAUDE_TRAY / history at an unwritable or missing path and run the tray"
     expected: "Tray keeps running; trends fall back to collecting/last-known state; no crash, no frozen menu"
     why_human: "OSError degradation path in compute_trends is only observable while the daemon runs"

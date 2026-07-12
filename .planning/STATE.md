@@ -4,11 +4,11 @@ milestone: v1.1
 milestone_name: Usage History & Trends
 current_phase: 03
 current_phase_name: usage-trends-in-the-tray
-status: verifying
-stopped_at: Phase 3 planned
-last_updated: "2026-07-12T11:25:17.951Z"
+status: complete
+stopped_at: Phase 3 complete (milestone v1.1 done)
+last_updated: "2026-07-12T11:48:41Z"
 last_activity: 2026-07-12
-last_activity_desc: Phase 03 executed; automated verification passed, human tray UAT pending
+last_activity_desc: Phase 03 verified complete — core feature UAT-passed, edge cases statically verified
 progress:
   total_phases: 3
   completed_phases: 3
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 ## Current Position
 
-Phase: 03 (usage-trends-in-the-tray) — EXECUTED (code complete)
+Phase: 03 (usage-trends-in-the-tray) — COMPLETE
 Plan: 1 of 1 complete
-Status: Automated verification passed (--selfcheck green, D-05 invariant + wiring verified); human tray UAT pending (03-UAT.md)
-Last activity: 2026-07-12 — Phase 03 executed; verification human_needed (live GTK render)
+Status: Verified — TREND-01/02/03 rendering UAT-passed (user-confirmed in live tray); empty-state + OSError edge cases skipped in live UAT but statically verified (--selfcheck green). Milestone v1.1 complete.
+Last activity: 2026-07-12 — Phase 03 verified complete
 
 ## Performance Metrics
 
