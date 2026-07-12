@@ -13,6 +13,7 @@ import json
 import os
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 
@@ -187,6 +188,48 @@ def parse_history(text):
         except Exception:
             continue
     return out
+
+
+def append_history(record):
+    """Append one record as a JSON line to HISTORY_PATH; swallow OSError.
+
+    A missing/unwritable path or full disk degrades to "history just doesn't
+    persist" rather than crashing or blocking the poll thread.
+    """
+    try:
+        with open(HISTORY_PATH, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError:
+        return
+
+
+def prune_history(now):
+    """Drop records older than HISTORY_DAYS, rewriting HISTORY_PATH atomically.
+
+    Survivors are written to a temp file in the same dir, then os.replace'd over
+    the original -- never truncate-in-place, so there is no data-loss window. Any
+    OSError (including the file not existing) is swallowed and leaves the original
+    untouched; a leftover temp file is cleaned up if the replace did not happen.
+    """
+    tmp = None
+    try:
+        with open(HISTORY_PATH) as f:
+            records = parse_history(f.read())
+        survivors = [r for r in records if history_keep(r, now, HISTORY_DAYS)]
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(HISTORY_PATH))
+        with os.fdopen(fd, "w") as f:
+            for r in survivors:
+                f.write(json.dumps(r) + "\n")
+        os.replace(tmp, HISTORY_PATH)
+        tmp = None  # replace succeeded; nothing to clean up
+    except OSError:
+        return
+    finally:
+        if tmp is not None:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
 def demo():
@@ -484,10 +527,23 @@ def serve(mon):
 
 def poll_loop(mon):
     """Daemon-thread loop: fetch usage off the Gtk main loop, marshal the result
-    back via GLib.idle_add (mirrors serve()'s pattern), then sleep."""
+    back via GLib.idle_add (mirrors serve()'s pattern), then sleep.
+
+    All history file I/O lives here (never in apply_usage/main, which run on the
+    Gtk main thread): a successful poll appends one record before the idle_add,
+    and the store is pruned once at startup then opportunistically thereafter.
+    """
+    prune_history(time.time())
+    last_prune = time.time()
     while True:
         usage = fetch_usage()
+        if usage is not None:
+            append_history(history_record(usage, time.time()))
         GLib.idle_add(mon.apply_usage, usage)
+        now = time.time()
+        if now - last_prune >= PRUNE_INTERVAL:
+            prune_history(now)
+            last_prune = now
         time.sleep(POLL_INTERVAL)
 
 
