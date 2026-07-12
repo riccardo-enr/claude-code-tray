@@ -488,17 +488,29 @@ var NS="http://www.w3.org/2000/svg";
 function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
 function el(name,attrs){var e=document.createElementNS(NS,name);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
 function drawPoly(svg,series,yfloor){
-  var W=600,H=200,P=26,xs=[],ys=[];
+  var W=600,H=200,PL=42,PR=12,PT=12,PB=30,xs=[],ys=[];
   series.forEach(function(p){if(p[1]!==null){xs.push(p[0]);ys.push(p[1]);}});
   if(!xs.length)return;
   var xmin=Math.min.apply(null,xs),xmax=Math.max.apply(null,xs);
   var ymax=Math.max.apply(null,ys);if(ymax<yfloor)ymax=yfloor;if(ymax<=0)ymax=1;
-  var xr=(xmax-xmin)||1;
-  function sx(x){return P+(x-xmin)/xr*(W-2*P);}
-  function sy(y){return H-P-(y/ymax)*(H-2*P);}
-  svg.appendChild(el("line",{x1:P,y1:H-P,x2:W-P,y2:H-P,stroke:"#ccc"}));
-  svg.appendChild(el("line",{x1:P,y1:P,x2:P,y2:H-P,stroke:"#ccc"}));
-  var top=el("text",{x:P+2,y:P+11,"font-size":12,fill:"#888"});top.textContent=Math.round(ymax);svg.appendChild(top);
+  var xr=(xmax-xmin)||1,spanDays=xr/86400,i,yv,xv,gy,gx,t;
+  function sx(x){return PL+(x-xmin)/xr*(W-PL-PR);}
+  function sy(y){return H-PB-(y/ymax)*(H-PB-PT);}
+  function two(n){return(n<10?"0":"")+n;}
+  function xlab(xv){var dt=new Date(xv*1000);return spanDays<2?(dt.getHours()+":"+two(dt.getMinutes())):((dt.getMonth()+1)+"/"+dt.getDate());}
+  for(i=0;i<=4;i++){
+    yv=ymax*i/4;gy=sy(yv);
+    svg.appendChild(el("line",{x1:PL,y1:gy,x2:W-PR,y2:gy,stroke:i?"#eee":"#ccc"}));
+    t=el("text",{x:PL-5,y:gy+4,"font-size":11,"text-anchor":"end",fill:"#888"});
+    t.textContent=(ymax>=10?Math.round(yv):yv.toFixed(1));svg.appendChild(t);
+  }
+  for(i=0;i<=4;i++){
+    xv=xmin+xr*i/4;gx=sx(xv);
+    svg.appendChild(el("line",{x1:gx,y1:H-PB,x2:gx,y2:H-PB+4,stroke:"#ccc"}));
+    t=el("text",{x:gx,y:H-PB+16,"font-size":11,"text-anchor":"middle",fill:"#888"});
+    t.textContent=xlab(xv);svg.appendChild(t);
+  }
+  svg.appendChild(el("line",{x1:PL,y1:PT,x2:PL,y2:H-PB,stroke:"#ccc"}));
   var d="",pen=false;
   series.forEach(function(p){
     if(p[1]===null){pen=false;return;}
