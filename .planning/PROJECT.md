@@ -54,12 +54,12 @@ v1.0's point-in-time readout into history.
 - checkmark Graceful degradation to "usage unavailable" on CLI failure (POLL-02) — v1.0
 - checkmark Tokens/% of plan limit, reset countdown, burn rate in the tray (USAGE-01/02/03) — v1.0
 - checkmark High-usage icon badge above threshold (ALERT-01) — v1.0
+- checkmark Persist each successful poll sample to a JSONL history store (HIST-01) — Phase 2
+- checkmark Prune history past a retention window, default 30 days env-configurable (HIST-02) — Phase 2
+- checkmark Defensive history I/O — never crash/block the helper (HIST-03) — Phase 2
 
 ### Active (v1.1)
 
-- [ ] Persist each successful poll sample to a JSONL history store (HIST-01)
-- [ ] Prune history past a retention window, default 30 days env-configurable (HIST-02)
-- [ ] Defensive history I/O — never crash/block the helper (HIST-03)
 - [ ] In-menu sparkline of usage % over a recent window (TREND-01)
 - [ ] Daily / weekly aggregate burn in the menu (TREND-02)
 - [ ] Peak-usage hours in the menu (TREND-03)
@@ -82,7 +82,8 @@ v1.0's point-in-time readout into history.
 | Background-thread polling on an interval | CLI is slow (~seconds); must not block Gtk main loop | — Pending |
 | Show tokens+%, reset time, burn rate, high-usage badge | The at-a-glance signals the user wants | Shipped in v1.0 |
 | Degrade to "usage unavailable" only after N consecutive poll misses (not the first) | Absorbs transient CLI hiccups (WR-03) while still surfacing sustained failure (POLL-02) | v1.1 baseline (fixed in v1.0 UAT) |
-| Persist usage history as append-only JSONL under `~/.claude/`, pruned by retention window | Simplest durable store for a lightweight helper; no DB dependency; reuses the existing poll sample | v1.1 |
+| Persist usage history as append-only JSONL under `~/.claude/`, pruned by retention window | Simplest durable store for a lightweight helper; no DB dependency; reuses the existing poll sample | Shipped in Phase 2 |
+| `parse_history` keeps only JSON objects with a numeric `t`; prune reads `errors="replace"` | Corruption tolerance must be total — a valid-JSON-but-wrong-shape or non-UTF8 line must never raise and kill the poll thread (code-review WR-01) | Shipped in Phase 2 |
 
 ## Evolution
 
@@ -102,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-11 — started milestone v1.1 (Usage History & Trends); v1.0 shipped and verified.*
+*Last updated: 2026-07-12 — Phase 2 (Usage History Persistence) complete and verified: HIST-01/02/03 validated via live UAT + security review. Next: Phase 3 (Usage Trends).*
