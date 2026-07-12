@@ -522,6 +522,12 @@ class Monitor:
             mi = Gtk.MenuItem.new_with_label(row)
             mi.set_sensitive(False)
             self.menu.append(mi)
+        # separator dividing the usage block from the trend block (D-11)
+        self.menu.append(Gtk.SeparatorMenuItem.new())
+        for row in self.trend_rows():
+            mi = Gtk.MenuItem.new_with_label(row)
+            mi.set_sensitive(False)
+            self.menu.append(mi)
         self.menu.append(Gtk.SeparatorMenuItem.new())
         q = Gtk.MenuItem.new_with_label("Quit monitor")
         q.connect("activate", lambda _w: Gtk.main_quit())
@@ -553,6 +559,16 @@ class Monitor:
             fmt_countdown(u["resets_at_epoch"] - time.time()),
             "burn: %s tok/hr" % fmt_tokens(round(u["burn_rate_per_min"] * 60)),
         ]
+
+    def trend_rows(self):
+        """Insensitive trend-row strings from the self.trends cache (no file I/O).
+
+        None -> the single collecting-history empty-state row (D-12); otherwise the
+        ready-to-render rows compute_trends built (sparkline, today/week, peak hour).
+        """
+        if self.trends is None:
+            return ["trends: collecting history..."]
+        return self.trends
 
     # idle_add target on the Gtk main thread: store usage, redraw once.
     USAGE_MISS_LIMIT = 2  # consecutive failed polls tolerated before showing "unavailable"
