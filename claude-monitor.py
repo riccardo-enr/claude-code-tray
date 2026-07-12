@@ -9,6 +9,7 @@ status in the tray menu; clicking a session focuses its tmux pane and raises
 the Ghostty window.
 """
 
+import datetime
 import json
 import os
 import socket
@@ -62,6 +63,14 @@ except ValueError:
     HISTORY_DAYS = 30  # bad env -> default
 # Opportunistic-prune cadence in seconds (>= 6h per CONTEXT; planner-picked).
 PRUNE_INTERVAL = 6 * 3600
+
+# --- Phase 03 trend rendering constants ---
+# Auto-scale ramp for the 24h usage sparkline; index 0 = lowest, -1 = highest.
+# These 8 block glyphs + SPARK_GAP are the ONLY intended non-ASCII in this file.
+SPARK_GLYPHS = "▁▂▃▄▅▆▇█"
+SPARK_GAP = " "  # rendered for hours with no samples (keeps columns time-aligned)
+TREND_INTERVAL = 5 * 60  # trend recompute throttle in poll_loop (seconds)
+TREND_MIN_SPAN = 3600  # min history span (s) before real rows replace empty state
 
 
 def parse_usage(stdout):
@@ -239,6 +248,84 @@ def prune_history(now):
                 pass
 
 
+def local_bounds(now):
+    """Local-calendar day/week start epochs for `now` (per D-09).
+
+    Returns (day_start_epoch, week_start_epoch): local midnight today and local
+    Monday 00:00 of the current ISO week. Uses local time (no tz arg) so the
+    boundaries match how a person reads "today" and align with the peak-hour view.
+    """
+    dt = datetime.datetime.fromtimestamp(now)
+    day_start = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = day_start - datetime.timedelta(days=day_start.weekday())
+    return int(day_start.timestamp()), int(week_start.timestamp())
+
+
+def trend_sparkline(records, now):
+    """24-char auto-scaled block sparkline of mean pct/hour over 24h (D-01..D-04).
+
+    Column i (0 = 23h ago, 23 = current hour) is the mean `pct` of records in that
+    hour bucket. Heights auto-scale to the window's own non-empty min..max across
+    the 8 block glyphs; empty hours render SPARK_GAP so columns stay time-aligned.
+    Guards a flat window (hi == lo -> lowest glyph) and empty input (all gaps) so
+    there is no ZeroDivisionError. Bare string, no label/prefix.
+    """
+    buckets = [[] for _ in range(24)]
+    for rec in records:
+        bucket = 23 - int((now - rec["t"]) // 3600)
+        if 0 <= bucket <= 23:
+            buckets[bucket].append(rec["pct"])
+    means = [sum(b) / len(b) if b else None for b in buckets]
+    vals = [m for m in means if m is not None]
+    if not vals:
+        return SPARK_GAP * 24
+    lo, hi = min(vals), max(vals)
+    span = hi - lo
+    out = []
+    for m in means:
+        if m is None:
+            out.append(SPARK_GAP)
+        elif span == 0:
+            out.append(SPARK_GLYPHS[0])  # flat window: all non-empty at the floor
+        else:
+            idx = round((m - lo) / span * (len(SPARK_GLYPHS) - 1))
+            out.append(SPARK_GLYPHS[idx])
+    return "".join(out)
+
+
+def trend_burn(records, start, end):
+    """Mean burn RATE in tok/hr over [start, end), or None (per D-08).
+
+    Averages the RAW per-minute `burn` field of records with start <= t < end,
+    then multiplies by 60 exactly ONCE to convert per-minute -> per-hour.
+    """
+    vals = [rec["burn"] for rec in records if start <= rec["t"] < end]
+    if not vals:
+        return None
+    return sum(vals) / len(vals) * 60
+
+
+def trend_peak_hour(records):
+    """Busiest local hour-of-day and its mean burn rate in tok/hr, or None (D-10).
+
+    Groups all records by local hour (0-23), ranks by mean raw per-minute `burn`,
+    and returns (hour, mean_burn * 60) for the top hour. Ties break to the lowest
+    hour index for determinism (ascending scan, strict-greater update).
+    """
+    if not records:
+        return None
+    hours = {}
+    for rec in records:
+        h = datetime.datetime.fromtimestamp(rec["t"]).hour
+        hours.setdefault(h, []).append(rec["burn"])
+    best_hour, best_rate = None, None
+    for h in sorted(hours):
+        rate = sum(hours[h]) / len(hours[h])
+        if best_rate is None or rate > best_rate:
+            best_hour, best_rate = h, rate
+    return best_hour, best_rate * 60
+
+
 def demo():
     """Assert-based self-check for the pure usage logic (run via --selfcheck)."""
     sample = {
@@ -339,6 +426,46 @@ def demo():
     # history_keep(rec["t"]) can never raise and kill the poll thread.
     junk = "42\nnull\n[1, 2]\n{}\n" + json.dumps({"t": "nope"}) + "\n\"hi\"\n"
     assert parse_history(json.dumps(good1) + "\n" + junk + json.dumps(good2) + "\n") == [good1, good2]
+
+    # --- trend logic (Phase 03) ---
+    # local_bounds: day_start is local midnight, week_start is local Monday 00:00.
+    now_lb = int(time.time())
+    day_start, week_start = local_bounds(now_lb)
+    assert datetime.datetime.fromtimestamp(day_start).hour == 0
+    assert datetime.datetime.fromtimestamp(day_start).minute == 0
+    assert datetime.datetime.fromtimestamp(week_start).weekday() == 0
+    assert datetime.datetime.fromtimestamp(week_start).hour == 0
+    assert week_start <= day_start <= now_lb
+    # sparkline: 24 chars; lowest column -> floor glyph, highest -> top glyph, an
+    # interior hour with no samples -> gap; empty input -> all gaps.
+    now_sp = 1_700_000_000
+    recs_sp = [
+        {"t": now_sp - 23 * 3600, "pct": 5.0},  # bucket 0 (oldest), lowest mean
+        {"t": now_sp, "pct": 90.0},  # bucket 23 (current hour), highest mean
+    ]
+    spark = trend_sparkline(recs_sp, now_sp)
+    assert len(spark) == 24
+    assert spark[0] == SPARK_GLYPHS[0]
+    assert spark[23] == SPARK_GLYPHS[-1]
+    assert spark[12] == SPARK_GAP  # interior empty hour stays a gap
+    assert trend_sparkline([], now_sp) == SPARK_GAP * 24
+    # flat window (all equal pct): no ZeroDivisionError, every column at the floor.
+    flat = [{"t": now_sp - h * 3600, "pct": 42.0} for h in range(24)]
+    fspark = trend_sparkline(flat, now_sp)
+    assert all(c == SPARK_GLYPHS[0] for c in fspark)
+    # burn: raw per-minute mean(100,200)=150 -> *60 = 9000 tok/hr; empty window None.
+    burn_recs = [{"t": 100, "burn": 100.0}, {"t": 200, "burn": 200.0}]
+    assert trend_burn(burn_recs, 0, 1000) == 9000.0
+    assert trend_burn(burn_recs, 1000, 2000) is None
+    # peak hour: later hour has the higher mean burn -> it wins; empty input None.
+    base_ph = datetime.datetime(2024, 1, 1)
+    ep = lambda h: int(base_ph.replace(hour=h).timestamp())
+    peak_recs = [
+        {"t": ep(3), "burn": 10.0}, {"t": ep(3) + 60, "burn": 20.0},   # hour 3, mean 15
+        {"t": ep(15), "burn": 100.0}, {"t": ep(15) + 60, "burn": 200.0},  # hour 15, mean 150
+    ]
+    assert trend_peak_hour(peak_recs) == (15, 9000.0)
+    assert trend_peak_hour([]) is None
     print("ok")
 
 
