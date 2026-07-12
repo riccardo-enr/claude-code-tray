@@ -12,11 +12,13 @@ the Ghostty window.
 import datetime
 import json
 import os
+import pathlib
 import socket
 import subprocess
 import tempfile
 import threading
 import time
+import webbrowser
 
 import gi
 
@@ -813,6 +815,12 @@ class Monitor:
             )
         subprocess.run(["wmctrl", "-x", "-a", GHOSTTY_CLASS], stderr=subprocess.DEVNULL)
 
+    # menu click (Gtk main thread): open the already-written dashboard, ZERO history
+    # I/O (D-05). pathlib .resolve().as_uri() builds a correct file:// URI that escapes
+    # spaces/special chars, unlike string concat (review finding 3); stdlib-only.
+    def open_dashboard(self, *_):
+        webbrowser.open(pathlib.Path(DASH_PATH).resolve().as_uri())
+
     # menu click: acknowledge (clears the session's "!" attention) and focus it.
     def on_click(self, s):
         s["acked"] = True
@@ -841,6 +849,12 @@ class Monitor:
             mi = Gtk.MenuItem.new_with_label(row)
             mi.set_sensitive(False)
             self.menu.append(mi)
+        # sensitive action item (like "Quit monitor"): greyed until the first HTML
+        # write has happened, then opens the pre-written dashboard (DASH-01).
+        dash = Gtk.MenuItem.new_with_label("Open Usage Dashboard")
+        dash.connect("activate", self.open_dashboard)
+        dash.set_sensitive(self.dash_ready)
+        self.menu.append(dash)
         self.menu.append(Gtk.SeparatorMenuItem.new())
         q = Gtk.MenuItem.new_with_label("Quit monitor")
         q.connect("activate", lambda _w: Gtk.main_quit())
