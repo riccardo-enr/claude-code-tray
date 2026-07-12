@@ -8,6 +8,7 @@ roadmap spans two milestones on the same single-file helper (`claude-monitor.py`
 
 - **v1.0 — Usage & Quota Monitoring** (Phase 1, complete): background-polled
   usage rows + high-usage icon badge in the existing menu.
+
 - **v1.1 — Usage History & Trends** (Phases 2-3): persist each poll sample to a
   durable, bounded JSONL store, then surface trends (sparkline, daily/weekly
   burn, peak-usage hours) inside the same tray menu.
@@ -25,7 +26,7 @@ read-side trend views that depend on it.
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Usage & Quota Monitoring in the Tray** - Background-polled usage rows + high-usage icon badge in the existing menu (v1.0, completed 2026-07-11)
-- [ ] **Phase 2: Usage History Persistence** - Append each successful poll to a bounded, corruption-tolerant JSONL history store under `~/.claude/` (v1.1)
+- [x] **Phase 2: Usage History Persistence** - Append each successful poll to a bounded, corruption-tolerant JSONL history store under `~/.claude/` (v1.1) (completed 2026-07-12)
 - [ ] **Phase 3: Usage Trends in the Tray** - Sparkline, daily/weekly burn, and peak-usage hours rendered in the existing tray menu from history (v1.1)
 
 ## Phase Details
@@ -61,9 +62,11 @@ read-side trend views that depend on it.
   2. Samples older than the retention window (default 30 days, env-configurable via `CLAUDE_TRAY_HISTORY_DAYS`) are pruned on startup and periodically, so the file stays bounded instead of growing without limit. (HIST-02)
   3. A missing, unwritable, or partially-corrupt history file never crashes or freezes the tray — writes happen off the Gtk main loop and the reader skips bad lines; usage rows and session status keep working in every failure mode. (HIST-03)
 
-**Plans**: 1 plan
+**Plans**: 1/1 plans complete
 
-- [ ] 02-01-PLAN.md — Extend claude-monitor.py: append each successful poll to ~/.claude/usage-history.jsonl, prune past the retention window atomically at startup + periodically, with defensive OSError-swallowing I/O and a corruption-tolerant reader
+- [ ] 02-PLAN.md
+
+- [x] 02-01-PLAN.md — Extend claude-monitor.py: append each successful poll to ~/.claude/usage-history.jsonl, prune past the retention window atomically at startup + periodically, with defensive OSError-swallowing I/O and a corruption-tolerant reader
 
 ### Phase 3: Usage Trends in the Tray
 
@@ -88,5 +91,5 @@ Phases execute in numeric order: 1 (done) -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Usage & Quota Monitoring in the Tray | 1/1 | Complete | 2026-07-11 |
-| 2. Usage History Persistence | 0/0 | Not started | - |
+| 2. Usage History Persistence | 1/1 | Complete   | 2026-07-12 |
 | 3. Usage Trends in the Tray | 0/0 | Not started | - |

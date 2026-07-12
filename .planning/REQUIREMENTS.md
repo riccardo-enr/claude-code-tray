@@ -8,9 +8,9 @@ point-in-time usage monitoring. Reuses the existing background poll; no new poll
 
 ### Persistence (HIST)
 
-- [ ] **HIST-01**: Each successful usage poll appends one sample (timestamp + used_percentage + tokens_used + token_limit + burn rate) as a single JSON line to a history store under `~/.claude/` (e.g. `usage-history.jsonl`). Failed/degraded polls are not recorded.
-- [ ] **HIST-02**: On startup and periodically, samples older than the retention window (default 30 days, env-configurable via `CLAUDE_TRAY_HISTORY_DAYS`) are pruned so the file stays bounded.
-- [ ] **HIST-03**: History I/O is defensive — a missing file, unwritable path, or corrupt/partial line never crashes or blocks the helper. Writes happen off the Gtk main loop; the reader tolerantly skips bad lines.
+- [x] **HIST-01**: Each successful usage poll appends one sample (timestamp + used_percentage + tokens_used + token_limit + burn rate) as a single JSON line to a history store under `~/.claude/` (e.g. `usage-history.jsonl`). Failed/degraded polls are not recorded.
+- [x] **HIST-02**: On startup and periodically, samples older than the retention window (default 30 days, env-configurable via `CLAUDE_TRAY_HISTORY_DAYS`) are pruned so the file stays bounded.
+- [x] **HIST-03**: History I/O is defensive — a missing file, unwritable path, or corrupt/partial line never crashes or blocks the helper. Writes happen off the Gtk main loop; the reader tolerantly skips bad lines.
 
 ### Trends display (TREND)
 
