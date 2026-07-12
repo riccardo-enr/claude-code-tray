@@ -1,10 +1,11 @@
 ---
 phase: 04
 slug: usage-web-dashboard
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-07-12
+reviewed_at: 2026-07-12
 ---
 
 # Phase 04 — UI Design Contract
@@ -26,6 +27,8 @@ created: 2026-07-12
 | Font | system stack: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`; numeric labels add `font-variant-numeric: tabular-nums` for aligned tick/legend digits |
 
 **Layout:** single centered column, `max-width: 880px`, `margin: 0 auto`, page padding 24px. Three stacked chart cards in DASH order: (1) usage-% trend + range toggle, (2) daily burn-rate trend, (3) hour x day heatmap. Page title row on top. Fully responsive-degrading via SVG `viewBox` + `width:100%` (no media queries required).
+
+**Focal point (Dimension 2):** the **usage-% trend card (card 1)** is the visual anchor — it sits top-of-stack directly under the title, is the only card with the range toggle, and carries the accent-colored trend stroke. The executor should treat it as primary; the burn-rate and heatmap cards are secondary/supporting and never out-weight it visually.
 
 ---
 
