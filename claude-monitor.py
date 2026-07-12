@@ -339,6 +339,200 @@ def trend_peak_hour(records):
     return best_hour, best_rate * 60
 
 
+def _embed_json(obj):
+    """JSON-serialize obj, escaping <, >, & so a value can't break out of the
+    inline <script> that embeds it (T-04-01). The ONLY place the dashboard
+    payload is serialized; escapes to JSON unicode escapes, so the JS still
+    parses the const while '</script>' etc. can never appear literally.
+    """
+    return (
+        json.dumps(obj)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+
+
+def history_numeric(records):
+    """Keep only records whose t, pct AND burn are ALL numeric (review finding 1).
+
+    parse_history validates a numeric `t` only, so a corrupt/tampered record can
+    still carry a string `pct`/`burn` that would raise inside trend_burn's
+    sum(vals) or reach the JS chart math. Dropping the whole suspect record here
+    (before any aggregation or embedding) keeps bad values out of every dataset;
+    _embed_json escaping remains as defense-in-depth. Order preserved.
+    """
+    def num(v):
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+    return [r for r in records if num(r.get("t")) and num(r.get("pct")) and num(r.get("burn"))]
+
+
+def heatmap_buckets(records):
+    """7x24 grid (dow Mon..Sun x hour 0..23) of mean(burn)*60 tok/hr (DASH-03, D-06).
+
+    Accumulates each record's RAW per-minute `burn` into its local (weekday, hour)
+    bucket, then converts to per-hour exactly ONCE (mean * 60, matching
+    trend_burn/trend_peak_hour). Empty buckets stay None so "no data" is distinct
+    from a zero-value cell for the gray-vs-ramp rendering (D-07).
+    """
+    grid = [[None] * 24 for _ in range(7)]
+    acc = {}
+    for rec in records:
+        dt = datetime.datetime.fromtimestamp(rec["t"])
+        acc.setdefault((dt.weekday(), dt.hour), []).append(rec["burn"])
+    for (dow, hour), vals in acc.items():
+        grid[dow][hour] = sum(vals) / len(vals) * 60
+    return grid
+
+
+def burn_series(records, now):
+    """Daily burn-rate series [[day_start_epoch, rate_or_None], ...] (DASH-04).
+
+    Steps one calendar day at a time (+timedelta so DST days stay aligned) from
+    the earliest record's local midnight through `now`, reusing trend_burn for
+    each day's [start, end) window (which applies *60 once and returns None for an
+    empty window). Days with no samples carry None so the client draws a break,
+    not a false zero. Empty input -> empty list.
+    """
+    if not records:
+        return []
+    first = min(rec["t"] for rec in records)
+    dt = datetime.datetime.fromtimestamp(first).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    end_dt = datetime.datetime.fromtimestamp(now)
+    out = []
+    while dt <= end_dt:
+        nxt = dt + datetime.timedelta(days=1)
+        start, end = int(dt.timestamp()), int(nxt.timestamp())
+        out.append([start, trend_burn(records, start, end)])
+        dt = nxt
+    return out
+
+
+# --- Dashboard HTML (self-contained: inline CSS/JS, SVG charts, no CDN/deps) ---
+# The ONE permitted http:// in the page is the SVG XML namespace passed to
+# createElementNS -- an identifier, never fetched. No <link, no src=, no https://.
+_DASH_STYLE = (
+    "body{font-family:sans-serif;background:#fafafa;color:#222;margin:0;padding:1.5em}"
+    "h1{font-size:1.3em}h2{font-size:1em;color:#444}"
+    "section{margin:0 0 1.8em}svg{max-width:100%;height:auto;background:#fff;border:1px solid #eee}"
+    "#ranges button{margin-right:.4em;padding:.2em .7em;border:1px solid #bbb;background:#fff;cursor:pointer}"
+    "#ranges button.active{background:#1a6cae;color:#fff;border-color:#1a6cae}"
+    "p.empty{color:#888}"
+)
+
+_DASH_EMPTY = (
+    "<!doctype html><html><head><meta charset=\"utf-8\">"
+    "<title>Claude Code Usage</title><style>" + _DASH_STYLE + "</style></head>"
+    "<body><h1>Claude Code Usage</h1>"
+    "<p class=\"empty\">Collecting usage history...</p></body></html>"
+)
+
+_DASH_BODY = (
+    "<h1>Claude Code Usage</h1>"
+    "<section><h2>Usage %</h2>"
+    "<div id=\"ranges\"><button data-range=\"day\">Day</button>"
+    "<button data-range=\"week\">Week</button>"
+    "<button data-range=\"all\" class=\"active\">All</button></div>"
+    "<svg id=\"usage-chart\" viewBox=\"0 0 600 200\"></svg></section>"
+    "<section><h2>Daily burn rate (tok/hr)</h2>"
+    "<svg id=\"burn-chart\" viewBox=\"0 0 600 200\"></svg></section>"
+    "<section><h2>Peak usage heatmap (mean burn tok/hr)</h2>"
+    "<svg id=\"heatmap\" viewBox=\"0 0 520 150\"></svg></section>"
+)
+
+_DASH_JS = """
+var NS="http://www.w3.org/2000/svg";
+function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
+function el(name,attrs){var e=document.createElementNS(NS,name);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
+function drawPoly(svg,series,yfloor){
+  var W=600,H=200,P=26,xs=[],ys=[];
+  series.forEach(function(p){if(p[1]!==null){xs.push(p[0]);ys.push(p[1]);}});
+  if(!xs.length)return;
+  var xmin=Math.min.apply(null,xs),xmax=Math.max.apply(null,xs);
+  var ymax=Math.max.apply(null,ys);if(ymax<yfloor)ymax=yfloor;if(ymax<=0)ymax=1;
+  var xr=(xmax-xmin)||1;
+  function sx(x){return P+(x-xmin)/xr*(W-2*P);}
+  function sy(y){return H-P-(y/ymax)*(H-2*P);}
+  svg.appendChild(el("line",{x1:P,y1:H-P,x2:W-P,y2:H-P,stroke:"#ccc"}));
+  svg.appendChild(el("line",{x1:P,y1:P,x2:P,y2:H-P,stroke:"#ccc"}));
+  var top=el("text",{x:P+2,y:P+8,"font-size":9,fill:"#888"});top.textContent=Math.round(ymax);svg.appendChild(top);
+  var d="",pen=false;
+  series.forEach(function(p){
+    if(p[1]===null){pen=false;return;}
+    d+=(pen?"L":"M")+sx(p[0]).toFixed(1)+" "+sy(p[1]).toFixed(1)+" ";pen=true;
+  });
+  svg.appendChild(el("path",{d:d,fill:"none",stroke:"#1a6cae","stroke-width":2}));
+}
+function drawUsage(range){
+  var svg=document.getElementById("usage-chart");clear(svg);
+  var pts=D.usage;
+  if(range==="day")pts=pts.filter(function(p){return p[0]>=D.bounds.day;});
+  else if(range==="week")pts=pts.filter(function(p){return p[0]>=D.bounds.week;});
+  drawPoly(svg,pts.map(function(p){return [p[0],p[1]];}),1);
+  var bs=document.querySelectorAll("#ranges button");
+  for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-range")===range)?"active":"";
+}
+function drawBurn(){
+  var svg=document.getElementById("burn-chart");clear(svg);
+  drawPoly(svg,D.burn.map(function(p){return [p[0],p[1]];}),1);
+}
+function drawHeatmap(){
+  var svg=document.getElementById("heatmap");clear(svg);
+  var g=D.heatmap,max=0,r,c;
+  for(r=0;r<7;r++)for(c=0;c<24;c++){var v=g[r][c];if(v!==null&&v>max)max=v;}
+  if(max<=0)max=1;
+  var days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],cw=20,ch=18,lx=32,ty=16;
+  for(c=0;c<24;c++){var t=el("text",{x:lx+c*cw+cw/2,y:12,"font-size":7,"text-anchor":"middle",fill:"#777"});t.textContent=c;svg.appendChild(t);}
+  for(r=0;r<7;r++){
+    var lbl=el("text",{x:lx-4,y:ty+r*ch+ch/2+3,"font-size":9,"text-anchor":"end",fill:"#555"});
+    lbl.textContent=days[r];svg.appendChild(lbl);
+    for(c=0;c<24;c++){
+      var val=g[r][c],fill;
+      if(val===null)fill="hsl(0,0%,88%)";
+      else fill="hsl(210,80%,"+(92-(val/max)*62).toFixed(0)+"%)";
+      svg.appendChild(el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:fill}));
+    }
+  }
+}
+drawUsage("all");drawBurn();drawHeatmap();
+document.getElementById("ranges").addEventListener("click",function(e){
+  var r=e.target.getAttribute("data-range");if(r)drawUsage(r);
+});
+"""
+
+
+def render_dashboard(records, now):
+    """Full self-contained dashboard HTML string (DASH-02/03/04/06, D-02/D-03/D-07).
+
+    Drops non-numeric records via history_numeric FIRST (review finding 1) so only
+    numeric-safe data reaches the embedded payload and chart math. Empty (no input
+    or everything dropped) -> a minimal "collecting history" page. Otherwise embeds
+    one payload (usage pairs filtered client-side per D-03, heatmap, daily burn,
+    local day/week bounds, generated stamp) via _embed_json and inline JS that draws
+    all three charts with plain DOM SVG -- no CDN, no library (DASH-06).
+    """
+    records = history_numeric(records)
+    if not records:
+        return _DASH_EMPTY
+    day_start, week_start = local_bounds(now)
+    payload = {
+        "usage": [[int(r["t"]), r["pct"]] for r in records],
+        "heatmap": heatmap_buckets(records),
+        "burn": burn_series(records, now),
+        "bounds": {"day": day_start, "week": week_start},
+        "generated": int(now),
+    }
+    return (
+        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        "<title>Claude Code Usage</title><style>" + _DASH_STYLE + "</style></head>"
+        "<body>" + _DASH_BODY + "<script>const D = " + _embed_json(payload) + ";"
+        + _DASH_JS + "</script></body></html>"
+    )
+
+
 def demo():
     """Assert-based self-check for the pure usage logic (run via --selfcheck)."""
     sample = {
@@ -517,6 +711,65 @@ def demo():
     ]
     assert trend_peak_hour(peak_recs) == (15, 9000.0)
     assert trend_peak_hour([]) is None
+
+    # --- dashboard logic (Phase 04) ---
+    # _embed_json: the raw <, >, & are gone; letters survive; the < escape is present.
+    emb = _embed_json({"x": "</" + "script><b>&"})
+    assert "<" not in emb and ">" not in emb and "&" not in emb
+    assert "evil" not in emb  # sanity: none of our literal here
+    assert "b" in emb and "\\u003c" in emb
+    # history_numeric: drops string-pct, string-burn, and missing-burn; keeps good in order.
+    ok1 = {"t": 1, "pct": 10.0, "burn": 5.0}
+    ok2 = {"t": 2, "pct": 20.0, "burn": 6.0}
+    bad_pct = {"t": 3, "pct": "x", "burn": 5.0}
+    bad_burn = {"t": 4, "pct": 10.0, "burn": "x"}
+    no_burn = {"t": 5, "pct": 10.0}
+    assert history_numeric([ok1, bad_pct, bad_burn, no_burn, ok2]) == [ok1, ok2]
+    # heatmap_buckets: two records local Monday 15:xx (burn 100,200) -> grid[0][15]=9000;
+    # an untouched cell is None; grid is 7x24.
+    mon = datetime.datetime(2024, 1, 1, 15)  # 2024-01-01 is a Monday
+    hm = heatmap_buckets([
+        {"t": int(mon.timestamp()), "pct": 1.0, "burn": 100.0},
+        {"t": int(mon.replace(minute=30).timestamp()), "pct": 1.0, "burn": 200.0},
+    ])
+    assert len(hm) == 7 and all(len(row) == 24 for row in hm)
+    assert hm[0][15] == 9000.0
+    assert hm[2][3] is None
+    # burn_series: one full day mean(100,200)*60=9000; a spanned empty day -> None.
+    d1 = datetime.datetime(2024, 1, 1)  # Monday
+    bs_recs = [
+        {"t": int(d1.replace(hour=10).timestamp()), "pct": 1.0, "burn": 100.0},
+        {"t": int(d1.replace(hour=14).timestamp()), "pct": 1.0, "burn": 200.0},
+        {"t": int((d1 + datetime.timedelta(days=2)).replace(hour=10).timestamp()), "pct": 1.0, "burn": 300.0},
+    ]
+    bs_now = (d1 + datetime.timedelta(days=2)).replace(hour=12).timestamp()
+    series = burn_series(bs_recs, bs_now)
+    assert series[0] == [int(d1.timestamp()), 9000.0]
+    assert series[1][1] is None  # Jan 2 has no samples
+    assert series[2][1] == 18000.0
+    assert burn_series([], bs_now) == []
+    # render_dashboard: good record -> real page (doctype + embedded const D marker).
+    now_dash = int(time.time())
+    page = render_dashboard([{"t": now_dash, "pct": 42.0, "burn": 10.0}], now_dash)
+    assert isinstance(page, str) and "doctype" in page and "const D" in page
+    # empty input and all-non-numeric input both fall to the empty-state page.
+    assert "Collecting usage history" in render_dashboard([], now_dash)
+    assert "Collecting usage history" in render_dashboard(
+        [{"t": now_dash, "pct": "x", "burn": "y"}], now_dash
+    )
+    # injection (review finding 1 + T-04-01): a crafted string-pct record is dropped so its
+    # value never reaches the dataset, and the page holds exactly ONE script-closing sequence.
+    evil = "</" + "script><script>evil"
+    inj = render_dashboard(
+        [{"t": now_dash, "pct": 42.0, "burn": 10.0}, {"t": now_dash + 1, "pct": evil, "burn": 1.0}],
+        now_dash,
+    )
+    assert "evil" not in inj
+    assert inj.count("</" + "script>") == 1
+    # self-containment (review finding 4, DASH-06): no <link, no src=, no https://; the only
+    # http:// is the SVG namespace -- stripping it leaves none behind.
+    assert "<link" not in page and "src=" not in page and "https://" not in page
+    assert page.replace("http://www.w3.org/2000/svg", "").find("http://") == -1
     print("ok")
 
 
