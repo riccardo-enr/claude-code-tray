@@ -64,6 +64,13 @@ except ValueError:
 # Opportunistic-prune cadence in seconds (>= 6h per CONTEXT; planner-picked).
 PRUNE_INTERVAL = 6 * 3600
 
+# Regenerated dashboard artifact. A derived cache file (NOT under ~/.claude/), so
+# it lives under the XDG cache dir per D-01.
+DASH_DIR = os.path.join(
+    os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "claude-tray"
+)
+DASH_PATH = os.path.join(DASH_DIR, "dashboard.html")
+
 # --- Phase 03 trend rendering constants ---
 # Auto-scale ramp for the 24h usage sparkline; index 0 = lowest, -1 = highest.
 # These 8 block glyphs + SPARK_GAP are the ONLY intended non-ASCII in this file.
@@ -71,6 +78,7 @@ SPARK_GLYPHS = "▁▂▃▄▅▆▇█"
 SPARK_GAP = " "  # rendered for hours with no samples (keeps columns time-aligned)
 TREND_INTERVAL = 5 * 60  # trend recompute throttle in poll_loop (seconds)
 TREND_MIN_SPAN = 3600  # min history span (s) before real rows replace empty state
+DASH_INTERVAL = 5 * 60  # dashboard-regen throttle in poll_loop (seconds)
 
 
 def parse_usage(stdout):
@@ -779,6 +787,7 @@ class Monitor:
         self.usage = None  # latest parse_usage() dict, or None if unavailable
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
         self.trends = None  # cached trend row strings, or None (collecting/empty state)
+        self.dash_ready = False  # True after the first successful dashboard write (gates the menu item)
 
         self.ind = AppIndicator.Indicator.new(
             "claude-monitor", ICON, AppIndicator.IndicatorCategory.APPLICATION_STATUS
@@ -932,6 +941,43 @@ class Monitor:
         # ponytail: single list rebind, read-only in the Gtk redraw (mirrors self.usage) -- no lock.
         self.trends = rows
 
+    def write_dashboard(self, now):
+        """Read history OFF the Gtk main thread, render the dashboard, atomic-write it (D-04).
+
+        The ONLY place the dashboard reads history (single source, DASH-05): routes
+        through parse_history, then re-applies history_keep(now, HISTORY_DAYS) so
+        "full retained history" means the retained window even if an opportunistic
+        prune silently failed (review finding 2). render_dashboard additionally
+        drops non-numeric records. Writes atomically (temp + os.replace, mirroring
+        prune_history) and flips dash_ready on first success.
+
+        ponytail: the whole body is wrapped in a broad `except Exception` -- broader
+        than append_history/prune_history on purpose. A malformed record, a render
+        bug, or an OS error must all degrade to "dashboard just isn't updated this
+        tick" rather than killing the poll thread (HIST-03 / T-04-03).
+        """
+        tmp = None
+        try:
+            with open(HISTORY_PATH, errors="replace") as f:
+                records = parse_history(f.read())
+            records = [r for r in records if history_keep(r, now, HISTORY_DAYS)]
+            html = render_dashboard(records, now)
+            os.makedirs(DASH_DIR, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=DASH_DIR)
+            with os.fdopen(fd, "w") as f:
+                f.write(html)
+            os.replace(tmp, DASH_PATH)
+            tmp = None  # replace succeeded; nothing to clean up
+            self.dash_ready = True
+        except Exception:
+            return  # degrade: not updated this tick; retried next throttle window
+        finally:
+            if tmp is not None:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+
     # runs on the Gtk main thread (via idle_add)
     def handle(self, msg):
         sid = msg.get("session_id") or msg.get("pane") or "?"
@@ -1034,6 +1080,7 @@ def poll_loop(mon):
     prune_history(time.time())
     last_prune = time.time()
     last_trend = 0.0  # 0 -> first iteration recomputes immediately (no 5-min blank window)
+    last_dash = 0.0  # 0 -> generate the dashboard file immediately at startup
     while True:
         usage = fetch_usage()
         now = time.time()
@@ -1044,6 +1091,12 @@ def poll_loop(mon):
         if now - last_trend >= TREND_INTERVAL:
             mon.compute_trends(now)
             last_trend = now
+        # regenerate the dashboard HTML off the Gtk main thread on the same cadence.
+        # last_dash = now UNCONDITIONALLY: write_dashboard swallows its own errors, so
+        # a transient failure is throttled ~5min not hot-retried (mirrors last_trend).
+        if now - last_dash >= DASH_INTERVAL:
+            mon.write_dashboard(now)
+            last_dash = now
         GLib.idle_add(mon.apply_usage, usage)
         if now - last_prune >= PRUNE_INTERVAL:
             prune_history(now)
