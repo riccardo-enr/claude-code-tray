@@ -11,6 +11,7 @@ the Ghostty window.
 
 import datetime
 import json
+import math
 import os
 import pathlib
 import socket
@@ -371,11 +372,26 @@ def history_numeric(records):
     sum(vals) or reach the JS chart math. Dropping the whole suspect record here
     (before any aggregation or embedding) keeps bad values out of every dataset;
     _embed_json escaping remains as defense-in-depth. Order preserved.
+
+    Also rejects non-finite floats (NaN/Infinity, which json.loads accepts by
+    default) for t/pct/burn, and bounds `t` to a plausible epoch window
+    (0 < t < 4102444800, i.e. before 2100-01-01 UTC) so int(t)/
+    datetime.fromtimestamp(t) can never overflow and so a far-future record --
+    which history_keep never prunes -- cannot permanently break regeneration
+    (WR-01).
     """
     def num(v):
-        return isinstance(v, (int, float)) and not isinstance(v, bool)
+        return (
+            isinstance(v, (int, float))
+            and not isinstance(v, bool)
+            and math.isfinite(v)
+        )
 
-    return [r for r in records if num(r.get("t")) and num(r.get("pct")) and num(r.get("burn"))]
+    return [
+        r for r in records
+        if num(r.get("t")) and 0 < r["t"] < 4102444800
+        and num(r.get("pct")) and num(r.get("burn"))
+    ]
 
 
 def heatmap_buckets(records):
@@ -735,6 +751,13 @@ def demo():
     bad_burn = {"t": 4, "pct": 10.0, "burn": "x"}
     no_burn = {"t": 5, "pct": 10.0}
     assert history_numeric([ok1, bad_pct, bad_burn, no_burn, ok2]) == [ok1, ok2]
+    # non-finite floats (NaN/Inf json.loads accepts) and out-of-range t are ALL
+    # dropped so int(t)/fromtimestamp() downstream can never raise (WR-01).
+    nan_t = {"t": float("nan"), "pct": 1.0, "burn": 1.0}
+    inf_pct = {"t": 1, "pct": float("inf"), "burn": 1.0}
+    inf_burn = {"t": 1, "pct": 1.0, "burn": float("inf")}
+    far_t = {"t": 1e18, "pct": 1.0, "burn": 1.0}
+    assert history_numeric([nan_t, inf_pct, inf_burn, far_t, ok1]) == [ok1]
     # heatmap_buckets: two records local Monday 15:xx (burn 100,200) -> grid[0][15]=9000;
     # an untouched cell is None; grid is 7x24.
     mon = datetime.datetime(2024, 1, 1, 15)  # 2024-01-01 is a Monday
@@ -766,6 +789,14 @@ def demo():
     assert "Collecting usage history" in render_dashboard([], now_dash)
     assert "Collecting usage history" in render_dashboard(
         [{"t": now_dash, "pct": "x", "burn": "y"}], now_dash
+    )
+    # a lone NaN/Inf/out-of-range record is dropped too -> empty-state page, not a
+    # crash from int(t)/fromtimestamp() (WR-01).
+    assert "Collecting usage history" in render_dashboard(
+        [{"t": float("nan"), "pct": 1.0, "burn": 1.0}], now_dash
+    )
+    assert "Collecting usage history" in render_dashboard(
+        [{"t": 1e18, "pct": 1.0, "burn": 1.0}], now_dash
     )
     # injection (review finding 1 + T-04-01): a crafted string-pct record is dropped so its
     # value never reaches the dataset, and the page holds exactly ONE script-closing sequence.
