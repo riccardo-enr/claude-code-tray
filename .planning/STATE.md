@@ -8,7 +8,7 @@ status: planned
 stopped_at: Phase 4 UI-SPEC approved
 last_updated: "2026-07-12T13:42:54.776Z"
 last_activity: 2026-07-12
-last_activity_desc: Phase 4 planned; DASH-01..06 covered, decisions D-01..D-07 covered
+last_activity_desc: "Quick task 260712-ndo: --api official usage numbers (Phase 4 still planned)"
 progress:
   total_phases: 4
   completed_phases: 3
@@ -79,13 +79,19 @@ None yet.
 - DASH-05/06 are load-bearing constraints: the dashboard must never introduce a new poll, a second data source, or a runtime dependency. History reads must stay off the Gtk main loop (upholds HIST-03/POLL-02 posture).
 - The history `burn` field is RAW per-minute; convert to per-hour exactly once for burn-rate charts (mirrors Phase 03's `trend_burn`/`trend_peak_hour`).
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260712-ndo | Poll claude-monitor with --api for official /usage numbers (drops absolute token counts) | 2026-07-12 | 04b45d7 | Verified | [260712-ndo-api-official-usage](./quick/260712-ndo-api-official-usage/) |
+
 ## Deferred Items
 
 Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Usage | 7-day / weekly limit display (CLI reports null for this account) | Deferred | 2026-07-11 |
+| Usage | 7-day / weekly limit display — UNBLOCKED: `--api` returns it (31%), not null. See SEED-003 | Ready (SEED-003) | 2026-07-11 |
 | Alerting | Configurable threshold via env var (add if fixed 80% proves wrong) | Deferred | 2026-07-11 |
 | History | Raw data export (CSV/JSON dump) — HIST-F1 / DASH-F2 | Deferred | 2026-07-11 |
 | Trends | Configurable sparkline window / aggregation period — TREND-F1 / DASH-F3 | Deferred | 2026-07-11 |
