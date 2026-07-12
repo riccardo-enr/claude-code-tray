@@ -447,17 +447,24 @@ _DASH_STYLE = (
     "#ranges button{margin-right:.4em;padding:.2em .7em;border:1px solid #bbb;background:#fff;cursor:pointer}"
     "#ranges button.active{background:#1a6cae;color:#fff;border-color:#1a6cae}"
     "p.empty{color:#888}"
+    "#meta{color:#888;font-size:.85em;margin:.2em 0 1.5em}"
+    "#hm-legend{display:flex;align-items:center;gap:.4em;font-size:.85em;"
+    "color:#555;margin-top:.5em}"
+    "#hm-legend .sw{width:16px;height:12px;display:inline-block;"
+    "border:1px solid #ddd;vertical-align:middle}"
 )
 
 _DASH_EMPTY = (
     "<!doctype html><html><head><meta charset=\"utf-8\">"
-    "<title>Claude Code Usage</title><style>" + _DASH_STYLE + "</style></head>"
-    "<body><h1>Claude Code Usage</h1>"
+    "<title>Claude Code - Usage Dashboard</title>"
+    "<style>" + _DASH_STYLE + "</style></head>"
+    "<body><h1>Claude Code - Usage Dashboard</h1>"
     "<p class=\"empty\">Collecting usage history...</p></body></html>"
 )
 
 _DASH_BODY = (
-    "<h1>Claude Code Usage</h1>"
+    "<h1>Claude Code - Usage Dashboard</h1>"
+    "<div id=\"meta\"></div>"
     "<section><h2>Usage %</h2>"
     "<div id=\"ranges\"><button data-range=\"day\">Day</button>"
     "<button data-range=\"week\">Week</button>"
@@ -466,7 +473,14 @@ _DASH_BODY = (
     "<section><h2>Daily burn rate (tok/hr)</h2>"
     "<svg id=\"burn-chart\" viewBox=\"0 0 600 200\"></svg></section>"
     "<section><h2>Peak usage heatmap (mean burn tok/hr)</h2>"
-    "<svg id=\"heatmap\" viewBox=\"0 0 520 150\"></svg></section>"
+    "<svg id=\"heatmap\" viewBox=\"0 0 520 170\"></svg>"
+    "<div id=\"hm-legend\"><span>Low</span>"
+    "<span class=\"sw\" style=\"background:hsl(210,80%,92%)\"></span>"
+    "<span class=\"sw\" style=\"background:hsl(210,80%,61%)\"></span>"
+    "<span class=\"sw\" style=\"background:hsl(210,80%,30%)\"></span>"
+    "<span>High</span>"
+    "<span class=\"sw\" style=\"background:hsl(0,0%,88%)\"></span>"
+    "<span>no data</span></div></section>"
 )
 
 _DASH_JS = """
@@ -484,7 +498,7 @@ function drawPoly(svg,series,yfloor){
   function sy(y){return H-P-(y/ymax)*(H-2*P);}
   svg.appendChild(el("line",{x1:P,y1:H-P,x2:W-P,y2:H-P,stroke:"#ccc"}));
   svg.appendChild(el("line",{x1:P,y1:P,x2:P,y2:H-P,stroke:"#ccc"}));
-  var top=el("text",{x:P+2,y:P+8,"font-size":9,fill:"#888"});top.textContent=Math.round(ymax);svg.appendChild(top);
+  var top=el("text",{x:P+2,y:P+11,"font-size":12,fill:"#888"});top.textContent=Math.round(ymax);svg.appendChild(top);
   var d="",pen=false;
   series.forEach(function(p){
     if(p[1]===null){pen=false;return;}
@@ -510,20 +524,23 @@ function drawHeatmap(){
   var g=D.heatmap,max=0,r,c;
   for(r=0;r<7;r++)for(c=0;c<24;c++){var v=g[r][c];if(v!==null&&v>max)max=v;}
   if(max<=0)max=1;
-  var days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],cw=20,ch=18,lx=32,ty=16;
-  for(c=0;c<24;c++){var t=el("text",{x:lx+c*cw+cw/2,y:12,"font-size":7,"text-anchor":"middle",fill:"#777"});t.textContent=c;svg.appendChild(t);}
+  var days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],cw=20,ch=20,lx=34,ty=18;
+  for(c=0;c<24;c+=3){var t=el("text",{x:lx+c*cw+cw/2,y:13,"font-size":12,"text-anchor":"middle",fill:"#777"});t.textContent=c;svg.appendChild(t);}
   for(r=0;r<7;r++){
-    var lbl=el("text",{x:lx-4,y:ty+r*ch+ch/2+3,"font-size":9,"text-anchor":"end",fill:"#555"});
+    var lbl=el("text",{x:lx-5,y:ty+r*ch+ch/2+4,"font-size":12,"text-anchor":"end",fill:"#555"});
     lbl.textContent=days[r];svg.appendChild(lbl);
     for(c=0;c<24;c++){
-      var val=g[r][c],fill;
-      if(val===null)fill="hsl(0,0%,88%)";
-      else fill="hsl(210,80%,"+(92-(val/max)*62).toFixed(0)+"%)";
-      svg.appendChild(el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:fill}));
+      var val=g[r][c],fill,tip;
+      if(val===null){fill="hsl(0,0%,88%)";tip=days[r]+" "+c+":00 - no data";}
+      else{fill="hsl(210,80%,"+(92-(val/max)*62).toFixed(0)+"%)";tip=days[r]+" "+c+":00 - "+Math.round(val)+" tok/hr";}
+      var rect=el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:fill});
+      var ttl=el("title",{});ttl.textContent=tip;rect.appendChild(ttl);
+      svg.appendChild(rect);
     }
   }
 }
 drawUsage("all");drawBurn();drawHeatmap();
+document.getElementById("meta").textContent="Generated "+new Date(D.generated*1000).toLocaleString();
 document.getElementById("ranges").addEventListener("click",function(e){
   var r=e.target.getAttribute("data-range");if(r)drawUsage(r);
 });
@@ -553,7 +570,8 @@ def render_dashboard(records, now):
     }
     return (
         "<!doctype html><html><head><meta charset=\"utf-8\">"
-        "<title>Claude Code Usage</title><style>" + _DASH_STYLE + "</style></head>"
+        "<title>Claude Code - Usage Dashboard</title>"
+        "<style>" + _DASH_STYLE + "</style></head>"
         "<body>" + _DASH_BODY + "<script>const D = " + _embed_json(payload) + ";"
         + _DASH_JS + "</script></body></html>"
     )
