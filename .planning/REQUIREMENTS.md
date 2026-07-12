@@ -10,12 +10,12 @@ not replace it.
 
 ### Dashboard (DASH)
 
-- [ ] **DASH-01**: A tray menu item opens the usage dashboard in the user's default browser.
-- [ ] **DASH-02**: The dashboard renders a usage-% trend chart over a longer, selectable time range than the tray (e.g. day / week / full retained history).
-- [ ] **DASH-03**: The dashboard shows a peak-usage heatmap — hour-of-day (0-23) by day-of-week — derived from history.
-- [ ] **DASH-04**: The dashboard renders a burn-rate trend (daily/weekly aggregates) over the full retained history.
-- [ ] **DASH-05**: The dashboard reads only the existing `~/.claude/usage-history.jsonl` (single source, read-only, no new polling) and refreshes on the existing background poll tick.
-- [ ] **DASH-06**: The dashboard output is self-contained — stdlib only, no new dependencies, inline CSS/JS, charts drawn as SVG/canvas — consistent with the project's X11-only, dependency-light constraints.
+- [x] **DASH-01**: A tray menu item opens the usage dashboard in the user's default browser.
+- [x] **DASH-02**: The dashboard renders a usage-% trend chart over a longer, selectable time range than the tray (e.g. day / week / full retained history).
+- [x] **DASH-03**: The dashboard shows a peak-usage heatmap — hour-of-day (0-23) by day-of-week — derived from history.
+- [x] **DASH-04**: The dashboard renders a burn-rate trend (daily/weekly aggregates) over the full retained history.
+- [x] **DASH-05**: The dashboard reads only the existing `~/.claude/usage-history.jsonl` (single source, read-only, no new polling) and refreshes on the existing background poll tick.
+- [x] **DASH-06**: The dashboard output is self-contained — stdlib only, no new dependencies, inline CSS/JS, charts drawn as SVG/canvas — consistent with the project's X11-only, dependency-light constraints.
 
 ## Future Requirements (deferred)
 

@@ -105,7 +105,7 @@ the same store, delivered as one coherent capability.
   4. The dashboard renders a burn-rate trend (daily/weekly aggregates) over the full retained history. (DASH-04)
   5. The dashboard reads only `~/.claude/usage-history.jsonl` (no new polling, no second source) and its data refreshes on the existing background poll tick; the page is fully self-contained — stdlib-generated, no new dependencies, inline CSS/JS, charts drawn as SVG/canvas. (DASH-05, DASH-06)
 
-**Plans**: 1 plan
+**Plans**: 0/1 plans executed
 
 - [ ] 04-01-PLAN.md — Extend claude-monitor.py: pure dashboard generators (render_dashboard, heatmap_buckets, burn_series, script-safe _embed_json) + demo asserts, off-thread generate-and-write in poll_loop to a cache-path static .html, and a sensitive "Open Usage Dashboard" tray item opening it via file://
 
@@ -123,6 +123,6 @@ Phases execute in numeric order: 1 (done) -> 2 (done) -> 3 (done) -> 4
 | 1. Usage & Quota Monitoring in the Tray | 1/1 | Complete | 2026-07-11 |
 | 2. Usage History Persistence | 1/1 | Complete    | 2026-07-12 |
 | 3. Usage Trends in the Tray | 1/1 | Complete   | 2026-07-12 |
-| 4. Usage Web Dashboard | 0/? | Not started | - |
+| 4. Usage Web Dashboard | 0/1 | Planned    |  |
 </content>
 </invoke>

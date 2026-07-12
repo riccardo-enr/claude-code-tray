@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Usage Web Dashboard
-current_phase: 4
-current_phase_name: planned
-status: planned
+current_phase: 04
+current_phase_name: usage-web-dashboard
+status: verifying
 stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-07-12T13:42:54.776Z"
+last_updated: "2026-07-12T16:27:21.848Z"
 last_activity: 2026-07-12
-last_activity_desc: "Quick task 260712-ndo: --api official usage numbers (Phase 4 still planned)"
+last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 4 — usage-web-dashboard (planned, ready to execute)
+**Current focus:** Phase 04 — usage-web-dashboard
 
 ## Current Position
 
-Phase: 4 — Usage Web Dashboard (planned)
-Plan: 04-01-PLAN.md (3 tasks, 1 wave)
-Status: Planned — ready for `/gsd-execute-phase 4`
-Last activity: 2026-07-12 — Phase 4 planned; DASH-01..06 covered, decisions D-01..D-07 covered
+Phase: 04 (usage-web-dashboard) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
+Last activity: 2026-07-12 — Phase 04 execution started
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Last activity: 2026-07-12 — Phase 4 planned; DASH-01..06 covered, decisions D-
 | Phase 01 P01 | 2 min | 2 tasks | 1 files |
 | Phase 02 P01 | 2min | 2 tasks | 1 files |
 | Phase 03 P01 | 1 session | 3 tasks | 1 files |
+| Phase 04 P01 | 12min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,10 @@ Recent decisions affecting current work:
 - Dashboard reads the Phase-2 `~/.claude/usage-history.jsonl` read-only via the existing `parse_history`/`history_keep` readers; refreshes on the existing background poll tick — no new polling, no second source.
 - Self-contained, stdlib-only output: inline CSS/JS, charts as SVG/canvas, no new dependencies and no JS charting library.
 - Dashboard complements the tray — the in-menu sparkline/burn/peak rows stay; the browser page is opened from a new tray menu item.
+- [Phase ?]: Dashboard is a static self-contained file:// HTML regenerated on the poll tick (D-01); no server, no port.
+- [Phase ?]: History embedded once as escaped JSON; day/week/all range switching is client-side filtering (D-02/D-03).
+- [Phase ?]: history_numeric drops records with non-numeric t/pct/burn before charting/embedding; _embed_json escapes as defense-in-depth (T-04-01).
+- [Phase ?]: write_dashboard re-filters via history_keep so full retained history holds even if an opportunistic prune failed.
 
 ### Pending Todos
 
@@ -99,7 +104,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-12T13:42:54.766Z
+Last session: 2026-07-12T16:26:44.151Z
 Stopped at: Phase 4 UI-SPEC approved
 Resume file: .planning/phases/04-usage-web-dashboard/04-UI-SPEC.md
 </content>
