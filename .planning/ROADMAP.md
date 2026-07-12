@@ -79,7 +79,9 @@ read-side trend views that depend on it.
   2. The tray menu shows aggregate burn for today and for the current week, derived from history. (TREND-02)
   3. The tray menu surfaces the peak-usage hour(s) — the hour-of-day with the highest mean usage/burn over the retained history. (TREND-03)
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+- [ ] 03-01-PLAN.md — Extend claude-monitor.py: pure trend functions (24h sparkline, today/week mean burn, peak hour) + demo asserts, compute+cache in poll_loop off the Gtk main thread, and insensitive trend rows with a collecting-history empty state
 
 **UI hint**: yes
 
@@ -92,4 +94,4 @@ Phases execute in numeric order: 1 (done) -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. Usage & Quota Monitoring in the Tray | 1/1 | Complete | 2026-07-11 |
 | 2. Usage History Persistence | 1/1 | Complete    | 2026-07-12 |
-| 3. Usage Trends in the Tray | 0/0 | Not started | - |
+| 3. Usage Trends in the Tray | 0/1 | Not started | - |
