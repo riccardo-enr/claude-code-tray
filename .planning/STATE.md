@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Usage History & Trends
 current_phase: 3
 current_phase_name: Usage Trends in the Tray
-status: verifying
-stopped_at: v1.1 ROADMAP.md created (Phases 2-3); REQUIREMENTS.md traceability filled; STATE.md updated.
+status: ready_to_plan
+stopped_at: Phase 02 complete (UAT 3/3, security verified); ready to plan Phase 3 (Usage Trends).
 last_updated: "2026-07-12T10:27:59.055Z"
 last_activity: 2026-07-12
 last_activity_desc: Phase 02 complete, transitioned to Phase 3
@@ -24,13 +24,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-11)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 02 — usage-history-persistence
+**Current focus:** Phase 3 — Usage Trends in the Tray
 
 ## Current Position
 
 Phase: 3 — Usage Trends in the Tray
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to plan (Phase 02 complete — UAT 3/3 passed, security verified)
 Last activity: 2026-07-12 — Phase 02 complete, transitioned to Phase 3
 
 ## Performance Metrics
