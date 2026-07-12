@@ -51,6 +51,17 @@ POLL_TIMEOUT = 15  # subprocess seconds
 # is deferred (ALERT-F1). Do NOT add an env lookup here.
 USAGE_THRESHOLD = 80
 
+# Append-only usage history store (one JSON object per line). Phase 03 reads it.
+HISTORY_PATH = os.path.expanduser("~/.claude/usage-history.jsonl")
+# Retention window in days; records older than this are pruned. Env-overridable
+# via CLAUDE_TRAY_HISTORY_DAYS, guarded the same way as POLL_INTERVAL above.
+try:
+    HISTORY_DAYS = int(os.environ.get("CLAUDE_TRAY_HISTORY_DAYS", "30"))
+except ValueError:
+    HISTORY_DAYS = 30  # bad env -> default
+# Opportunistic-prune cadence in seconds (>= 6h per CONTEXT; planner-picked).
+PRUNE_INTERVAL = 6 * 3600
+
 
 def parse_usage(stdout):
     """Parse claude-monitor JSON stdout into a normalized usage dict, or None.
@@ -135,6 +146,49 @@ def build_label(usage, attention):
     return " ".join(s for s in (seg, wseg) if s)
 
 
+def history_record(usage, now):
+    """Build the compact history record from a normalized usage dict.
+
+    `t` is the wall-clock poll time (int(time.time()) at the call site), NOT
+    resets_at_epoch. `burn` is stored as the RAW per-MINUTE value the source
+    carries; Phase 03 converts it to per-hour once, so do not convert here.
+    """
+    return {
+        "t": int(now),
+        "pct": usage["used_percentage"],
+        "tokens_used": usage["tokens_used"],
+        "token_limit": usage["token_limit"],
+        "burn": usage["burn_rate_per_min"],
+    }
+
+
+def history_keep(rec, now, days):
+    """Retention predicate: True when rec is within the window, else False.
+
+    Records strictly older than `days` are dropped. Pure boolean, reused by
+    prune_history and by Phase 03's readers.
+    """
+    return rec["t"] >= now - days * 86400
+
+
+def parse_history(text):
+    """Tolerant loader: per-line json.loads, skipping empty and unparseable lines.
+
+    A half-written trailing line from a killed process (or any garbage line) is
+    skipped rather than raised on. Returns the surviving records in order.
+    """
+    out = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except Exception:
+            continue
+    return out
+
+
 def demo():
     """Assert-based self-check for the pure usage logic (run via --selfcheck)."""
     sample = {
@@ -204,6 +258,32 @@ def demo():
     assert build_label({"used_percentage": 47}, 0) == "47%"
     assert build_label(None, 2) == "2!"
     assert build_label(None, 0) == ""
+
+    # --- history logic (Phase 02) ---
+    now0 = int(time.time())
+    hu = {
+        "tokens_used": 417000,
+        "token_limit": 88000,
+        "used_percentage": 473.5,
+        "resets_at_epoch": now0 + 7380,
+        "burn_rate_per_min": 315615.2,
+    }
+    # record: t pinned to int(now) (NOT resets_at_epoch), burn stored RAW per-minute.
+    assert history_record(hu, now0) == {
+        "t": now0,
+        "pct": 473.5,
+        "tokens_used": 417000,
+        "token_limit": 88000,
+        "burn": 315615.2,
+    }
+    # retention: a 40-day-old record is dropped, a 1-day-old record is kept (days=30).
+    assert history_keep({"t": now0 - 40 * 86400}, now0, 30) is False
+    assert history_keep({"t": now0 - 1 * 86400}, now0, 30) is True
+    # tolerant parse: the corrupt middle line is skipped; the two good ones survive in order.
+    good1 = {"t": now0, "pct": 10.0}
+    good2 = {"t": now0 + 1, "pct": 20.0}
+    blob = json.dumps(good1) + "\nnot json {oops\n" + json.dumps(good2) + "\n"
+    assert parse_history(blob) == [good1, good2]
     print("ok")
 
 
