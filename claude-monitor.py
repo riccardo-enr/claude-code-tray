@@ -474,6 +474,7 @@ class Monitor:
         self.sessions = {}  # session_id -> {dir,status,pane,tmux,cwd}
         self.usage = None  # latest parse_usage() dict, or None if unavailable
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
+        self.trends = None  # cached trend row strings, or None (collecting/empty state)
 
         self.ind = AppIndicator.Indicator.new(
             "claude-monitor", ICON, AppIndicator.IndicatorCategory.APPLICATION_STATUS
@@ -572,6 +573,39 @@ class Monitor:
                 self.usage = None
         self.rebuild_menu()
         return False
+
+    def compute_trends(self, now):
+        """Read history once (OFF the Gtk main thread) and cache trend rows (D-05/D-07).
+
+        The ONLY place trend history is read. Routes through the corruption-tolerant
+        parse_history and swallows OSError (missing/unwritable file -> keep last-known
+        trends, never raise on the poll thread). Leaves self.trends = None until the
+        retained history spans TREND_MIN_SPAN seconds (empty/collecting state, D-12).
+        """
+        try:
+            with open(HISTORY_PATH, errors="replace") as f:
+                records = parse_history(f.read())
+        except OSError:
+            return  # degrade to last-known trends; never crash the poll thread
+        if not records or records[-1]["t"] - records[0]["t"] < TREND_MIN_SPAN:
+            self.trends = None  # not enough data yet -> collecting state
+            return
+        rows = [trend_sparkline([r for r in records if history_keep(r, now, 1)], now)]
+        day_start, week_start = local_bounds(now)
+        today = trend_burn(records, day_start, now)
+        week = trend_burn(records, week_start, now)
+        rows.append(
+            "today %s/hr | wk %s/hr"
+            % (
+                fmt_tokens(round(today)) if today is not None else "-",
+                fmt_tokens(round(week)) if week is not None else "-",
+            )
+        )
+        peak = trend_peak_hour(records)
+        if peak is not None:
+            rows.append("peak hour: %02d:00 (%s/hr)" % (peak[0], fmt_tokens(round(peak[1]))))
+        # ponytail: single list rebind, read-only in the Gtk redraw (mirrors self.usage) -- no lock.
+        self.trends = rows
 
     # runs on the Gtk main thread (via idle_add)
     def handle(self, msg):
@@ -674,12 +708,18 @@ def poll_loop(mon):
     """
     prune_history(time.time())
     last_prune = time.time()
+    last_trend = 0.0  # 0 -> first iteration recomputes immediately (no 5-min blank window)
     while True:
         usage = fetch_usage()
-        if usage is not None:
-            append_history(history_record(usage, time.time()))
-        GLib.idle_add(mon.apply_usage, usage)
         now = time.time()
+        if usage is not None:
+            append_history(history_record(usage, now))
+        # recompute trends off the Gtk main thread, AFTER the append (so the fresh
+        # record is included) and BEFORE the idle_add (so this poll's redraw sees it).
+        if now - last_trend >= TREND_INTERVAL:
+            mon.compute_trends(now)
+            last_trend = now
+        GLib.idle_add(mon.apply_usage, usage)
         if now - last_prune >= PRUNE_INTERVAL:
             prune_history(now)
             last_prune = now
