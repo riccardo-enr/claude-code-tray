@@ -95,14 +95,22 @@ def parse_usage(stdout):
         }
     except Exception:
         return None
-    # Require numeric usage fields. A structurally valid payload carrying null or
-    # string values (e.g. a just-reset window) would otherwise pass here and then
-    # crash the Gtk-thread menu redraw (round()/epoch math) inside a GLib callback,
-    # silently killing the countdown timer source. Degrade to "unavailable" instead.
-    if not all(
-        isinstance(v, (int, float)) and not isinstance(v, bool) for v in u.values()
-    ):
+    def is_num(v):
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+    # Essentials must be numeric. A structurally valid payload carrying null or
+    # string values here (e.g. a just-reset window) would otherwise crash the
+    # Gtk-thread menu redraw (round()/epoch math) inside a GLib callback,
+    # silently killing the countdown timer source. Degrade to "unavailable".
+    if not all(is_num(u[k]) for k in ("used_percentage", "resets_at_epoch", "burn_rate_per_min")):
         return None
+    # Token counts are optional: the official --api usage endpoint reports
+    # percentages only, so tokens_used/token_limit legitimately come back null.
+    # Accept numeric-or-null; reject any other junk (strings) that would break
+    # fmt_tokens downstream. usage_rows renders "% used" when they are null.
+    for k in ("tokens_used", "token_limit"):
+        if u[k] is not None and not is_num(u[k]):
+            return None
     return u
 
 
@@ -113,7 +121,12 @@ def fetch_usage():
     missing or non-executable CLI, ...) so the daemon poll thread can never die.
     stdout is parsed regardless of returncode (exit 11 == limit-hit carries JSON).
     """
-    cmd = [USAGE_CLI, "--output", "json", "--once"]
+    # --api pulls the official OAuth usage numbers (matching Claude Code's
+    # /usage): authoritative used_percentage + reset time. That endpoint reports
+    # percentages only, so tokens_used/token_limit come back null and the token
+    # row degrades to "% used" (see parse_usage / usage_rows). --plan stays as
+    # the fallback basis when the (experimental) endpoint is stale/absent.
+    cmd = [USAGE_CLI, "--output", "json", "--once", "--api"]
     if PLAN:
         cmd += ["--plan", PLAN]
     try:
@@ -381,6 +394,44 @@ def demo():
         )
         is None
     )
+    # official --api payload: percentages only, token counts null -> still valid
+    # (tokens optional), not a crash. usage_rows renders "% used" for this shape.
+    now_plus = int(time.time()) + 7380
+    official = parse_usage(
+        json.dumps(
+            {
+                "limits": {
+                    "five_hour": {
+                        "tokens_used": None,
+                        "token_limit": None,
+                        "used_percentage": 5.0,
+                        "resets_at_epoch": now_plus,
+                    }
+                },
+                "local": {"burn_rate_tokens_per_minute": 12000.0},
+            }
+        )
+    )
+    assert official is not None and official["tokens_used"] is None
+    assert official["used_percentage"] == 5.0
+    # a non-numeric token count (not just null) is still rejected as junk.
+    assert (
+        parse_usage(
+            json.dumps(
+                {
+                    "limits": {
+                        "five_hour": {
+                            "tokens_used": "lots",
+                            "token_limit": None,
+                            "used_percentage": 5.0,
+                            "resets_at_epoch": now_plus,
+                        }
+                    }
+                }
+            )
+        )
+        is None
+    )
     assert fmt_tokens(417000) == "417k"
     assert fmt_tokens(88000) == "88k"
     assert fmt_tokens(18936912) == "18.9M"
@@ -549,13 +600,18 @@ class Monitor:
         u = self.usage
         if u is None:
             return ["usage unavailable"]
-        return [
-            "%s / %s (%d%%)"
-            % (
+        # Official --api usage has no absolute token counts -> show "% used"
+        # only; the P90 fallback path still carries tokens -> "72k / 88k (82%)".
+        if u["tokens_used"] is not None and u["token_limit"] is not None:
+            used = "%s / %s (%d%%)" % (
                 fmt_tokens(u["tokens_used"]),
                 fmt_tokens(u["token_limit"]),
                 round(u["used_percentage"]),
-            ),
+            )
+        else:
+            used = "%d%% used" % round(u["used_percentage"])
+        return [
+            used,
             fmt_countdown(u["resets_at_epoch"] - time.time()),
             "burn: %s tok/hr" % fmt_tokens(round(u["burn_rate_per_min"] * 60)),
         ]
