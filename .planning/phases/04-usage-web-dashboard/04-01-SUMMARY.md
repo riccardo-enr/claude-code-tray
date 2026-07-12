@@ -148,6 +148,12 @@ None - no external service configuration required.
 - All DASH-01..06 requirements implemented; `--selfcheck` prints `ok` with the numeric-sanitizer, injection, and self-containment asserts passing.
 - **Runtime-observable checks need user confirmation** (this is a GUI Gtk tray app; the Gtk loop and browser open cannot be exercised headless): run the tray, confirm the "Open Usage Dashboard" item appears and becomes clickable after one poll cycle, and that `${XDG_CACHE_HOME:-~/.cache}/claude-tray/dashboard.html` opens showing the three charts with working day/week/all buttons, a light->dark single-hue heatmap ramp, and gray empty cells.
 
+## Self-Check: PASSED
+
+- SUMMARY.md exists; commits 9572241, deca9d6, c918a1e, 52f110d all present in git log.
+- `python3 claude-monitor.py --selfcheck` prints `ok`.
+- Pre-existing unrelated changes to `claude-send.py` and `.planning/config.json` left untouched.
+
 ---
 *Phase: 04-usage-web-dashboard*
 *Completed: 2026-07-12*
