@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Usage Web Dashboard
-status: planning
-last_updated: "2026-07-12T12:10:21.328Z"
+status: roadmapped
+last_updated: "2026-07-12T12:30:00.000Z"
 last_activity: 2026-07-12
 progress:
-  total_phases: 0
+  total_phases: 1
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-11)
+See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 03 — usage-trends-in-the-tray
+**Current focus:** Phase 4 — usage-web-dashboard (roadmapped, ready to plan)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-12 — Milestone v1.2 started
+Phase: 4 — Usage Web Dashboard (defined; roadmap complete)
+Plan: — (not yet planned)
+Status: Roadmapped — ready for `/gsd-plan-phase 4`
+Last activity: 2026-07-12 — v1.2 roadmap created (single phase, DASH-01..06 mapped)
 
 ## Performance Metrics
 
@@ -60,10 +60,11 @@ Last activity: 2026-07-12 — Milestone v1.2 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Persist usage history as append-only JSONL under `~/.claude/` (e.g. `usage-history.jsonl`), pruned by a retention window (default 30 days, env `CLAUDE_TRAY_HISTORY_DAYS`).
-- History writes happen off the Gtk main loop, reusing the existing background poll — no new polling.
-- Defensive history I/O: a missing file, unwritable path, or corrupt line never crashes/blocks the helper; the reader skips bad lines.
-- Trends render inside the existing tray menu (unicode-block sparkline, daily/weekly burn, peak-usage hours) — no separate window or charting GUI.
+- v1.2 is a single phase (Phase 4). The dashboard is one coherent read-side capability on the single-file helper; a generation-vs-serving split would presuppose the static-`file://` delivery shape, which is deliberately left open.
+- Delivery shape (static `.html` regenerated on the poll tick via `file://` vs. a stdlib `http.server` on loopback) is an OPEN planning decision (SEED-001) — settle it in `/gsd-plan-phase 4`, not the roadmap.
+- Dashboard reads the Phase-2 `~/.claude/usage-history.jsonl` read-only via the existing `parse_history`/`history_keep` readers; refreshes on the existing background poll tick — no new polling, no second source.
+- Self-contained, stdlib-only output: inline CSS/JS, charts as SVG/canvas, no new dependencies and no JS charting library.
+- Dashboard complements the tray — the in-menu sparkline/burn/peak rows stay; the browser page is opened from a new tray menu item.
 
 ### Pending Todos
 
@@ -71,7 +72,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- HIST-03 (defensive history I/O) is load-bearing: file writes and reads must never freeze the Gtk main loop or crash the long-lived helper, mirroring v1.0's POLL-02 degradation posture.
+- DASH-05/06 are load-bearing constraints: the dashboard must never introduce a new poll, a second data source, or a runtime dependency. History reads must stay off the Gtk main loop (upholds HIST-03/POLL-02 posture).
+- The history `burn` field is RAW per-minute; convert to per-hour exactly once for burn-rate charts (mirrors Phase 03's `trend_burn`/`trend_peak_hour`).
 
 ## Deferred Items
 
@@ -81,11 +83,13 @@ Items acknowledged and carried forward from previous milestone close:
 |----------|------|--------|-------------|
 | Usage | 7-day / weekly limit display (CLI reports null for this account) | Deferred | 2026-07-11 |
 | Alerting | Configurable threshold via env var (add if fixed 80% proves wrong) | Deferred | 2026-07-11 |
-| History | Raw data export (CSV/JSON dump) — HIST-F1 | Deferred | 2026-07-11 |
-| Trends | Configurable sparkline window / aggregation period — TREND-F1 | Deferred | 2026-07-11 |
+| History | Raw data export (CSV/JSON dump) — HIST-F1 / DASH-F2 | Deferred | 2026-07-11 |
+| Trends | Configurable sparkline window / aggregation period — TREND-F1 / DASH-F3 | Deferred | 2026-07-11 |
+| Dashboard | Live in-browser auto-refresh — DASH-F1 | Deferred | 2026-07-12 |
 
 ## Session Continuity
 
-Last session: 2026-07-12T11:25:05.129Z
-Stopped at: Phase 3 planned (1 plan, ready to execute)
-Resume file: .planning/phases/03-usage-trends-in-the-tray/03-01-PLAN.md
+Last session: 2026-07-12T12:30:00.000Z
+Stopped at: v1.2 roadmap created — Phase 4 defined, coverage 6/6
+Resume file: .planning/ROADMAP.md (next: `/gsd-plan-phase 4`)
+</content>

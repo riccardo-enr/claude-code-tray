@@ -41,9 +41,10 @@ not replace it.
 
 | Requirement | Phase |
 |-------------|-------|
-| DASH-01 | TBD |
-| DASH-02 | TBD |
-| DASH-03 | TBD |
-| DASH-04 | TBD |
-| DASH-05 | TBD |
-| DASH-06 | TBD |
+| DASH-01 | Phase 4 |
+| DASH-02 | Phase 4 |
+| DASH-03 | Phase 4 |
+| DASH-04 | Phase 4 |
+| DASH-05 | Phase 4 |
+| DASH-06 | Phase 4 |
+</content>

@@ -4,7 +4,7 @@
 
 The tray shows per-session Claude Code status and (v1.0) at-a-glance token-usage
 and quota-reset info sourced from the installed `claude-monitor` CLI. This
-roadmap spans two milestones on the same single-file helper (`claude-monitor.py`):
+roadmap spans three milestones on the same single-file helper (`claude-monitor.py`):
 
 - **v1.0 — Usage & Quota Monitoring** (Phase 1, complete): background-polled
   usage rows + high-usage icon badge in the existing menu.
@@ -13,10 +13,16 @@ roadmap spans two milestones on the same single-file helper (`claude-monitor.py`
   durable, bounded JSONL store, then surface trends (sparkline, daily/weekly
   burn, peak-usage hours) inside the same tray menu.
 
-v1.1 reuses the existing background poll — no new polling and no new
-dependencies (stdlib + PyGObject only, X11-only). It splits into two natural,
+- **v1.2 — Usage Web Dashboard** (Phase 4): turn that same JSONL history into a
+  browsable, self-contained HTML dashboard opened from a tray menu item — real
+  charts (usage-% trend over a selectable range, burn-rate trend, peak-usage
+  heatmap) that complement the cramped tray menu, not replace it.
+
+v1.1 and v1.2 reuse the existing background poll — no new polling and no new
+dependencies (stdlib + PyGObject only, X11-only). v1.1 split into two natural,
 independently-verifiable boundaries: a persistence foundation, then the
-read-side trend views that depend on it.
+read-side trend views that depend on it. v1.2 is a single read-side consumer of
+the same store, delivered as one coherent capability.
 
 ## Phases
 
@@ -28,6 +34,7 @@ read-side trend views that depend on it.
 - [x] **Phase 1: Usage & Quota Monitoring in the Tray** - Background-polled usage rows + high-usage icon badge in the existing menu (v1.0, completed 2026-07-11)
 - [x] **Phase 2: Usage History Persistence** - Append each successful poll to a bounded, corruption-tolerant JSONL history store under `~/.claude/` (v1.1) (completed 2026-07-12)
 - [x] **Phase 3: Usage Trends in the Tray** - Sparkline, daily/weekly burn, and peak-usage hours rendered in the existing tray menu from history (v1.1) (completed 2026-07-12)
+- [ ] **Phase 4: Usage Web Dashboard** - A tray menu item opens a self-contained HTML dashboard rendering the JSONL history as real charts: selectable-range usage-% trend, burn-rate trend, and a peak-usage heatmap (v1.2)
 
 ## Phase Details
 
@@ -85,13 +92,35 @@ read-side trend views that depend on it.
 
 **UI hint**: yes
 
+### Phase 4: Usage Web Dashboard
+
+**Goal**: From a tray menu item, the user opens a browsable, self-contained HTML dashboard that renders the persisted `~/.claude/usage-history.jsonl` as real charts — a selectable-range usage-% trend, a burn-rate trend over the full retained history, and an hour-of-day x day-of-week peak-usage heatmap — complementing (not replacing) the cramped tray menu, built read-only with stdlib only.
+**Depends on**: Phase 2 (reads the persisted `~/.claude/usage-history.jsonl` via the existing `parse_history`/`history_keep` readers); reuses the existing background poll tick for refresh — no new polling, no second data source. Sibling of Phase 3 (both are read-side consumers of the same store).
+**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06
+**Success Criteria** (what must be TRUE):
+
+  1. A new tray menu item (e.g. "Open Usage Dashboard") opens the dashboard in the user's default browser. (DASH-01)
+  2. The dashboard renders a usage-% trend chart with a selectable time range (e.g. day / week / full retained history) — a longer range than the tray sparkline holds. (DASH-02)
+  3. The dashboard shows a peak-usage heatmap laid out as hour-of-day (0-23) by day-of-week, derived from the history. (DASH-03)
+  4. The dashboard renders a burn-rate trend (daily/weekly aggregates) over the full retained history. (DASH-04)
+  5. The dashboard reads only `~/.claude/usage-history.jsonl` (no new polling, no second source) and its data refreshes on the existing background poll tick; the page is fully self-contained — stdlib-generated, no new dependencies, inline CSS/JS, charts drawn as SVG/canvas. (DASH-05, DASH-06)
+
+**Plans**: TBD
+
+**UI hint**: yes
+
+> Open planning decision (do NOT resolve in the roadmap; settle at phase planning per SEED-001): delivery shape — a static self-contained `.html` regenerated on the poll tick and opened via `file://`, vs. a tiny stdlib `http.server` bound to loopback serving live data. This choice determines how generation and serving interleave, which is why v1.2 stays a single phase rather than a generation/serving split.
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 (done) -> 2 -> 3
+Phases execute in numeric order: 1 (done) -> 2 (done) -> 3 (done) -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Usage & Quota Monitoring in the Tray | 1/1 | Complete | 2026-07-11 |
 | 2. Usage History Persistence | 1/1 | Complete    | 2026-07-12 |
 | 3. Usage Trends in the Tray | 1/1 | Complete   | 2026-07-12 |
+| 4. Usage Web Dashboard | 0/? | Not started | - |
+</content>
+</invoke>
