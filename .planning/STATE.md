@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Usage Web Dashboard
 current_phase: 4
-current_phase_name: defined; roadmap complete
+current_phase_name: planned
 status: planned
-stopped_at: Phase 4 planned (1 plan, ready to execute)
-last_updated: "2026-07-12T12:22:45.151Z"
+stopped_at: Phase 4 UI-SPEC approved
+last_updated: "2026-07-12T13:42:54.776Z"
 last_activity: 2026-07-12
-last_activity_desc: Phase 4 planned - 04-01-PLAN.md (3 tasks, 1 wave), DASH-01..06 covered
+last_activity_desc: Phase 4 planned; DASH-01..06 covered, decisions D-01..D-07 covered
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 3
+  total_plans: 4
   completed_plans: 3
   percent: 75
 ---
@@ -93,7 +93,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-12T12:22:45.144Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-usage-web-dashboard/04-CONTEXT.md
+Last session: 2026-07-12T13:42:54.766Z
+Stopped at: Phase 4 UI-SPEC approved
+Resume file: .planning/phases/04-usage-web-dashboard/04-UI-SPEC.md
 </content>
