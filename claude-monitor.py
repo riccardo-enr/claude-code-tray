@@ -412,31 +412,6 @@ def heatmap_buckets(records):
     return grid
 
 
-def burn_series(records, now):
-    """Daily burn-rate series [[day_start_epoch, rate_or_None], ...] (DASH-04).
-
-    Steps one calendar day at a time (+timedelta so DST days stay aligned) from
-    the earliest record's local midnight through `now`, reusing trend_burn for
-    each day's [start, end) window (which applies *60 once and returns None for an
-    empty window). Days with no samples carry None so the client draws a break,
-    not a false zero. Empty input -> empty list.
-    """
-    if not records:
-        return []
-    first = min(rec["t"] for rec in records)
-    dt = datetime.datetime.fromtimestamp(first).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    end_dt = datetime.datetime.fromtimestamp(now)
-    out = []
-    while dt <= end_dt:
-        nxt = dt + datetime.timedelta(days=1)
-        start, end = int(dt.timestamp()), int(nxt.timestamp())
-        out.append([start, trend_burn(records, start, end)])
-        dt = nxt
-    return out
-
-
 # --- Dashboard HTML (self-contained: inline CSS/JS, SVG charts, no CDN/deps) ---
 # The ONE permitted http:// in the page is the SVG XML namespace passed to
 # createElementNS -- an identifier, never fetched. No <link, no src=, no https://.
@@ -470,8 +445,6 @@ _DASH_BODY = (
     "<button data-range=\"week\">Week</button>"
     "<button data-range=\"all\" class=\"active\">All</button></div>"
     "<svg id=\"usage-chart\" viewBox=\"0 0 600 200\"></svg></section>"
-    "<section><h2>Daily burn rate (tok/hr)</h2>"
-    "<svg id=\"burn-chart\" viewBox=\"0 0 600 200\"></svg></section>"
     "<section><h2>Peak usage heatmap (mean burn tok/hr)</h2>"
     "<svg id=\"heatmap\" viewBox=\"0 0 520 170\"></svg>"
     "<div id=\"hm-legend\"><span>Low</span>"
@@ -527,10 +500,6 @@ function drawUsage(range){
   var bs=document.querySelectorAll("#ranges button");
   for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-range")===range)?"active":"";
 }
-function drawBurn(){
-  var svg=document.getElementById("burn-chart");clear(svg);
-  drawPoly(svg,D.burn.map(function(p){return [p[0],p[1]];}),1);
-}
 function drawHeatmap(){
   var svg=document.getElementById("heatmap");clear(svg);
   var g=D.heatmap,max=0,r,c;
@@ -551,7 +520,7 @@ function drawHeatmap(){
     }
   }
 }
-drawUsage("all");drawBurn();drawHeatmap();
+drawUsage("all");drawHeatmap();
 document.getElementById("meta").textContent="Generated "+new Date(D.generated*1000).toLocaleString();
 document.getElementById("ranges").addEventListener("click",function(e){
   var r=e.target.getAttribute("data-range");if(r)drawUsage(r);
@@ -576,7 +545,6 @@ def render_dashboard(records, now):
     payload = {
         "usage": [[int(r["t"]), r["pct"]] for r in records],
         "heatmap": heatmap_buckets(records),
-        "burn": burn_series(records, now),
         "bounds": {"day": day_start, "week": week_start},
         "generated": int(now),
     }
@@ -798,19 +766,6 @@ def demo():
     assert len(hm) == 7 and all(len(row) == 24 for row in hm)
     assert hm[0][15] == 9000.0
     assert hm[2][3] is None
-    # burn_series: one full day mean(100,200)*60=9000; a spanned empty day -> None.
-    d1 = datetime.datetime(2024, 1, 1)  # Monday
-    bs_recs = [
-        {"t": int(d1.replace(hour=10).timestamp()), "pct": 1.0, "burn": 100.0},
-        {"t": int(d1.replace(hour=14).timestamp()), "pct": 1.0, "burn": 200.0},
-        {"t": int((d1 + datetime.timedelta(days=2)).replace(hour=10).timestamp()), "pct": 1.0, "burn": 300.0},
-    ]
-    bs_now = (d1 + datetime.timedelta(days=2)).replace(hour=12).timestamp()
-    series = burn_series(bs_recs, bs_now)
-    assert series[0] == [int(d1.timestamp()), 9000.0]
-    assert series[1][1] is None  # Jan 2 has no samples
-    assert series[2][1] == 18000.0
-    assert burn_series([], bs_now) == []
     # render_dashboard: good record -> real page (doctype + embedded const D marker).
     now_dash = int(time.time())
     page = render_dashboard([{"t": now_dash, "pct": 42.0, "burn": 10.0}], now_dash)
