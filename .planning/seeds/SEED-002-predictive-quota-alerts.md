@@ -79,6 +79,15 @@ Chosen approach (all stdlib, on data already persisted):
    projected exhaustion epoch against `resets_at_epoch`; only warn when
    exhaustion lands BEFORE the reset. Removes false alarms when you'll coast to
    the window reset anyway.
+4. **Anchor to the OFFICIAL remaining, not the P90 estimate.** The tray runs
+   `claude-monitor --output json --once` WITHOUT `--api`, so it forecasts against
+   a P90-guessed limit. Adding `--api` returns the official OAuth numbers that
+   match Claude Code's `/usage` (verified 2026-07-12: weekly 31% matched exactly;
+   token auto-resolved from stored creds, no env var). A perfect burn rate ÷ the
+   wrong ceiling still lies, so the sharpest forecast = recent-window burn (1) ÷
+   official `tokens_remaining` (this). `ponytail:` `--api` is
+   `confidence:"experimental"` (undocumented endpoint) — keep the current P90
+   path as fallback when it's stale/absent, don't hard-depend on it.
 
 Deferred (`ponytail:` — add only if 1+2 measurably underperform):
 - least-squares regression over recent samples (vs. the two-point slope);
