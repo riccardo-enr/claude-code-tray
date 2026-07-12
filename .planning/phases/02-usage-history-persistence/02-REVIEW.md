@@ -10,7 +10,11 @@ findings:
   warning: 1
   info: 2
   total: 3
-status: issues_found
+status: resolved
+resolution:
+  WR-01: fixed (commit 352f9e3)
+  IN-01: accepted-by-design (plan relies on ~/.claude existing; OSError-swallow covers absence)
+  IN-02: deferred (documentation-only wording nit)
 ---
 
 # Phase 02: Code Review Report
@@ -141,6 +145,25 @@ bug. Optionally tighten the docstring to "records older than `days` (exclusive o
 exact boundary) are dropped" for clarity.
 
 **Fix:** Documentation-only; adjust wording or leave as-is.
+
+---
+
+## Resolution (2026-07-12)
+
+- **WR-01 — FIXED** in commit `352f9e3`. `parse_history` now keeps only JSON objects
+  with a **numeric** `"t"` (`isinstance(rec, dict) and isinstance(rec.get("t"), (int, float))`)
+  — stronger than the suggested `"t" in rec`, so a valid-JSON object with a non-numeric
+  `"t"` (e.g. `{"t": "nope"}`) is also dropped instead of raising `TypeError` in
+  `history_keep`. `prune_history` now reads with `errors="replace"` so invalid UTF-8
+  decodes to skippable garbage rather than raising `UnicodeDecodeError`. Verified by an
+  extended `--selfcheck` assert and a runtime test that prunes a store containing invalid
+  UTF-8 bytes + `42`/`null`/`[1,2]`/`{}`/`{"t":"nope"}` lines without raising, keeping only
+  the well-formed record. Upholds HIST-03.
+- **IN-01 — ACCEPTED BY DESIGN.** The plan explicitly relies on `~/.claude` existing (it
+  is the Claude Code home the CLI lives under) and lets the `OSError`-swallow cover its
+  absence. Not creating the dir is the intended degradation, not a defect.
+- **IN-02 — DEFERRED.** Documentation-only wording nit on the inclusive retention
+  boundary; no functional impact.
 
 ---
 
