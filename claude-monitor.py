@@ -173,10 +173,15 @@ def history_keep(rec, now, days):
 
 
 def parse_history(text):
-    """Tolerant loader: per-line json.loads, skipping empty and unparseable lines.
+    """Tolerant loader: per-line json.loads, keeping only well-formed records.
 
-    A half-written trailing line from a killed process (or any garbage line) is
-    skipped rather than raised on. Returns the surviving records in order.
+    A record is well-formed when it is a JSON object carrying a numeric "t" (the
+    poll epoch). Empty lines, unparseable lines (e.g. a half-written trailing
+    line from a killed process), and structurally invalid records (bare scalars,
+    arrays, or objects whose "t" is missing or non-numeric) are all skipped
+    rather than raised on. This is the single corruption-tolerance boundary both
+    prune_history and Phase 03's readers route through, so a downstream
+    history_keep(rec["t"]) can never raise on garbage. Returns survivors in order.
     """
     out = []
     for line in text.splitlines():
@@ -184,9 +189,11 @@ def parse_history(text):
         if not line:
             continue
         try:
-            out.append(json.loads(line))
+            rec = json.loads(line)
         except Exception:
             continue
+        if isinstance(rec, dict) and isinstance(rec.get("t"), (int, float)):
+            out.append(rec)
     return out
 
 
@@ -213,7 +220,7 @@ def prune_history(now):
     """
     tmp = None
     try:
-        with open(HISTORY_PATH) as f:
+        with open(HISTORY_PATH, errors="replace") as f:
             records = parse_history(f.read())
         survivors = [r for r in records if history_keep(r, now, HISTORY_DAYS)]
         fd, tmp = tempfile.mkstemp(dir=os.path.dirname(HISTORY_PATH))
@@ -327,6 +334,11 @@ def demo():
     good2 = {"t": now0 + 1, "pct": 20.0}
     blob = json.dumps(good1) + "\nnot json {oops\n" + json.dumps(good2) + "\n"
     assert parse_history(blob) == [good1, good2]
+    # tolerant parse also drops valid-JSON-but-wrong-shape lines (bare scalar, null,
+    # array, object with no "t", object with non-numeric "t") so prune_history's
+    # history_keep(rec["t"]) can never raise and kill the poll thread.
+    junk = "42\nnull\n[1, 2]\n{}\n" + json.dumps({"t": "nope"}) + "\n\"hi\"\n"
+    assert parse_history(json.dumps(good1) + "\n" + junk + json.dumps(good2) + "\n") == [good1, good2]
     print("ok")
 
 
