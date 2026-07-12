@@ -4,11 +4,11 @@ milestone: v1.2
 milestone_name: Usage Web Dashboard
 current_phase: 4
 current_phase_name: defined; roadmap complete
-status: roadmapped
-stopped_at: Phase 4 context gathered
+status: planned
+stopped_at: Phase 4 planned (1 plan, ready to execute)
 last_updated: "2026-07-12T12:22:45.151Z"
 last_activity: 2026-07-12
-last_activity_desc: v1.2 roadmap created (single phase, DASH-01..06 mapped)
+last_activity_desc: Phase 4 planned - 04-01-PLAN.md (3 tasks, 1 wave), DASH-01..06 covered
 progress:
   total_phases: 4
   completed_phases: 3
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 4 — usage-web-dashboard (roadmapped, ready to plan)
+**Current focus:** Phase 4 — usage-web-dashboard (planned, ready to execute)
 
 ## Current Position
 
-Phase: 4 — Usage Web Dashboard (defined; roadmap complete)
-Plan: — (not yet planned)
-Status: Roadmapped — ready for `/gsd-plan-phase 4`
-Last activity: 2026-07-12 — v1.2 roadmap created (single phase, DASH-01..06 mapped)
+Phase: 4 — Usage Web Dashboard (planned)
+Plan: 04-01-PLAN.md (3 tasks, 1 wave)
+Status: Planned — ready for `/gsd-execute-phase 4`
+Last activity: 2026-07-12 — Phase 4 planned; DASH-01..06 covered, decisions D-01..D-07 covered
 
 ## Performance Metrics
 
