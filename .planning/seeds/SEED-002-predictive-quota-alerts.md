@@ -41,8 +41,9 @@ cache excluded so the basis matches tokens_remaining), then
 
 ## Scope Estimate
 
-**Small** — one phase. The forecast math already exists upstream; this is a
-read + notify job, not a modeling job. No new deps (PyGObject already present).
+**Small** — one phase. No new deps (PyGObject already present). Upstream gives a
+usable fallback forecast; our own recent-window + EWMA estimate (see "Better
+Than Upstream") is ~15 lines over data Phase 2 already persists, so still light.
 
 Lazy shape (stdlib + PyGObject):
 1. Extend `parse_usage()` in claude-monitor.py to pull the `forecast` block
@@ -54,8 +55,36 @@ Lazy shape (stdlib + PyGObject):
    crossing, not every poll.
 - Open questions for planning: threshold config surface (env vars vs. menu);
   whether the forecast row also lands in the v1.2 dashboard (`[[SEED-001]]`).
-- `ponytail:` if upstream's linear forecast ever proves too jittery, smooth
-  using our own Phase-2 history — but only then; don't pre-build it.
+
+## Better Than Upstream (chosen forecast)
+
+Upstream's weakness: `io_burn = totalTokens / durationMinutes` averages over the
+WHOLE session block. After an idle gap it reads stale and *overestimates* time
+left — the dangerous direction for an alert. Our Phase-2 history (`{t,
+tokens_used, burn}` per poll) is a real time series upstream never sees, so we
+compute our own estimate and only fall back to `forecast.*` if history is thin.
+
+Chosen approach (all stdlib, on data already persisted):
+
+1. **Recent-window burn, not session-average.** Slope of `tokens_used` over the
+   last ~20-30 min of history samples:
+   `recent_burn = (tokens_now - tokens_20min_ago) / minutes_elapsed` (tok/min),
+   then `minutes_left = tokens_remaining / recent_burn`. Reacts immediately when
+   a heavy session starts. Guard: need >=2 samples spanning a few minutes, and
+   `recent_burn > 0`, else fall back to upstream `forecast.minutes_remaining`.
+2. **EWMA smoothing** on the per-poll burn so the estimate doesn't bounce every
+   poll: `ewma = alpha*sample + (1-alpha)*ewma`, alpha ~0.3. Forecast off the
+   smoothed rate.
+3. **Alert on exhaustion-before-reset, not exhaustion-in-the-abstract.** Compare
+   projected exhaustion epoch against `resets_at_epoch`; only warn when
+   exhaustion lands BEFORE the reset. Removes false alarms when you'll coast to
+   the window reset anyway.
+
+Deferred (`ponytail:` — add only if 1+2 measurably underperform):
+- least-squares regression over recent samples (vs. the two-point slope);
+- conservative bound (mean + 1 std of recent burn) to warn pessimistically;
+- hour-of-day priors reusing Phase-3 peak-hour calc;
+- Holt / double-exponential smoothing for acceleration.
 
 ## Breadcrumbs
 
