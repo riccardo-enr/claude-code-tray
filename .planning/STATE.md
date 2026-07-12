@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Usage History & Trends
-current_phase: 03
-current_phase_name: usage-trends-in-the-tray
-status: complete
-stopped_at: Phase 3 complete (milestone v1.1 done)
-last_updated: "2026-07-12T11:48:41Z"
+milestone: v1.2
+milestone_name: Usage Web Dashboard
+status: planning
+last_updated: "2026-07-12T12:10:21.328Z"
 last_activity: 2026-07-12
-last_activity_desc: Phase 03 verified complete — core feature UAT-passed, edge cases statically verified
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 ## Current Position
 
-Phase: 03 (usage-trends-in-the-tray) — COMPLETE
-Plan: 1 of 1 complete
-Status: Verified — TREND-01/02/03 rendering UAT-passed (user-confirmed in live tray); empty-state + OSError edge cases skipped in live UAT but statically verified (--selfcheck green). Milestone v1.1 complete.
-Last activity: 2026-07-12 — Phase 03 verified complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-12 — Milestone v1.2 started
 
 ## Performance Metrics
 

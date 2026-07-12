@@ -6,8 +6,10 @@ A GNOME top-bar tray indicator for Claude Code. It already shows per-session
 status (running / waiting / done) fed by Claude Code hooks over a unix socket,
 and focuses the originating tmux pane + Ghostty window on click. v1.0 added
 **token-usage and quota-reset monitoring** (current usage vs plan limit, reset
-countdown, burn rate). v1.1 adds **usage history and trends** on top: persisted
-samples, an in-menu sparkline, daily/weekly burn, and peak-usage hours.
+countdown, burn rate). v1.1 added **usage history and trends** on top: persisted
+samples, an in-menu sparkline, daily/weekly burn, and peak-usage hours. v1.2 adds
+a **browsable HTML usage dashboard** opened from the tray, rendering the same
+history as real charts (trends, peak-hour heatmap, longer ranges).
 
 ## Core Value
 
@@ -31,16 +33,18 @@ it resets** — without launching a separate terminal monitor.
 - **Performance constraint:** the CLI takes a few seconds to run, so polling
   must happen on a background thread on an interval, never on the Gtk main loop.
 
-## Current Milestone: v1.1 Usage History & Trends
+## Current Milestone: v1.2 Usage Web Dashboard
 
-**Goal:** Persist usage samples over time and surface trends in the tray, turning
-v1.0's point-in-time readout into history.
+**Goal:** Turn the persisted `~/.claude/usage-history.jsonl` history into a
+browsable HTML dashboard opened from the tray — real charts (trends, peak-hour
+heatmap, longer ranges) that complement the cramped tray menu, not replace it.
 
 **Target features:**
-- Persist each poll sample to a JSONL store under `~/.claude/`, pruned past a retention window (default 30 days)
-- In-menu sparkline of usage % over a recent window
-- Daily / weekly aggregate burn
-- Peak-usage hours (hour-of-day with highest mean usage/burn)
+- A tray menu item that opens a usage dashboard in the browser
+- Usage-% and burn-rate trend charts over a longer, selectable range than the tray
+- Peak-usage heatmap (hour-of-day x day-of-week)
+- Read-only over the existing Phase-2 JSONL; no new polling; refreshed on the existing poll tick
+- Self-contained, stdlib-only output (no new deps) matching the project's constraints
 
 ## Requirements
 
@@ -57,19 +61,25 @@ v1.0's point-in-time readout into history.
 - checkmark Persist each successful poll sample to a JSONL history store (HIST-01) — Phase 2
 - checkmark Prune history past a retention window, default 30 days env-configurable (HIST-02) — Phase 2
 - checkmark Defensive history I/O — never crash/block the helper (HIST-03) — Phase 2
+- checkmark In-menu sparkline of usage % over a recent window (TREND-01) — Phase 3
+- checkmark Daily / weekly aggregate burn in the menu (TREND-02) — Phase 3
+- checkmark Peak-usage hours in the menu (TREND-03) — Phase 3
 
-### Active (v1.1)
+### Active (v1.2)
 
-- [ ] In-menu sparkline of usage % over a recent window (TREND-01)
-- [ ] Daily / weekly aggregate burn in the menu (TREND-02)
-- [ ] Peak-usage hours in the menu (TREND-03)
+- [ ] Open a browsable usage dashboard in the browser from a tray menu item (DASH-01)
+- [ ] Usage-% trend chart over a longer, selectable range than the tray (DASH-02)
+- [ ] Peak-usage heatmap (hour-of-day x day-of-week) from history (DASH-03)
+- [ ] Burn-rate trend over the full retained history (DASH-04)
+- [ ] Reads the existing `~/.claude/usage-history.jsonl` (read-only, no new polling); refreshes on the existing poll tick (DASH-05)
+- [ ] Self-contained output — stdlib only, no new deps, inline CSS/JS, charts as SVG/canvas (DASH-06)
 
 ### Out of Scope
 
 - Data export (CSV/JSON) this milestone — revisit as HIST-F1 if in-tray views prove insufficient
 - 7-day / weekly limit display — the CLI reports it as null for this account; revisit if it populates
 - Cost/dollar tracking in the tray — usage %, not billing, is the goal
-- Charting GUI / separate window — trends live inside the existing tray menu
+- In-process GTK charting window — v1.2's dashboard is a self-contained HTML page opened in the browser, not a Gtk-drawn chart surface (the tray stays glanceable text/unicode)
 - Wayland support — existing app is X11-only; unchanged this milestone
 - Bundling/replacing the `claude-monitor` CLI — we consume it, not vendor it
 
@@ -103,4 +113,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-12 — Phase 2 (Usage History Persistence) complete and verified: HIST-01/02/03 validated via live UAT + security review. Next: Phase 3 (Usage Trends).*
+*Last updated: 2026-07-12 — v1.1 (Usage History & Trends) shipped: HIST-01/02/03 + TREND-01/02/03 validated. Milestone v1.2 (Usage Web Dashboard) started; requirements DASH-01..06 active. Next: roadmap v1.2.*

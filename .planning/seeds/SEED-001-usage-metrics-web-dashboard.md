@@ -1,6 +1,7 @@
 ---
 id: SEED-001
-status: dormant
+status: sprouted
+sprouted_into: v1.2 Usage Web Dashboard
 planted: 2026-07-12
 planted_during: v1.1 Phase 3 (Usage Trends in the Tray)
 trigger_when: after v1.1 ships (Phase 3 verified); next milestone (v1.2)

@@ -15,3 +15,21 @@ sourced from the `claude-monitor` CLI, without launching a separate terminal mon
 retained forever after a WR-03 fix) was found and fixed with a consecutive-miss counter.
 
 **Phases:** 01-usage-quota-monitoring-in-the-tray (verified).
+
+## v1.1 — Usage History & Trends (shipped 2026-07-12)
+
+**Goal:** Persist usage samples over time and surface trends in the tray, turning
+v1.0's point-in-time readout into history — without new polling or new dependencies.
+
+**Delivered:**
+- Append each successful poll to a bounded, corruption-tolerant `~/.claude/usage-history.jsonl` store, pruned past a 30-day retention window (env `CLAUDE_TRAY_HISTORY_DAYS`) — HIST-01/02/03
+- In-menu 24h auto-scaled unicode-block sparkline of usage % — TREND-01
+- Today / current-ISO-week mean burn rate in the menu — TREND-02
+- Peak usage hour-of-day (by mean burn) in the menu — TREND-03
+- All trend compute off the Gtk main thread (cached in `poll_loop`, ~5min throttle); no history I/O on the UI loop (upholds HIST-03/POLL-02)
+
+**Verification:** Phase 02 UAT 3/3 passed + security review; Phase 03 automated
+`--selfcheck` green (all new + prior asserts), goal-backward verification passed,
+live-tray UAT confirmed the three trend rows render.
+
+**Phases:** 02-usage-history-persistence (verified), 03-usage-trends-in-the-tray (verified).
