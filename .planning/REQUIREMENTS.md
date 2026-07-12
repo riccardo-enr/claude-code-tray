@@ -14,9 +14,9 @@ point-in-time usage monitoring. Reuses the existing background poll; no new poll
 
 ### Trends display (TREND)
 
-- [ ] **TREND-01**: The tray menu shows a sparkline of usage % over a recent window (default last 24h) rendered from history.
-- [ ] **TREND-02**: The tray menu shows aggregate burn for today and the current week, derived from history.
-- [ ] **TREND-03**: The tray menu surfaces peak-usage hour(s) — the hour-of-day with the highest mean usage/burn over the retained history.
+- [x] **TREND-01**: The tray menu shows a sparkline of usage % over a recent window (default last 24h) rendered from history.
+- [x] **TREND-02**: The tray menu shows aggregate burn for today and the current week, derived from history.
+- [x] **TREND-03**: The tray menu surfaces peak-usage hour(s) — the hour-of-day with the highest mean usage/burn over the retained history.
 
 ## Future Requirements (deferred)
 
