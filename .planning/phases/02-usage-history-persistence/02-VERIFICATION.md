@@ -1,17 +1,20 @@
 ---
 phase: 02-usage-history-persistence
 verified: 2026-07-12T00:00:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Run `python3 claude-monitor.py` for several poll cycles and `tail -f ~/.claude/usage-history.jsonl`."
     expected: "Exactly one well-formed JSON line appears per successful poll; a degraded poll (rename/kill the CLI) adds no line while usage rows still update."
     why_human: "Requires the live GTK/AppIndicator tray and real polls; headless sandbox cannot import gi or drive poll_loop end-to-end. Code path is statically verified (append guarded by `usage is not None`, before idle_add) but the running-tray guarantee needs observation."
+
   - test: "Hand-seed an old record (a line with `t` set to now-40d) into ~/.claude/usage-history.jsonl, then restart the tray."
     expected: "The old record is pruned on startup and the file is rewritten whole (no partial/truncated file)."
     why_human: "Startup prune fires inside the live poll_loop daemon thread against the real on-disk file; the atomic rewrite logic is proven by harness but the live startup wiring needs one observed run."
+
   - test: "`chmod 000 ~/.claude/usage-history.jsonl` (or point HISTORY_PATH at an unwritable dir) with the tray running."
     expected: "The tray keeps running and usage rows keep updating; history just stops persisting (no crash, no freeze)."
     why_human: "The long-lived-tray resilience guarantee (SUMMARY D5) can only be confirmed by observing a running GTK process; the OSError-swallow code paths are proven non-raising by harness but not under the live main loop."

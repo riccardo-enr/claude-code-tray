@@ -91,5 +91,5 @@ Phases execute in numeric order: 1 (done) -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Usage & Quota Monitoring in the Tray | 1/1 | Complete | 2026-07-11 |
-| 2. Usage History Persistence | 1/1 | Complete   | 2026-07-12 |
+| 2. Usage History Persistence | 1/1 | Complete    | 2026-07-12 |
 | 3. Usage Trends in the Tray | 0/0 | Not started | - |
