@@ -89,7 +89,7 @@ them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
   4. After a cap's window rolls over, that cap can alert again — a previous warning does not suppress the fresh window.
   5. With the notification daemon absent or failing, the tray keeps polling, rendering, and serving session events — no crash, no dead thread, no stalled menu.
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -98,7 +98,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md — SESS producer: `sess_should_notify` de-dupe + `Monitor.handle` emits `waiting` (sticky) / `done` (expiring) notifications that click through to the tmux pane
+- [x] 05-02-PLAN.md — SESS producer: `sess_should_notify` de-dupe + `Monitor.handle` emits `waiting` (sticky) / `done` (expiring) notifications that click through to the tmux pane
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -195,5 +195,5 @@ functions) + human UAT on the live tray.
 | 2. Usage History Persistence | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 3. Usage Trends in the Tray | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
-| 5. Notification Path & Event Producers | v1.3 | 1/3 | In Progress|  |
+| 5. Notification Path & Event Producers | v1.3 | 2/3 | In Progress|  |
 | 6. Notification Control & Config | v1.3 | 0/TBD | Not started | - |

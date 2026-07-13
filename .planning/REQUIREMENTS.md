@@ -22,8 +22,8 @@ The shared path. This is the actual deliverable — the individual pings are pro
 
 ### Session events (SESS)
 
-- [ ] **SESS-01**: User is notified when a Claude Code session is **waiting for input** (permission prompt / question), fed by the existing hook -> unix socket status pipeline.
-- [ ] **SESS-02**: User is notified when a Claude Code session **finishes (done)**, same pipeline.
+- [x] **SESS-01**: User is notified when a Claude Code session is **waiting for input** (permission prompt / question), fed by the existing hook -> unix socket status pipeline.
+- [x] **SESS-02**: User is notified when a Claude Code session **finishes (done)**, same pipeline.
 
 ### Predictive quota alerts (ALERT)
 

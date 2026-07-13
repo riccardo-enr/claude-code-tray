@@ -6,14 +6,14 @@ current_phase: 05
 current_phase_name: Notification Path & Event Producers
 status: executing
 stopped_at: Phase 5 planned (3 plans)
-last_updated: "2026-07-13T12:55:32.655Z"
+last_updated: "2026-07-13T13:01:12.717Z"
 last_activity: 2026-07-13
 last_activity_desc: Phase 05 execution started
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 ## Current Position
 
 Phase: 05 (Notification Path & Event Producers) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-13 — Phase 05 execution started
 
@@ -56,6 +56,7 @@ Last activity: 2026-07-13 — Phase 05 execution started
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 05 P02 | 15 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Recent decisions affecting current work:
 - **Both producers (SESS-* and ALERT-*) land in Phase 5, not separate phases.** The deliverable is the shared emit path (de-dupe, mute hook, click-to-focus); building it against one producer and bolting the second on later is how it grows two heads — the exact failure SEED-004 called out.
 - **Config (CFG-*) comes last (Phase 6)** because CFG-01 enumerates all four event types — they must exist before they can be toggled.
 - ALERT-* reuses v1.2's QUOTA-03 **percentage** projection. It is not a new forecaster; SEED-002's token-based EWMA plan is superseded (token counts are `null` under `--api`, quick task `260712-ndo`).
+- [Phase 05]: SESS de-dupe is one pure expression: notifiable state AND a change from the previous status -- no timestamps, no seen-set (NOTIF-02, D-03)
+- [Phase 05]: Structural greps/AST checks over claude-monitor.py are defeated by prose naming the symbol they forbid (docstrings are in ast.dump) -- second occurrence this phase
 
 ### Pending Todos
 
@@ -114,7 +117,7 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-13T12:55:32.645Z
+Last session: 2026-07-13T13:00:56.186Z
 Stopped at: Phase 5 planned (3 plans, waves 1-3)
 Resume file: .planning/phases/05-notification-path-event-producers/05-01-PLAN.md
 
