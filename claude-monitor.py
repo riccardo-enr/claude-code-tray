@@ -1574,6 +1574,76 @@ def demo():
     assert sess_should_notify("done", "done") is False
     assert sess_should_notify("waiting", "running") is False  # running never notifies
     assert sess_should_notify("done", "end") is False  # end never notifies
+
+    # --- the project() port: ALERT-02/03 + D-05 -------------------------------------
+    # Synthetic epochs, never time.time(): these must be deterministic and must not go
+    # stale. Same 10 cases the JS copy is expected to produce -- if you change one copy,
+    # change the other and re-run these.
+    R = 1_000_000  # a 5h window's reset epoch
+    S = R - WIN5  # ...so the window started here
+    assert project(None, R, WIN5, S + 9000) is None  # no data
+    assert project(50.0, None, WIN5, S + 9000) is None  # no reset epoch
+    assert project("x", R, WIN5, S + 9000) is None  # non-numeric -> None, not TypeError
+    assert project(50.0, R, WIN5, S + 900) == {"early": True}  # e == 0.05 exactly
+    assert "proj" in project(50.0, R, WIN5, S + 901)  # e just over the guard -> projects
+    assert project(50.0, R, WIN5, S - 5000) == {"early": True}  # negative e (clock skew)
+    # THE boundary. 50% at half window projects to exactly 100.0 -- and gets NO exhaust
+    # key, because project() sets it only when the projection STRICTLY exceeds 100. This
+    # pair is what makes alert_due's membership test the only safe way to ask the question.
+    assert abs(project(50.0, R, WIN5, S + WIN5 // 2)["proj"] - 100.0) < 1e-9
+    assert "exhaust" not in project(50.0, R, WIN5, S + WIN5 // 2)
+    over = project(60.0, R, WIN5, S + WIN5 // 2)  # 60% at half window -> 120%, runs out early
+    assert abs(over["proj"] - 120.0) < 1e-9
+    assert abs(over["exhaust"] - (S + 15000.0)) < 1e-6 and over["exhaust"] < R
+    assert abs(project(10.0, R, WIN5, S + WIN5 // 2)["proj"] - 20.0) < 1e-9  # coasting
+    # Window already over -> e clamps to 1 -> the projection degrades to the current pct.
+    assert abs(project(42.0, R, WIN5, R + 3600)["proj"] - 42.0) < 1e-9
+    assert "exhaust" not in project(42.0, R, WIN5, R + 3600)
+    assert project(0.0, R, WIN5, S + WIN5 // 2)["proj"] == 0.0  # pct 0, no div-by-zero
+    R7 = 2_000_000
+    S7 = R7 - WIN7  # same function, 7d window
+    assert abs(project(80.0, R7, WIN7, S7 + WIN7 // 2)["proj"] - 160.0) < 1e-9
+    # The INVARIANT the two exhaust guards exist to hold, swept across the domain rather
+    # than poked at one point: an exhaust epoch is present ONLY when the projection
+    # strictly exceeds 100 AND that epoch lands before the reset. This is what forbids
+    # Pitfall 7's false alert at exactly 100%, and it is the only thing covering the
+    # `exh < reset` guard -- which matters for an EXPIRED window, where e clamps to 1 but
+    # (now - start) does not, so a barely-over-100 pct can otherwise project an exhaust
+    # LATER than the reset it is supposed to precede.
+    for _pct in range(0, 201):
+        for _n in range(1, 41):  # sweep the window, and well past its reset
+            _p = project(float(_pct), R, WIN5, S + WIN5 * _n // 20)
+            if _p and "exhaust" in _p:
+                assert _p["proj"] > 100 and _p["exhaust"] < R
+    assert len(hhmm(0)) == 5 and ":" in hhmm(0)  # HH:MM; the value is TZ-dependent (D-08)
+
+    # --- the arm/re-arm state machine: ALERT-04 + D-06 + D-07 ------------------------
+    now = S + WIN5 // 2
+    hot = project(60.0, R, WIN5, now)  # 120%, exhaust 2500s out -> actionable
+    cold = project(10.0, R, WIN5, now)  # 20% -> coasting
+    assert alert_due(hot, now) is True
+    assert alert_due(cold, now) is False
+    assert alert_due({"early": True}, now) is False  # early guard is silent for free
+    assert alert_due(None, now) is False  # no data -> silent
+    assert alert_should_fire(None, R, hot, now) is True  # never armed + hot -> FIRE
+    assert alert_should_fire(R, R, hot, now) is False  # already fired THIS window (D-06)
+    # The window rolled: a changed reset epoch IS a new window, so the cap re-arms. This
+    # single line is ALERT-04 / ROADMAP SC4 -- nothing else pins the re-arm.
+    assert alert_should_fire(R, R + WIN5, hot, now) is True
+    assert alert_should_fire(None, R, cold, now) is False  # coasting -> nothing fires
+    assert alert_should_fire(None, R, {"early": True}, now) is False
+    assert alert_should_fire(None, R, None, now) is False
+    assert alert_should_fire(None, None, None, now) is False  # 7d absent on an older CLI
+    # D-05's lead: an exhaust 60s away is not actionable; 15min+ away is.
+    soon = {"proj": 200.0, "exhaust": now + 60}
+    assert alert_should_fire(None, R, soon, now) is False
+    assert alert_should_fire(None, R, {"proj": 200.0, "exhaust": now + 901}, now) is True
+    # D-07, and the ONLY thing that would catch someone "helpfully" adding a special case:
+    # an already-exhausted cap has an exhaust epoch in the PAST, so the same lead
+    # subtraction rejects it. No special case, no code.
+    dead = project(200.0, R, WIN5, R + WIN5 // 2)  # expired AND over 100
+    assert dead["exhaust"] < R + WIN5 // 2
+    assert alert_should_fire(None, R, dead, R + WIN5 // 2) is False
     print("ok")
 
 
