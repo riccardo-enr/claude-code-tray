@@ -28,7 +28,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import AyatanaAppIndicator3 as AppIndicator
-from gi.repository import GLib, Gtk
+from gi.repository import GLib, Gio, Gtk
 
 SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.sock")
 # Icon name from your theme; override with CLAUDE_TRAY_ICON. "claude-desktop"
@@ -57,6 +57,31 @@ POLL_TIMEOUT = 15  # subprocess seconds
 # High-usage badge threshold (percent). Hardcoded on purpose: env-configurability
 # is deferred (ALERT-F1). Do NOT add an env lookup here.
 USAGE_THRESHOLD = 80
+
+# Desktop notifications, spoken over the session bus as raw freedesktop
+# org.freedesktop.Notifications (Gio.DBusProxy). NOT Gio.Notification: gnome-shell's
+# GTK notification path does lookup_app(appId + ".desktop") and drops the notification
+# outright when there is no installed .desktop -- and this script has none.
+NOTIF_BUS = "org.freedesktop.Notifications"
+NOTIF_PATH = "/org/freedesktop/Notifications"
+# GNOME Shell urgency levels. This is the ONLY knob that changes banner lifetime here:
+# Notify's 8th argument (expire_timeout) is destructured by gnome-shell 46 as an unused
+# name and never read again -- banner life is a hardcoded 4000ms. Pass -1 for it and do
+# not reason about its value.
+URGENCY_NORMAL = 1  # 4s banner -> GNOME's notification list (SESS-02 "done")
+URGENCY_CRITICAL = 2  # no dismiss timer armed; sticks until clicked (SESS-01 "waiting")
+
+
+def notif_allowed(kind):
+    """Mute gate (NOTIF-02 seam). Phase 6 wires the config in HERE and nowhere else.
+
+    `kind` is one of the four event-type keys "waiting", "done", "5h", "7d". Phase 5
+    ships the seam open: every event fires. Phase 6's global mute (CFG-02) is a
+    `return False` for all four, so no fifth key and no separate global gate is needed.
+    """
+    return True  # ponytail: seam only. Phase 6 (CFG-01/02) replaces this body and
+    # touches zero call sites -- that is the whole point of gating inside emit_notif.
+
 
 # Append-only usage history store (one JSON object per line). Phase 03 reads it.
 HISTORY_PATH = os.path.expanduser("~/.claude/usage-history.jsonl")
@@ -1427,6 +1452,11 @@ def demo():
     # http:// is the SVG namespace -- stripping it leaves none behind.
     assert "<link" not in page and "src=" not in page and "https://" not in page
     assert page.replace("http://www.w3.org/2000/svg", "").find("http://") == -1
+
+    # --- notification mute gate (NOTIF-02 seam) ---
+    # Open in Phase 5: all four event-type keys pass. Phase 6 replaces the body; these
+    # assertions then become the toggle table's fixtures.
+    assert all(notif_allowed(k) for k in ("waiting", "done", "5h", "7d"))
     print("ok")
 
 
