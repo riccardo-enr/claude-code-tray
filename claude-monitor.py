@@ -83,6 +83,10 @@ SPARK_GAP = " "  # rendered for hours with no samples (keeps columns time-aligne
 TREND_INTERVAL = 5 * 60  # trend recompute throttle in poll_loop (seconds)
 TREND_MIN_SPAN = 3600  # min history span (s) before real rows replace empty state
 DASH_INTERVAL = 5 * 60  # dashboard-regen throttle in poll_loop (seconds)
+# The dashboard is a static file on disk: without this an open tab keeps showing
+# whatever was written when it was opened. ponytail: meta-refresh over a JS poller;
+# swap it out only if the page ever grows state a reload would throw away.
+_DASH_META_REFRESH = f"<meta http-equiv=\"refresh\" content=\"{DASH_INTERVAL}\">"
 
 
 def parse_usage(stdout):
@@ -666,6 +670,7 @@ _IC_GRID = (
 
 _DASH_EMPTY = (
     "<!doctype html><html><head><meta charset=\"utf-8\">"
+    + _DASH_META_REFRESH +
     "<title>Claude Code - Usage Dashboard</title>"
     "<style>" + _DASH_STYLE + "</style></head>"
     "<body><h1><span class=\"ttl\"><span id=\"brand\"></span>"
@@ -979,6 +984,7 @@ def render_dashboard(records, now):
     }
     return (
         "<!doctype html><html><head><meta charset=\"utf-8\">"
+        + _DASH_META_REFRESH +
         "<title>Claude Code - Usage Dashboard</title>"
         "<style>" + _DASH_STYLE + "</style></head>"
         "<body>" + _DASH_BODY + "<script>const D = " + _embed_json(payload) + ";"
