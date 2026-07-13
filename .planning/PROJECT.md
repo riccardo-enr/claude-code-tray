@@ -44,10 +44,39 @@ The tray now covers the full quota picture: both rolling caps (5-hour and 7-day)
 where each is projected to land at reset, 30 days of persisted history, in-menu
 trends, and a self-contained browser dashboard over the same store.
 
-**Next milestone:** not yet scoped — run `/gsd-new-milestone`. The two live seeds
-are SEED-002 (predictive quota alerts) and SEED-004 (desktop notification when a
-Claude Code session finishes) — the first extends what v1.2's projections already
-compute; the second is the first feature aimed at *session* status rather than quota.
+**Next milestone:** v1.3 (Notifications & Predictive Alerts) — see below. It merges
+the two live seeds, SEED-002 (predictive quota alerts) and SEED-004 (session-finished
+notification), which converge on the same shared notification path.
+
+## Current Milestone: v1.3 Notifications & Predictive Alerts
+
+**Goal:** Give the tray a push voice — one notification subsystem that pulls the user
+back to Claude Code when a session needs them or when quota is about to run out, so
+they can context-switch away from the top bar entirely.
+
+**Target features:**
+
+- Shared notification path (`Gio.Notification` via PyGObject) with per-event de-dupe —
+  an event fires once per state transition, never once per poll — and click-to-focus
+  reusing the existing tmux-pane + Ghostty-window action
+- Session **waiting-for-input** notification, fed by the existing hook -> unix socket
+  status pipeline
+- Session **finished (done)** notification, same pipeline
+- **Predictive quota alert:** warn when either cap (5-hour or 7-day) is *projected* to
+  hit 100% before its window resets — reusing v1.2's QUOTA-03 percentage projection
+- Tray menu toggles for which events fire, persisted to a small JSON config under
+  `~/.claude/`
+- Simple global mute toggle (no quiet-hours scheduling)
+
+**Key context:**
+
+- SEED-002's original EWMA / `tokens_remaining` forecast plan is **obsolete**: the poll
+  now runs `--api` (quick task `260712-ndo`), where token counts come back `null`. All
+  projection stays percentage-denominated — the forecaster already exists as QUOTA-03.
+- Hard-threshold pushes (>90%) are **not** in scope — the existing >80% icon badge
+  (ALERT-01) stays the reactive signal; this milestone adds the *predictive* one.
+- Closes SEED-002 and SEED-004; the config surface also absorbs the deferred
+  "configurable alert threshold" item.
 
 ## Requirements
 
@@ -80,11 +109,13 @@ compute; the second is the first feature aimed at *session* status rather than q
 
 ### Active
 
-None — v1.2 shipped. Next milestone not yet scoped (`/gsd-new-milestone`).
+v1.3 (Notifications & Predictive Alerts) — REQ-IDs defined in `REQUIREMENTS.md`:
+shared notification path with de-dupe and click-to-focus (NOTIF-*), session
+waiting/done events (SESS-*), predictive quota alert off the QUOTA-03 projection
+(ALERT-*), menu-toggle config with global mute (CFG-*).
 
-Carried-forward candidates: SEED-002 (predictive quota alerts), SEED-004
-(session-finished desktop notification), configurable alert threshold, raw data
-export (HIST-F1 / DASH-F2), configurable ranges (TREND-F1 / DASH-F3).
+Still deferred, not in v1.3: raw data export (HIST-F1 / DASH-F2), configurable
+ranges (TREND-F1 / DASH-F3).
 
 ### Out of Scope
 
@@ -116,6 +147,8 @@ as QUOTA-01 in v1.2.)*
 | All projection/forecast math derives from percentages, never the CLI's token-based `forecast`/`status` | Under `--api` token counts come back `null` and those commands report "limit hit" — wiring them in would have claimed exhaustion at 20% real usage | ✓ Good — caught before shipping |
 | Trend line breaks across sampling gaps instead of interpolating | A 13.7h outage was rendering as a smooth "decline" that never happened — the chart was asserting data it did not have | ✓ Good |
 | Cut DASH-04 (burn-rate chart) during UAT rather than ship it | It plotted near-flat ~30M tok/hr raw throughput and duplicated the heatmap; the dashboard is deliberately usage-%-denominated | ✓ Good — scope decision made against the running artifact |
+| v1.3 predictive alerts reuse the existing QUOTA-03 percentage projection instead of building SEED-002's EWMA / `tokens_remaining` forecaster | SEED-002 was written before the `--api` switch (`260712-ndo`) made token counts `null`. A token-denominated forecaster cannot be built on the data we now poll, and the percentage projection that *can* already ships | Decided at v1.3 scoping — SEED-002's "Better Than Upstream" section is superseded |
+| One notification subsystem, two producers (session events + quota alerts), rather than a one-off "session done" ping | SEED-004 called this out explicitly: the value is the shared path (de-dupe, mute, click-to-focus), not the single ping. Two one-offs would duplicate all of it | Decided at v1.3 scoping |
 
 ## Evolution
 
@@ -135,4 +168,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-13 after v1.2 milestone — Usage Web Dashboard shipped. DASH-01/02/03/05/06/07/08 + QUOTA-01/02/03 validated; DASH-04 descoped during UAT. Weekly cap now visible (closes SEED-003). Next: `/gsd-new-milestone`.*
+*Last updated: 2026-07-13 — milestone v1.3 (Notifications & Predictive Alerts) started. Merges SEED-002 + SEED-004 into one notification subsystem; SEED-002's token-based forecast superseded by the QUOTA-03 percentage projection. Phase numbering continues from 4.*
