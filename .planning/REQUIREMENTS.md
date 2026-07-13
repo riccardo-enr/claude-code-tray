@@ -66,6 +66,7 @@ buildable on the data we poll, and is superseded.
 
 ## Open Questions (settle at phase planning)
 
+- **Notification binding (Phase 5, load-bearing).** The helper has **no `Gio.Application`** — `claude-monitor.py:1817` is a bare `Gtk.main()`. `Gio.Notification.send_notification` requires one, and notification *click actions* (NOTIF-03) additionally require an app id with a matching `.desktop` file. The alternative is calling `org.freedesktop.Notifications.Notify` through `Gio.DBusProxy`, which carries `actions` + an `ActionInvoked` signal with no app-id/.desktop plumbing. NOTIF-01's "`Gio.Notification`" is intent (PyGObject, no new dependency), not a binding mandate — settle the actual route at plan time.
 - **Alert timing surface:** does the predictive alert fire once on crossing into "will exhaust before reset", or also re-fire with lead-time steps (e.g. "~30m left")? Lean: once per crossing per window (NOTIF-02 + ALERT-04), lead-time steps deferred until the single alert proves too coarse.
 - **Config file location/name** under `~/.claude/` and whether it subsumes the existing `CLAUDE_TRAY_*` env vars or layers over them (env as default, menu as override).
 
@@ -73,17 +74,30 @@ buildable on the data we poll, and is superseded.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIF-01 | TBD | Planned |
-| NOTIF-02 | TBD | Planned |
-| NOTIF-03 | TBD | Planned |
-| NOTIF-04 | TBD | Planned |
-| SESS-01 | TBD | Planned |
-| SESS-02 | TBD | Planned |
-| ALERT-02 | TBD | Planned |
-| ALERT-03 | TBD | Planned |
-| ALERT-04 | TBD | Planned |
-| CFG-01 | TBD | Planned |
-| CFG-02 | TBD | Planned |
-| CFG-03 | TBD | Planned |
-| CFG-04 | TBD | Planned |
-| CFG-05 | TBD | Planned |
+| NOTIF-01 | Phase 5 | Planned |
+| NOTIF-02 | Phase 5 | Planned |
+| NOTIF-03 | Phase 5 | Planned |
+| NOTIF-04 | Phase 5 | Planned |
+| SESS-01 | Phase 5 | Planned |
+| SESS-02 | Phase 5 | Planned |
+| ALERT-02 | Phase 5 | Planned |
+| ALERT-03 | Phase 5 | Planned |
+| ALERT-04 | Phase 5 | Planned |
+| CFG-01 | Phase 6 | Planned |
+| CFG-02 | Phase 6 | Planned |
+| CFG-03 | Phase 6 | Planned |
+| CFG-04 | Phase 6 | Planned |
+| CFG-05 | Phase 6 | Planned |
+
+**Coverage:** 14/14 v1.3 requirements mapped, no orphans, no duplicates.
+
+### Note on the QUOTA-03 reuse (ALERT-02/03)
+
+Verified during roadmapping: `project()` — the QUOTA-03 percentage projection — exists
+**only as JavaScript**, at `claude-monitor.py:931`, inside the generated dashboard HTML.
+`poll_loop` computes no projection. ALERT-02/03 must evaluate it on the poll thread, so
+Phase 5 **ports** that ~15-line formula into Python (elapsed-fraction linear
+extrapolation, `e<=0.05` early guard, exhaust-time when `proj>100`) and asserts it in
+`--selfcheck`. This is mechanical arithmetic, not modeling, and not a new forecaster —
+the semantics are already decided. The JS copy necessarily remains, since it recomputes
+against a live browser clock.

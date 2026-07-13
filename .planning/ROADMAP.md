@@ -8,8 +8,13 @@ milestones extended that same single-file helper (`claude-monitor.py`) into a
 quota monitor: point-in-time usage, then persisted history and in-menu trends,
 then a browsable HTML dashboard.
 
-Constraints that held across all three: stdlib + PyGObject only, X11-only, one
-background poll, no new dependencies.
+v1.3 gives that tray a **push voice**: one notification subsystem, with the
+session events and the predictive quota alerts riding it as two producers — so
+the user can context-switch away from the top bar and get pulled back only when
+a session needs them or quota is about to run out.
+
+Constraints that held across all three shipped milestones, and hold here: stdlib
++ PyGObject only, X11-only, one background poll, no new dependencies.
 
 Full phase detail for shipped milestones lives in `.planning/milestones/`;
 per-phase artifacts remain under `.planning/phases/`.
@@ -19,7 +24,7 @@ per-phase artifacts remain under `.planning/phases/`.
 - ✅ **v1.0 Usage & Quota Monitoring** — Phase 1 (shipped 2026-07-11)
 - ✅ **v1.1 Usage History & Trends** — Phases 2-3 (shipped 2026-07-12)
 - ✅ **v1.2 Usage Web Dashboard** — Phase 4 (shipped 2026-07-13) — [archive](./milestones/v1.2-ROADMAP.md)
-- 📋 **v1.3** — not yet scoped (`/gsd-new-milestone`)
+- 🚧 **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (in progress)
 
 ## Phases
 
@@ -59,14 +64,93 @@ usage at reset (QUOTA-03). Descoped during UAT: DASH-04 burn-rate trend chart
 
 </details>
 
-### 📋 v1.3 (not yet scoped)
+### 🚧 v1.3 Notifications & Predictive Alerts (Phases 5-6) — IN PROGRESS
 
-Run `/gsd-new-milestone` to define it. Candidate seeds carried forward:
+**Milestone Goal:** One notification subsystem that all tray events route through,
+so the user can leave the top bar and still be pulled back when a session needs
+them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
 
-- SEED-002: predictive quota alerts (surface a forecast + notify)
-- SEED-004: desktop notification when a Claude Code session finishes
+- [ ] **Phase 5: Notification Path & Event Producers** - One shared emit path, with session waiting/done events and predictive 5h/7d quota alerts riding it
+- [ ] **Phase 6: Notification Control & Config** - Per-event tray toggles, global mute, and a configurable badge threshold, persisted and corruption-tolerant
+
+## Phase Details
+
+### Phase 5: Notification Path & Event Producers
+**Goal**: The tray can pull the user back — one shared notification path, de-duped and click-to-focus, with both producers (session events, predictive quota alerts) riding it.
+**Depends on**: Phase 4 (QUOTA-03 projection semantics)
+**Requirements**: NOTIF-01, NOTIF-02, NOTIF-03, NOTIF-04, SESS-01, SESS-02, ALERT-02, ALERT-03, ALERT-04
+**Success Criteria** (what must be TRUE):
+  1. When a session starts waiting for input, a desktop notification appears; when it finishes, a done notification appears — once per state transition, never once per tick.
+  2. Clicking a session notification focuses that session's tmux pane and raises the terminal window — same outcome as clicking the tray row.
+  3. When either cap (5-hour or 7-day) is projected to hit 100% before its window resets, a notification fires once; when the projection says usage coasts to reset, nothing fires.
+  4. After a cap's window rolls over, that cap can alert again — a previous warning does not suppress the fresh window.
+  5. With the notification daemon absent or failing, the tray keeps polling, rendering, and serving session events — no crash, no dead thread, no stalled menu.
+**Plans**: TBD
+
+**Why both producers land in one phase:** the deliverable is the *shared path*
+(emit + de-dupe + mute hook + click-to-focus), not either ping. Building the path
+against one producer and bolting the second on later is how it grows two heads —
+the failure mode SEED-004 explicitly called out. Both producers in one phase means
+the path generalizes by construction.
+
+**Grounding (verified against `claude-monitor.py`, read before planning):**
+
+- **`project()` is JS-only today.** QUOTA-03's projection lives at
+  `claude-monitor.py:931` as JavaScript *inside the dashboard HTML*. There is no
+  Python-side projection — `poll_loop` never computes one. ALERT-02/03 must
+  evaluate it on the poll thread, so this phase **ports** that ~15-line formula
+  (elapsed-fraction linear extrapolation, `e<=0.05` early guard, exhaust-time when
+  `proj>100`) into Python. Fixed, known arithmetic — assert it in `--selfcheck`
+  against the same cases. **Not** modeling work, and **not** a new forecaster.
+  The JS copy necessarily stays (it recomputes against a live browser clock); that
+  duplication is deliberate and should be noted where it lands.
+- **There is no `Gio.Application`.** `claude-monitor.py:1817` is a bare
+  `Gtk.main()`. `Gio.Notification` + `send_notification` needs a `Gio.Application`
+  (and, for notification *actions* to route back — NOTIF-03 — an app id with a
+  matching `.desktop`). The alternative is `org.freedesktop.Notifications.Notify`
+  over `Gio.DBusProxy`, which carries `actions` + an `ActionInvoked` signal with no
+  app-id/.desktop plumbing. **This is the phase's load-bearing decision** — settle
+  it in `/gsd-plan-phase 5`, not here. NOTIF-01's "`Gio.Notification`" is intent
+  ("PyGObject, no new dependency"), not a binding choice.
+- **`serve()` is unguarded.** `poll_loop` got a blanket `except` + traceback from
+  quick task `260713-fry`, so the alert producer inherits that protection.
+  `serve()` (`claude-monitor.py:1705`) did **not** — a raise in its loop kills the
+  socket thread and *all* session events, permanently. The session producer rides
+  that thread. NOTIF-04 has real teeth here.
+- Session state transitions land in `Monitor.handle` via `GLib.idle_add`, i.e. on
+  the Gtk main thread. Whatever emit path is chosen must be non-blocking there
+  (D-Bus notify is async; a `subprocess` shell-out is not).
+
+**Verification:** `--selfcheck` asserts (projection port, de-dupe/arm state as pure
+functions) + human UAT on the live tray.
+
+### Phase 6: Notification Control & Config
+**Goal**: The user decides what fires — per-event toggles, one global mute, and a configurable badge threshold, persisted across restarts and safe against a corrupt config.
+**Depends on**: Phase 5 (all four event types must exist to be toggled)
+**Requirements**: CFG-01, CFG-02, CFG-03, CFG-04, CFG-05
+**Success Criteria** (what must be TRUE):
+  1. Each of the four event types (waiting / done / 5h alert / 7d alert) can be switched on and off from the tray menu, and the next event honors the change with no restart.
+  2. A single "mute all" tray toggle silences every notification while the tray rows and icon badge keep working.
+  3. Toggle states survive a restart of the helper.
+  4. A missing, unreadable, or malformed config file leaves the tray running on defaults — never a crash, matching the history store's total-tolerance bar.
+  5. The high-usage badge threshold is configurable rather than a hard-coded 80%, and the badge follows the configured value.
+**Plans**: TBD
+
+**Notes:**
+
+- CFG-04's bar is set by precedent, not aspiration: a corrupt *history* record
+  already killed the poll thread once (`260713-fry`). Config reads must be as
+  total-tolerant as `parse_history` — malformed JSON, wrong shape, non-UTF8, and
+  missing file all fall back to defaults.
+- CFG-05 closes the deferred "Alerting: configurable threshold" item and retires
+  the fixed 80% constant used by the badge (both caps).
+- Open question carried from REQUIREMENTS.md: whether the config file subsumes the
+  existing `CLAUDE_TRAY_*` env vars or layers over them (lean: env as default, menu
+  as override). Settle at plan time.
 
 ## Progress
+
+**Execution Order:** Phases execute in numeric order: 5 → 6
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -74,3 +158,5 @@ Run `/gsd-new-milestone` to define it. Candidate seeds carried forward:
 | 2. Usage History Persistence | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 3. Usage Trends in the Tray | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
+| 5. Notification Path & Event Producers | v1.3 | 0/TBD | Not started | - |
+| 6. Notification Control & Config | v1.3 | 0/TBD | Not started | - |
