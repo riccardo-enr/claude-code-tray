@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import traceback
 import webbrowser
 
 import gi
@@ -1723,31 +1724,45 @@ def poll_loop(mon):
     All history file I/O lives here (never in apply_usage/main, which run on the
     Gtk main thread): a successful poll appends one record before the idle_add,
     and the store is pruned once at startup then opportunistically thereafter.
+
+    ponytail: the whole while-body is wrapped in a broad `except Exception` --
+    mirroring write_dashboard. This thread is the ONLY thing polling usage, computing
+    trends and regenerating the dashboard, so ANY raise escaping one iteration kills
+    it permanently and the tray silently freezes until restart (exactly the corrupt-
+    record bug). A blanket swallow could mask a real bug, so the degradation is made
+    OBSERVABLE instead of silent: traceback.print_exc() writes the full traceback to
+    stderr (the journal) on EVERY failing iteration -- a persistent failure is loud and
+    repeated, a transient one costs a single poll. Upgrade path: surface the failure in
+    the tray label if a real bug ever hides in here. time.sleep stays OUTSIDE the try
+    so a failing iteration is still throttled and cannot hot-spin.
     """
     prune_history(time.time())
     last_prune = time.time()
     last_trend = 0.0  # 0 -> first iteration recomputes immediately (no 5-min blank window)
     last_dash = 0.0  # 0 -> generate the dashboard file immediately at startup
     while True:
-        usage = fetch_usage()
-        now = time.time()
-        if usage is not None:
-            append_history(history_record(usage, now))
-        # recompute trends off the Gtk main thread, AFTER the append (so the fresh
-        # record is included) and BEFORE the idle_add (so this poll's redraw sees it).
-        if now - last_trend >= TREND_INTERVAL:
-            mon.compute_trends(now)
-            last_trend = now
-        # regenerate the dashboard HTML off the Gtk main thread on the same cadence.
-        # last_dash = now UNCONDITIONALLY: write_dashboard swallows its own errors, so
-        # a transient failure is throttled ~5min not hot-retried (mirrors last_trend).
-        if now - last_dash >= DASH_INTERVAL:
-            mon.write_dashboard(now)
-            last_dash = now
-        GLib.idle_add(mon.apply_usage, usage)
-        if now - last_prune >= PRUNE_INTERVAL:
-            prune_history(now)
-            last_prune = now
+        try:
+            usage = fetch_usage()
+            now = time.time()
+            if usage is not None:
+                append_history(history_record(usage, now))
+            # recompute trends off the Gtk main thread, AFTER the append (so the fresh
+            # record is included) and BEFORE the idle_add (so this poll's redraw sees it).
+            if now - last_trend >= TREND_INTERVAL:
+                mon.compute_trends(now)
+                last_trend = now
+            # regenerate the dashboard HTML off the Gtk main thread on the same cadence.
+            # last_dash = now UNCONDITIONALLY: write_dashboard swallows its own errors, so
+            # a transient failure is throttled ~5min not hot-retried (mirrors last_trend).
+            if now - last_dash >= DASH_INTERVAL:
+                mon.write_dashboard(now)
+                last_dash = now
+            GLib.idle_add(mon.apply_usage, usage)
+            if now - last_prune >= PRUNE_INTERVAL:
+                prune_history(now)
+                last_prune = now
+        except Exception:
+            traceback.print_exc()  # loud + repeated: the thread survives, the failure doesn't hide
         time.sleep(POLL_INTERVAL)
 
 
