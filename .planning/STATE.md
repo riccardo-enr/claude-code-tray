@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Usage Web Dashboard
 current_phase: 04
-current_phase_name: usage-web-dashboard
 status: verifying
 stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-07-12T16:27:21.848Z"
-last_activity: 2026-07-12
-last_activity_desc: Phase 04 execution started
+last_updated: "2026-07-13T09:15:35.241Z"
+last_activity: 2026-07-13
+last_activity_desc: Phase 04 complete
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
+current_phase_name: usage-web-dashboard
 ---
 
 # Project State
@@ -28,16 +28,16 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 
 ## Current Position
 
-Phase: 04 (usage-web-dashboard) — EXECUTING
-Plan: 1 of 1
+Phase: 04
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-12 — Phase 04 execution started
+Last activity: 2026-07-13 — Phase 04 complete
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 1
+- Total plans completed: 2
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -46,6 +46,7 @@ Last activity: 2026-07-12 — Phase 04 execution started
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 02 | 1 | - | - |
+| 04 | 1 | - | - |
 
 **Recent Trend:**
 
@@ -96,7 +97,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Usage | 7-day / weekly limit display — UNBLOCKED: `--api` returns it (31%), not null. See SEED-003 | Ready (SEED-003) | 2026-07-11 |
+| Usage | ~~7-day / weekly limit display — SEED-003~~ | **DONE 2026-07-13** (QUOTA-01: tray rows, badge warning, dashboard + projection) | 2026-07-11 |
 | Alerting | Configurable threshold via env var (add if fixed 80% proves wrong) | Deferred | 2026-07-11 |
 | History | Raw data export (CSV/JSON dump) — HIST-F1 / DASH-F2 | Deferred | 2026-07-11 |
 | Trends | Configurable sparkline window / aggregation period — TREND-F1 / DASH-F3 | Deferred | 2026-07-11 |

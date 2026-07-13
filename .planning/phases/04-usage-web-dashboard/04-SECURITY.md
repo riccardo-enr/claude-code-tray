@@ -61,6 +61,36 @@ sanitizer (04-REVIEW-FIX.md, commit 2fdb913).
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-07-12 | 4 | 4 | 0 | /gsd-secure-phase (grep-depth L1, corroborated by 04-REVIEW.md trace + WR-01 fix) |
+| 2026-07-13 | 4 | 4 | 0 | re-audit of post-audit scope growth (see below) |
+
+### 2026-07-13 re-audit — post-audit scope growth
+
+The phase grew substantially after the original audit (weekly cap, reset persistence,
+projections, dark mode, embedded brand icon). Re-checked the two mitigated threats
+against the new code:
+
+**T-04-01 (injection) — still CLOSED, but the mitigation needed extending.** The new
+payload fields (`pct7`, `reset`, `reset7`, `resets`) reach the inline `<script>` through
+`usage7_series` / `reset_marks` / `latest_state` — and `history_numeric`, the phase's
+front-line sanitizer, validates **only** `t`/`pct`/`burn`. A record can therefore be
+"numeric-clean" by its lights while carrying hostile junk in the new fields. Verified by
+probe that each new accessor independently `_is_num`-filters, so nothing hostile reaches
+the payload; `_embed_json` escaping remains as defense-in-depth. This held only by
+construction and was **not asserted**, so a future payload field added without a filter
+would have silently reopened the hole — a regression guard is now in `--selfcheck`
+(renders a record with `pct7`/`reset`/`reset7` set to a script-closing string and asserts
+the value is absent and exactly one `</script>` remains).
+
+**T-04-02 (info disclosure) — still CLOSED, accepted.** The embedded brand icon is a
+local, already-world-readable system asset (`/usr/share/icons/.../claude-desktop.png`),
+inlined as base64. It adds no new data to the page and no network reference. It is applied
+via CSS `background-image:url(data:...)` rather than `<img src=>` precisely because the
+DASH-06 self-containment assert forbids any `src=` — an `<img>` would have failed the build.
+
+**T-04-03 (DoS) — still CLOSED.** No new unbounded input. New fields are numeric-filtered
+before any arithmetic; the off-thread + throttled + broad-except posture is unchanged.
+
+No new trust boundary was introduced: the dashboard still performs zero network I/O.
 
 ---
 

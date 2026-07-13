@@ -34,7 +34,7 @@ the same store, delivered as one coherent capability.
 - [x] **Phase 1: Usage & Quota Monitoring in the Tray** - Background-polled usage rows + high-usage icon badge in the existing menu (v1.0, completed 2026-07-11)
 - [x] **Phase 2: Usage History Persistence** - Append each successful poll to a bounded, corruption-tolerant JSONL history store under `~/.claude/` (v1.1) (completed 2026-07-12)
 - [x] **Phase 3: Usage Trends in the Tray** - Sparkline, daily/weekly burn, and peak-usage hours rendered in the existing tray menu from history (v1.1) (completed 2026-07-12)
-- [ ] **Phase 4: Usage Web Dashboard** - A tray menu item opens a self-contained HTML dashboard rendering the JSONL history as real charts: selectable-range usage-% trend, burn-rate trend, and a peak-usage heatmap (v1.2)
+- [x] **Phase 4: Usage Web Dashboard** - A tray menu item opens a self-contained HTML dashboard rendering the JSONL history as real charts: selectable-range usage-% trend, burn-rate trend, and a peak-usage heatmap (v1.2) (completed 2026-07-13)
 
 ## Phase Details
 
@@ -107,7 +107,7 @@ the same store, delivered as one coherent capability.
 
 **Plans**: 0/1 plans executed
 
-- [ ] 04-01-PLAN.md — Extend claude-monitor.py: pure dashboard generators (render_dashboard, heatmap_buckets, burn_series, script-safe _embed_json) + demo asserts, off-thread generate-and-write in poll_loop to a cache-path static .html, and a sensitive "Open Usage Dashboard" tray item opening it via file://
+- [x] 04-01-PLAN.md — Extend claude-monitor.py: pure dashboard generators (render_dashboard, heatmap_buckets, burn_series, script-safe _embed_json) + demo asserts, off-thread generate-and-write in poll_loop to a cache-path static .html, and a sensitive "Open Usage Dashboard" tray item opening it via file://
 
 **UI hint**: yes
 
@@ -123,6 +123,6 @@ Phases execute in numeric order: 1 (done) -> 2 (done) -> 3 (done) -> 4
 | 1. Usage & Quota Monitoring in the Tray | 1/1 | Complete | 2026-07-11 |
 | 2. Usage History Persistence | 1/1 | Complete    | 2026-07-12 |
 | 3. Usage Trends in the Tray | 1/1 | Complete   | 2026-07-12 |
-| 4. Usage Web Dashboard | 0/1 | Planned    |  |
+| 4. Usage Web Dashboard | 1/1 | Complete    | 2026-07-13 |
 </content>
 </invoke>
