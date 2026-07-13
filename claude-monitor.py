@@ -9,6 +9,7 @@ status in the tray menu; clicking a session focuses its tmux pane and raises
 the Ghostty window.
 """
 
+import base64
 import datetime
 import json
 import math
@@ -504,6 +505,43 @@ def latest_state(records):
 # --- Dashboard HTML (self-contained: inline CSS/JS, SVG charts, no CDN/deps) ---
 # The ONE permitted http:// in the page is the SVG XML namespace passed to
 # createElementNS -- an identifier, never fetched. No <link, no src=, no https://.
+def _brand_icon_uri():
+    """base64 data: URI for the locally-installed Claude icon, or "" when absent.
+
+    EMBEDDED, not referenced: the page must stay self-contained (DASH-06, asserted
+    in --selfcheck), so a file path or a URL is not an option. It is applied via CSS
+    `background-image:url(data:...)` rather than `<img src=...>` because the very
+    same self-containment assert forbids any `src=` in the page -- an <img> tag would
+    fail it. 32x32 is ~2KB of base64; small enough to re-embed on every regeneration.
+
+    Degrades to "" (no mark, no broken image) on machines with no claude-desktop
+    install, which is why the CSS below is emitted conditionally.
+    """
+    for p in (
+        "/usr/share/icons/hicolor/32x32/apps/claude-desktop.png",
+        "/usr/share/icons/hicolor/48x48/apps/claude-desktop.png",
+    ):
+        try:
+            with open(p, "rb") as f:
+                data = base64.b64encode(f.read()).decode("ascii")
+            return "data:image/png;base64," + data
+        except OSError:
+            continue
+    return ""
+
+
+_BRAND_URI = _brand_icon_uri()
+
+_BRAND_CSS = (
+    (
+        "#brand{width:20px;height:20px;display:inline-block;flex:none;"
+        "margin-right:.45em;background-size:contain;background-repeat:no-repeat;"
+        "background-position:center;background-image:url(" + _BRAND_URI + ")}"
+    )
+    if _BRAND_URI
+    else "#brand{display:none}"
+)
+
 # Dark palette, reused by BOTH the explicit [data-theme="dark"] rule (toggle) and
 # the prefers-color-scheme fallback (so the JS-less empty page still respects the
 # system theme). Kept as one string so the two selectors cannot drift apart.
@@ -540,7 +578,7 @@ _DASH_STYLE = (
     "#status{display:flex;flex-direction:column;gap:.55em}"
     ".srow{display:grid;grid-template-columns:5em 3.2em 7em 1fr;align-items:center;"
     "gap:.6em;font-size:.9em}"
-    ".sname{font-weight:600}"
+    ".sname{font-weight:600;display:flex;align-items:center}"
     ".sval{text-align:right;font-variant-numeric:tabular-nums}"
     ".sbar{height:8px;background:var(--gridlite);border-radius:4px;"
     "overflow:hidden;display:block}"
@@ -567,22 +605,50 @@ _DASH_STYLE = (
     "color:var(--legend);margin-top:.5em}"
     "#hm-legend .sw{width:16px;height:12px;display:inline-block;"
     "border:1px solid var(--swbd);vertical-align:middle}"
+    # Inline SVG glyphs. Stroked with currentColor so they inherit the themed text
+    # colour with no per-theme rules, and carry NO xmlns -- inline SVG in HTML does
+    # not need one, which keeps the page's only http:// the createElementNS literal.
+    ".ic{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;"
+    "stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;"
+    "margin-right:.35em;flex:none}"
+    "h2 .ic{opacity:.75}"
+    ".ttl{display:flex;align-items:center;min-width:0}"
+    + _BRAND_CSS
+)
+
+# Inline SVG icon markup (no xmlns on purpose -- see .ic above).
+_IC_GAUGE = (
+    "<svg class=\"ic\" viewBox=\"0 0 16 16\">"
+    "<path d=\"M2 12a6 6 0 1 1 12 0\"/><path d=\"M8 12l3.5-3.5\"/></svg>"
+)
+_IC_TREND = (
+    "<svg class=\"ic\" viewBox=\"0 0 16 16\">"
+    "<path d=\"M2 13V3\"/><path d=\"M2 13h12\"/><path d=\"M4 10l3-3 2.5 2.5L14 5\"/></svg>"
+)
+_IC_GRID = (
+    "<svg class=\"ic\" viewBox=\"0 0 16 16\">"
+    "<path d=\"M2.5 2.5h11v11h-11z\"/><path d=\"M6 2.5v11\"/><path d=\"M10 2.5v11\"/>"
+    "<path d=\"M2.5 6h11\"/><path d=\"M2.5 10h11\"/></svg>"
 )
 
 _DASH_EMPTY = (
     "<!doctype html><html><head><meta charset=\"utf-8\">"
     "<title>Claude Code - Usage Dashboard</title>"
     "<style>" + _DASH_STYLE + "</style></head>"
-    "<body><h1>Claude Code - Usage Dashboard</h1>"
+    "<body><h1><span class=\"ttl\"><span id=\"brand\"></span>"
+    "Claude Code - Usage Dashboard</span></h1>"
     "<p class=\"empty\">Collecting usage history...</p></body></html>"
 )
 
 _DASH_BODY = (
-    "<h1>Claude Code - Usage Dashboard"
+    "<h1><span class=\"ttl\"><span id=\"brand\"></span>"
+    "Claude Code - Usage Dashboard</span>"
     "<button id=\"theme\">Dark</button></h1>"
     "<div id=\"meta\"></div>"
-    "<section><h2>Current quota</h2><div id=\"status\"></div></section>"
-    "<section><h2>Usage % over time<span id=\"usage-now\"></span></h2>"
+    "<section><h2>" + _IC_GAUGE + "Current quota</h2>"
+    "<div id=\"status\"></div></section>"
+    "<section><h2>" + _IC_TREND + "Usage % over time"
+    "<span id=\"usage-now\"></span></h2>"
     "<div id=\"ranges\"><button data-range=\"h24\">24h</button>"
     "<button data-range=\"d7\">7d</button>"
     "<button data-range=\"all\" class=\"active\">All</button></div>"
@@ -590,7 +656,7 @@ _DASH_BODY = (
     "<div id=\"u-legend\"><span class=\"k k5\"></span><span>5-hour</span>"
     "<span class=\"k k7\"></span><span>weekly</span>"
     "<span class=\"k kr\"></span><span>window reset</span></div></section>"
-    "<section><h2>Usage by hour (mean % of the 5h cap)</h2>"
+    "<section><h2>" + _IC_GRID + "Usage by hour (mean % of the 5h cap)</h2>"
     "<svg id=\"heatmap\" viewBox=\"0 0 520 170\"></svg>"
     "<div id=\"hm-legend\"></div></section>"
 )
@@ -741,12 +807,25 @@ function project(pct,reset,win){
   }
   return out;
 }
-function addQuotaRow(box,name,pct,reset,win){
+var IC={
+  clock:["M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z","M8 4.5V8l2.5 1.5"],
+  cal:["M2.5 3.5h11v10h-11z","M2.5 6.5h11","M5.5 2v3","M10.5 2v3"]
+};
+function icon(name){
+  // Built with createElementNS (same NS literal the charts use) so the glyph is a
+  // real SVG node; .ic strokes it with currentColor, so it themes for free.
+  var s=el("svg",{"class":"ic","viewBox":"0 0 16 16"});
+  (IC[name]||[]).forEach(function(d){s.appendChild(el("path",{d:d}));});
+  return s;
+}
+function addQuotaRow(box,name,pct,reset,win,ic){
   if(pct===null||pct===undefined)return;
   var now=Date.now()/1000;
   var row=document.createElement("div");row.className="srow";
   function sp(cls,txt){var e=document.createElement("span");e.className=cls;e.textContent=txt;return e;}
-  row.appendChild(sp("sname",name));
+  var lab=sp("sname",name);
+  if(ic)lab.insertBefore(icon(ic),lab.firstChild);
+  row.appendChild(lab);
   row.appendChild(sp("sval",Math.round(pct)+"%"));
   var bar=document.createElement("span");bar.className="sbar";
   var fill=document.createElement("span");
@@ -763,8 +842,8 @@ function addQuotaRow(box,name,pct,reset,win){
 }
 function statusCard(){
   var box=document.getElementById("status");clear(box);
-  addQuotaRow(box,"5-hour",D.now.pct,D.now.reset,WIN5);
-  addQuotaRow(box,"Weekly",D.now.pct7,D.now.reset7,WIN7);
+  addQuotaRow(box,"5-hour",D.now.pct,D.now.reset,WIN5,"clock");
+  addQuotaRow(box,"Weekly",D.now.pct7,D.now.reset7,WIN7,"cal");
   if(!box.firstChild)box.appendChild(document.createTextNode(
     "No current quota data yet - it appears after the next poll."));
 }
