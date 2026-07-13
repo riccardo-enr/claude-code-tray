@@ -89,12 +89,12 @@ them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
   4. After a cap's window rolls over, that cap can alert again — a previous warning does not suppress the fresh window.
   5. With the notification daemon absent or failing, the tray keeps polling, rendering, and serving session events — no crash, no dead thread, no stalled menu.
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — The shared notification path: `Gio.DBusProxy` to `org.freedesktop.Notifications`, one `emit_notif` choke point with the mute-gate seam and replace-in-place slots, an id-filtered `ActionInvoked` click dispatcher, and a hardened `serve()`
+- [x] 05-01-PLAN.md — The shared notification path: `Gio.DBusProxy` to `org.freedesktop.Notifications`, one `emit_notif` choke point with the mute-gate seam and replace-in-place slots, an id-filtered `ActionInvoked` click dispatcher, and a hardened `serve()`
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -195,5 +195,5 @@ functions) + human UAT on the live tray.
 | 2. Usage History Persistence | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 3. Usage Trends in the Tray | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
-| 5. Notification Path & Event Producers | v1.3 | 0/TBD | Not started | - |
+| 5. Notification Path & Event Producers | v1.3 | 1/3 | In Progress|  |
 | 6. Notification Control & Config | v1.3 | 0/TBD | Not started | - |

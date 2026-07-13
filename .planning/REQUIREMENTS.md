@@ -15,10 +15,10 @@ polling, nothing on the Gtk main loop, X11 only.
 
 The shared path. This is the actual deliverable — the individual pings are producers.
 
-- [ ] **NOTIF-01**: Tray events are delivered as GNOME desktop notifications via a single shared emit path (`Gio.Notification` / PyGObject — no new dependency).
-- [ ] **NOTIF-02**: An event notifies **once per state transition**, not once per poll — de-duped so a session sitting in `waiting`, or a cap sitting over its projection, does not re-notify on every tick.
-- [ ] **NOTIF-03**: Clicking a session notification focuses the originating tmux pane and raises the terminal window, reusing the tray's existing click-to-focus action.
-- [ ] **NOTIF-04**: Notification delivery never blocks the Gtk main loop and never kills the helper — a failing/absent notification daemon degrades silently, matching the HIST-03 / POLL-02 posture.
+- [x] **NOTIF-01**: Tray events are delivered as GNOME desktop notifications via a single shared emit path (`Gio.Notification` / PyGObject — no new dependency).
+- [x] **NOTIF-02**: An event notifies **once per state transition**, not once per poll — de-duped so a session sitting in `waiting`, or a cap sitting over its projection, does not re-notify on every tick.
+- [x] **NOTIF-03**: Clicking a session notification focuses the originating tmux pane and raises the terminal window, reusing the tray's existing click-to-focus action.
+- [x] **NOTIF-04**: Notification delivery never blocks the Gtk main loop and never kills the helper — a failing/absent notification daemon degrades silently, matching the HIST-03 / POLL-02 posture.
 
 ### Session events (SESS)
 
