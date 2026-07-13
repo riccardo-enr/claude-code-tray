@@ -97,12 +97,21 @@ def parse_usage(stdout):
         if not isinstance(five, dict):
             return None
         local = doc.get("local") or {}
+        seven = doc["limits"].get("seven_day")
+        if not isinstance(seven, dict):
+            seven = {}
         u = {
             "tokens_used": five["tokens_used"],
             "token_limit": five["token_limit"],
             "used_percentage": five["used_percentage"],
             "resets_at_epoch": five["resets_at_epoch"],
             "burn_rate_per_min": local.get("burn_rate_tokens_per_minute", 0),
+            # Weekly (7-day) cap. Claude Code enforces BOTH a rolling 5h window and
+            # a rolling 7d one, and the weekly is often the binding constraint, so
+            # capture it. OPTIONAL by design: older CLIs and non---api modes omit
+            # the block entirely -- see the degrade-to-None rule below.
+            "seven_day_pct": seven.get("used_percentage"),
+            "seven_day_reset": seven.get("resets_at_epoch"),
         }
     except Exception:
         return None
@@ -122,6 +131,12 @@ def parse_usage(stdout):
     for k in ("tokens_used", "token_limit"):
         if u[k] is not None and not is_num(u[k]):
             return None
+    # The weekly block is optional AND secondary: junk or nulls there must never
+    # invalidate the five-hour payload the tray depends on. Degrade to None rather
+    # than returning None for the whole poll (which would blank the usage rows).
+    for k in ("seven_day_pct", "seven_day_reset"):
+        if not is_num(u[k]):
+            u[k] = None
     return u
 
 
@@ -193,6 +208,14 @@ def history_record(usage, now):
         "tokens_used": usage["tokens_used"],
         "token_limit": usage["token_limit"],
         "burn": usage["burn_rate_per_min"],
+        # `reset` is the 5h window's end epoch -- persisted so readers can mark
+        # where the usage-% sawtooth DROPS because the window rolled (rather than
+        # because usage fell) and can show a countdown. `pct7`/`reset7` are the
+        # weekly cap. All three are OPTIONAL: records written before this change
+        # simply lack the keys, so every reader must tolerate their absence.
+        "reset": usage["resets_at_epoch"],
+        "pct7": usage.get("seven_day_pct"),
+        "reset7": usage.get("seven_day_reset"),
     }
 
 
@@ -705,6 +728,50 @@ def demo():
     )
     assert official is not None and official["tokens_used"] is None
     assert official["used_percentage"] == 5.0
+    # no seven_day block -> weekly degrades to None, five_hour data still valid.
+    assert official["seven_day_pct"] is None and official["seven_day_reset"] is None
+    # seven_day (weekly cap) is captured when the --api payload carries it.
+    weekly = parse_usage(
+        json.dumps(
+            {
+                "limits": {
+                    "five_hour": {
+                        "tokens_used": None,
+                        "token_limit": None,
+                        "used_percentage": 18.0,
+                        "resets_at_epoch": now_plus,
+                    },
+                    "seven_day": {
+                        "used_percentage": 40.0,
+                        "resets_at_epoch": now_plus + 86400,
+                    },
+                },
+                "local": {"burn_rate_tokens_per_minute": 1000.0},
+            }
+        )
+    )
+    assert weekly["seven_day_pct"] == 40.0
+    assert weekly["seven_day_reset"] == now_plus + 86400
+    # junk in the weekly block degrades that block to None -- it must NOT discard
+    # the five_hour payload (which would blank the tray's usage rows entirely).
+    junk7 = parse_usage(
+        json.dumps(
+            {
+                "limits": {
+                    "five_hour": {
+                        "tokens_used": None,
+                        "token_limit": None,
+                        "used_percentage": 7.0,
+                        "resets_at_epoch": now_plus,
+                    },
+                    "seven_day": {"used_percentage": "lots", "resets_at_epoch": None},
+                },
+                "local": {"burn_rate_tokens_per_minute": 1000.0},
+            }
+        )
+    )
+    assert junk7 is not None and junk7["used_percentage"] == 7.0
+    assert junk7["seven_day_pct"] is None and junk7["seven_day_reset"] is None
     # a non-numeric token count (not just null) is still rejected as junk.
     assert (
         parse_usage(
@@ -748,13 +815,27 @@ def demo():
         "burn_rate_per_min": 315615.2,
     }
     # record: t pinned to int(now) (NOT resets_at_epoch), burn stored RAW per-minute.
+    # reset carries the 5h window end; pct7/reset7 are None when the payload that
+    # produced `hu` had no seven_day block (the pre---api / older-CLI shape).
     assert history_record(hu, now0) == {
         "t": now0,
         "pct": 473.5,
         "tokens_used": 417000,
         "token_limit": 88000,
         "burn": 315615.2,
+        "reset": now0 + 7380,
+        "pct7": None,
+        "reset7": None,
     }
+    # weekly fields survive into the record when the payload carries them.
+    hu7 = dict(hu, seven_day_pct=40.0, seven_day_reset=now0 + 86400)
+    r7 = history_record(hu7, now0)
+    assert r7["pct7"] == 40.0 and r7["reset7"] == now0 + 86400
+    # a legacy record (no reset/pct7/reset7 keys at all) must still pass the
+    # numeric sanitizer -- the new fields are optional, never required.
+    assert history_numeric([{"t": now0, "pct": 1.0, "burn": 2.0}]) == [
+        {"t": now0, "pct": 1.0, "burn": 2.0}
+    ]
     # retention: a 40-day-old record is dropped, a 1-day-old record is kept (days=30).
     assert history_keep({"t": now0 - 40 * 86400}, now0, 30) is False
     assert history_keep({"t": now0 - 1 * 86400}, now0, 30) is True
