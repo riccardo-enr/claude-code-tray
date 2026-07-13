@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import traceback
 import webbrowser
 
 import gi
@@ -401,6 +402,43 @@ def trend_peak_hour(records):
         if best_rate is None or rate > best_rate:
             best_hour, best_rate = h, rate
     return best_hour, best_rate * 60
+
+
+def build_trend_rows(records, now):
+    """Pure core of Monitor.compute_trends: history records -> trend rows (or None).
+
+    Sanitizes through history_numeric FIRST -- the SAME choke point render_dashboard
+    uses. parse_history validates a numeric `t` only, so a corrupt record can still
+    carry a string `burn` (TypeError inside trend_burn's sum), a NaN `burn` (renders
+    "nan/hr") or a far-future `t` (OSError inside fromtimestamp). Dropping the whole
+    suspect record here means no corrupt value reaches ANY trend math, and the
+    TREND_MIN_SPAN check below is evaluated on sanitized records so a far-future `t`
+    can no longer inflate the span.
+
+    Returns None while the retained history spans less than TREND_MIN_SPAN seconds
+    (empty/collecting state, D-12), else the list of row strings.
+
+    Split out of the Monitor method on purpose: this is Gtk-free, so demo() exercises
+    the real path without instantiating Monitor.
+    """
+    records = history_numeric(records)
+    if not records or records[-1]["t"] - records[0]["t"] < TREND_MIN_SPAN:
+        return None  # not enough data yet -> collecting state
+    rows = [trend_sparkline([r for r in records if history_keep(r, now, 1)], now)]
+    day_start, week_start = local_bounds(now)
+    today = trend_burn(records, day_start, now)
+    week = trend_burn(records, week_start, now)
+    rows.append(
+        "today %s/hr | wk %s/hr"
+        % (
+            fmt_tokens(round(today)) if today is not None else "-",
+            fmt_tokens(round(week)) if week is not None else "-",
+        )
+    )
+    peak = trend_peak_hour(records)
+    if peak is not None:
+        rows.append("peak hour: %02d:00 (%s/hr)" % (peak[0], fmt_tokens(round(peak[1]))))
+    return rows
 
 
 def _embed_json(obj):
@@ -1238,6 +1276,33 @@ def demo():
     ]
     assert trend_peak_hour(peak_recs) == (15, 9000.0)
     assert trend_peak_hour([]) is None
+    # build_trend_rows: a corrupt record NEVER reaches the trend math. Without the
+    # history_numeric sanitizer the string `burn` raises TypeError inside trend_burn,
+    # the NaN `burn` renders "nan/hr", and t=1e18 raises OSError in fromtimestamp.
+    # `now` is real (not a fixed epoch) so local_bounds' day/week windows contain the
+    # records; span is 2h > TREND_MIN_SPAN so real rows replace the collecting state.
+    now_bt = time.time()
+    clean_bt = [
+        {"t": now_bt - 7200, "pct": 10.0, "burn": 100.0},
+        {"t": now_bt - 3600, "pct": 30.0, "burn": 200.0},
+        {"t": now_bt, "pct": 50.0, "burn": 300.0},
+    ]
+    corrupt_bt = [
+        {"t": now_bt - 5400, "pct": 20.0, "burn": "lots"},  # string burn -> TypeError
+        {"t": now_bt - 1800, "pct": 20.0, "burn": float("nan")},  # NaN -> "nan/hr"
+        {"t": 1e18, "pct": 20.0, "burn": 50.0},  # far-future t -> OSError
+    ]
+    rows_clean = build_trend_rows(clean_bt, now_bt)
+    assert rows_clean is not None and len(rows_clean) == 3
+    assert rows_clean[1].startswith("today ") and "nan" not in rows_clean[1]
+    assert rows_clean[2].startswith("peak hour: ")
+    # THE regression guard: corrupt records are dropped, so the mixed history yields
+    # byte-identical rows to the clean history alone -- and raises nothing.
+    mixed_bt = [clean_bt[0], corrupt_bt[0], clean_bt[1], corrupt_bt[1], clean_bt[2], corrupt_bt[2]]
+    assert build_trend_rows(mixed_bt, now_bt) == rows_clean
+    # all records corrupt -> everything dropped -> collecting state, not a crash.
+    assert build_trend_rows(corrupt_bt, now_bt) is None
+    assert build_trend_rows([], now_bt) is None
 
     # --- dashboard logic (Phase 04) ---
     # _embed_json: the raw <, >, & are gone; letters survive; the < escape is present.
@@ -1516,33 +1581,19 @@ class Monitor:
 
         The ONLY place trend history is read. Routes through the corruption-tolerant
         parse_history and swallows OSError (missing/unwritable file -> keep last-known
-        trends, never raise on the poll thread). Leaves self.trends = None until the
-        retained history spans TREND_MIN_SPAN seconds (empty/collecting state, D-12).
+        trends, never raise on the poll thread). The rows themselves are built by the
+        pure build_trend_rows, which sanitizes through history_numeric -- the SAME
+        choke point render_dashboard uses -- so a corrupt record (string/NaN burn,
+        far-future t) is dropped before any trend math and cannot raise here. Yields
+        None until the retained history spans TREND_MIN_SPAN seconds (collecting, D-12).
         """
         try:
             with open(HISTORY_PATH, errors="replace") as f:
                 records = parse_history(f.read())
         except OSError:
             return  # degrade to last-known trends; never crash the poll thread
-        if not records or records[-1]["t"] - records[0]["t"] < TREND_MIN_SPAN:
-            self.trends = None  # not enough data yet -> collecting state
-            return
-        rows = [trend_sparkline([r for r in records if history_keep(r, now, 1)], now)]
-        day_start, week_start = local_bounds(now)
-        today = trend_burn(records, day_start, now)
-        week = trend_burn(records, week_start, now)
-        rows.append(
-            "today %s/hr | wk %s/hr"
-            % (
-                fmt_tokens(round(today)) if today is not None else "-",
-                fmt_tokens(round(week)) if week is not None else "-",
-            )
-        )
-        peak = trend_peak_hour(records)
-        if peak is not None:
-            rows.append("peak hour: %02d:00 (%s/hr)" % (peak[0], fmt_tokens(round(peak[1]))))
         # ponytail: single list rebind, read-only in the Gtk redraw (mirrors self.usage) -- no lock.
-        self.trends = rows
+        self.trends = build_trend_rows(records, now)
 
     def write_dashboard(self, now):
         """Read history OFF the Gtk main thread, render the dashboard, atomic-write it (D-04).
@@ -1679,31 +1730,45 @@ def poll_loop(mon):
     All history file I/O lives here (never in apply_usage/main, which run on the
     Gtk main thread): a successful poll appends one record before the idle_add,
     and the store is pruned once at startup then opportunistically thereafter.
+
+    ponytail: the whole while-body is wrapped in a broad `except Exception` --
+    mirroring write_dashboard. This thread is the ONLY thing polling usage, computing
+    trends and regenerating the dashboard, so ANY raise escaping one iteration kills
+    it permanently and the tray silently freezes until restart (exactly the corrupt-
+    record bug). A blanket swallow could mask a real bug, so the degradation is made
+    OBSERVABLE instead of silent: traceback.print_exc() writes the full traceback to
+    stderr (the journal) on EVERY failing iteration -- a persistent failure is loud and
+    repeated, a transient one costs a single poll. Upgrade path: surface the failure in
+    the tray label if a real bug ever hides in here. time.sleep stays OUTSIDE the try
+    so a failing iteration is still throttled and cannot hot-spin.
     """
     prune_history(time.time())
     last_prune = time.time()
     last_trend = 0.0  # 0 -> first iteration recomputes immediately (no 5-min blank window)
     last_dash = 0.0  # 0 -> generate the dashboard file immediately at startup
     while True:
-        usage = fetch_usage()
-        now = time.time()
-        if usage is not None:
-            append_history(history_record(usage, now))
-        # recompute trends off the Gtk main thread, AFTER the append (so the fresh
-        # record is included) and BEFORE the idle_add (so this poll's redraw sees it).
-        if now - last_trend >= TREND_INTERVAL:
-            mon.compute_trends(now)
-            last_trend = now
-        # regenerate the dashboard HTML off the Gtk main thread on the same cadence.
-        # last_dash = now UNCONDITIONALLY: write_dashboard swallows its own errors, so
-        # a transient failure is throttled ~5min not hot-retried (mirrors last_trend).
-        if now - last_dash >= DASH_INTERVAL:
-            mon.write_dashboard(now)
-            last_dash = now
-        GLib.idle_add(mon.apply_usage, usage)
-        if now - last_prune >= PRUNE_INTERVAL:
-            prune_history(now)
-            last_prune = now
+        try:
+            usage = fetch_usage()
+            now = time.time()
+            if usage is not None:
+                append_history(history_record(usage, now))
+            # recompute trends off the Gtk main thread, AFTER the append (so the fresh
+            # record is included) and BEFORE the idle_add (so this poll's redraw sees it).
+            if now - last_trend >= TREND_INTERVAL:
+                mon.compute_trends(now)
+                last_trend = now
+            # regenerate the dashboard HTML off the Gtk main thread on the same cadence.
+            # last_dash = now UNCONDITIONALLY: write_dashboard swallows its own errors, so
+            # a transient failure is throttled ~5min not hot-retried (mirrors last_trend).
+            if now - last_dash >= DASH_INTERVAL:
+                mon.write_dashboard(now)
+                last_dash = now
+            GLib.idle_add(mon.apply_usage, usage)
+            if now - last_prune >= PRUNE_INTERVAL:
+                prune_history(now)
+                last_prune = now
+        except Exception:
+            traceback.print_exc()  # loud + repeated: the thread survives, the failure doesn't hide
         time.sleep(POLL_INTERVAL)
 
 
