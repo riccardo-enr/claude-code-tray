@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Usage Web Dashboard
-current_phase: 04
-status: verifying
-stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-07-13T09:15:35.241Z"
+current_phase: 4
+status: Awaiting next milestone
+stopped_at: Milestone v1.2 shipped
+last_updated: "2026-07-13T09:40:50.406Z"
 last_activity: 2026-07-13
-last_activity_desc: Phase 04 complete
+last_activity_desc: Milestone v1.2 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -21,17 +21,17 @@ current_phase_name: usage-web-dashboard
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-12)
+See: .planning/PROJECT.md (updated 2026-07-13)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 04 — usage-web-dashboard
+**Current focus:** v1.2 shipped — planning the next milestone
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-07-13 — Phase 04 complete
+Phase: Milestone v1.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-13 — Milestone v1.2 completed and archived
 
 ## Performance Metrics
 
@@ -99,14 +99,20 @@ Items acknowledged and carried forward from previous milestone close:
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | Usage | ~~7-day / weekly limit display — SEED-003~~ | **DONE 2026-07-13** (QUOTA-01: tray rows, badge warning, dashboard + projection) | 2026-07-11 |
+| Dashboard | ~~Live in-browser auto-refresh — DASH-F1~~ | **DONE 2026-07-13** (commit `ea00509`) | 2026-07-12 |
 | Alerting | Configurable threshold via env var (add if fixed 80% proves wrong) | Deferred | 2026-07-11 |
 | History | Raw data export (CSV/JSON dump) — HIST-F1 / DASH-F2 | Deferred | 2026-07-11 |
 | Trends | Configurable sparkline window / aggregation period — TREND-F1 / DASH-F3 | Deferred | 2026-07-11 |
-| Dashboard | Live in-browser auto-refresh — DASH-F1 | Deferred | 2026-07-12 |
+| Seed | SEED-002 — predictive quota alerts (forecast + notify) | Dormant | 2026-07-13 (v1.2 close) |
+| Seed | SEED-004 — desktop notification when a Claude Code session finishes | Dormant | 2026-07-13 (v1.2 close) |
+| UAT | Phase 01 flagged by pre-close audit; 01-UAT.md is `[passed]` with 0 pending scenarios — audit-format false positive, no real gap | Acknowledged | 2026-07-13 (v1.2 close) |
 
 ## Session Continuity
 
-Last session: 2026-07-12T16:26:44.151Z
-Stopped at: Phase 4 UI-SPEC approved
-Resume file: .planning/phases/04-usage-web-dashboard/04-UI-SPEC.md
-</content>
+Last session: 2026-07-13
+Stopped at: Milestone v1.2 shipped and archived
+Resume file: —
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

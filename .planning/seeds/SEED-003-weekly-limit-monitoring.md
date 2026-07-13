@@ -1,6 +1,7 @@
 ---
 id: SEED-003
-status: dormant
+status: implemented
+implemented_in: v1.2 (QUOTA-01) — weekly cap in tray rows, badge warning on either cap, dashboard + projection
 planted: 2026-07-12
 planted_during: v1.1 Phase 3 (Usage Trends in the Tray)
 trigger_when: after v1.2 ships; pairs with v1.3 (SEED-002 already needs --api)

@@ -7,14 +7,14 @@ silent if the monitor is not running -- must never hold up a hook.
 
 Usage (as a hook command):  claude-send.py {running|waiting|done|end}
 """
-import os
-import sys
+
 import json
+import os
 import socket
+import sys
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "done"
-sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"),
-                    "claude-monitor.sock")
+sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.sock")
 
 try:
     data = json.load(sys.stdin)
