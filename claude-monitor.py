@@ -415,24 +415,49 @@ def heatmap_buckets(records):
 # --- Dashboard HTML (self-contained: inline CSS/JS, SVG charts, no CDN/deps) ---
 # The ONE permitted http:// in the page is the SVG XML namespace passed to
 # createElementNS -- an identifier, never fetched. No <link, no src=, no https://.
+# Dark palette, reused by BOTH the explicit [data-theme="dark"] rule (toggle) and
+# the prefers-color-scheme fallback (so the JS-less empty page still respects the
+# system theme). Kept as one string so the two selectors cannot drift apart.
+_DASH_DARK = (
+    "--bg:#16181d;--fg:#e6e8ec;--card:#1e2128;--border:#2c313a;--muted:#8b929c;"
+    "--accent:#4a9eda;--grid:#3a414b;--gridlite:#2a2f37;--h2:#cfd3da;"
+    "--btn:#252932;--btnbd:#3a414b;--legend:#9aa1ab;--swbd:#3a414b;"
+    "--shadow:rgba(0,0,0,.35)"
+)
+
 _DASH_STYLE = (
-    "body{font-family:sans-serif;background:#f4f5f7;color:#1a1a1a;"
+    ":root{--bg:#f4f5f7;--fg:#1a1a1a;--card:#fff;--border:#e6e6e6;--muted:#888;"
+    "--accent:#1a6cae;--grid:#ccc;--gridlite:#eee;--h2:#333;--btn:#fff;"
+    "--btnbd:#bbb;--legend:#555;--swbd:#ddd;--shadow:rgba(0,0,0,.06)}"
+    "[data-theme=\"dark\"]{" + _DASH_DARK + "}"
+    "@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]){"
+    + _DASH_DARK + "}}"
+    "body{font-family:sans-serif;background:var(--bg);color:var(--fg);"
     "max-width:920px;margin:0 auto;padding:1.5em}"
-    "h1{font-size:1.3em;margin:.2em 0}"
-    "h2{font-size:1em;color:#333;margin:0 0 .6em}"
-    "section{background:#fff;border:1px solid #e6e6e6;border-radius:8px;"
-    "padding:.9em 1.1em;margin:0 0 1.1em;box-shadow:0 1px 3px rgba(0,0,0,.06)}"
+    "h1{font-size:1.3em;margin:.2em 0;display:flex;align-items:center;"
+    "justify-content:space-between}"
+    "h2{font-size:1em;color:var(--h2);margin:0 0 .6em}"
+    "section{background:var(--card);border:1px solid var(--border);"
+    "border-radius:8px;padding:.9em 1.1em;margin:0 0 1.1em;"
+    "box-shadow:0 1px 3px var(--shadow)}"
     "svg{max-width:100%;height:auto}"
-    "#ranges button{margin-right:.4em;padding:.25em .8em;border:1px solid #bbb;"
-    "background:#fff;border-radius:4px;cursor:pointer}"
-    "#ranges button.active{background:#1a6cae;color:#fff;border-color:#1a6cae}"
-    "#usage-now{color:#1a6cae;font-weight:600}"
-    "p.empty{color:#888}"
-    "#meta{color:#888;font-size:.85em;margin:.2em 0 1.5em}"
+    "svg .grid{stroke:var(--grid)}svg .gridlite{stroke:var(--gridlite)}"
+    "svg .axis{fill:var(--muted)}"
+    "svg .series{stroke:var(--accent);fill:none;stroke-width:2}"
+    "#ranges button,#theme{padding:.25em .8em;border:1px solid var(--btnbd);"
+    "background:var(--btn);color:var(--fg);border-radius:4px;cursor:pointer;"
+    "font:inherit}"
+    "#ranges button{margin-right:.4em}"
+    "#theme{font-size:.7em}"
+    "#ranges button.active{background:var(--accent);color:#fff;"
+    "border-color:var(--accent)}"
+    "#usage-now{color:var(--accent);font-weight:600}"
+    "p.empty{color:var(--muted)}"
+    "#meta{color:var(--muted);font-size:.85em;margin:.2em 0 1.5em}"
     "#hm-legend{display:flex;align-items:center;gap:.4em;font-size:.85em;"
-    "color:#555;margin-top:.5em}"
+    "color:var(--legend);margin-top:.5em}"
     "#hm-legend .sw{width:16px;height:12px;display:inline-block;"
-    "border:1px solid #ddd;vertical-align:middle}"
+    "border:1px solid var(--swbd);vertical-align:middle}"
 )
 
 _DASH_EMPTY = (
@@ -444,7 +469,8 @@ _DASH_EMPTY = (
 )
 
 _DASH_BODY = (
-    "<h1>Claude Code - Usage Dashboard</h1>"
+    "<h1>Claude Code - Usage Dashboard"
+    "<button id=\"theme\">Dark</button></h1>"
     "<div id=\"meta\"></div>"
     "<section><h2>Usage %<span id=\"usage-now\"></span></h2>"
     "<div id=\"ranges\"><button data-range=\"h24\">24h</button>"
@@ -473,23 +499,23 @@ function drawPoly(svg,series,yfloor,unit){
   function xlab(xv){var dt=new Date(xv*1000);return spanDays<2?(dt.getHours()+":"+two(dt.getMinutes())):((dt.getMonth()+1)+"/"+dt.getDate());}
   for(i=0;i<=4;i++){
     yv=ymax*i/4;gy=sy(yv);
-    svg.appendChild(el("line",{x1:PL,y1:gy,x2:W-PR,y2:gy,stroke:i?"#eee":"#ccc"}));
-    t=el("text",{x:PL-5,y:gy+4,"font-size":11,"text-anchor":"end",fill:"#888"});
+    svg.appendChild(el("line",{x1:PL,y1:gy,x2:W-PR,y2:gy,"class":i?"gridlite":"grid"}));
+    t=el("text",{x:PL-5,y:gy+4,"font-size":11,"text-anchor":"end","class":"axis"});
     t.textContent=(ymax>=10?Math.round(yv):yv.toFixed(1))+(unit||"");svg.appendChild(t);
   }
   for(i=0;i<=4;i++){
     xv=xmin+xr*i/4;gx=sx(xv);
-    svg.appendChild(el("line",{x1:gx,y1:H-PB,x2:gx,y2:H-PB+4,stroke:"#ccc"}));
-    t=el("text",{x:gx,y:H-PB+16,"font-size":11,"text-anchor":"middle",fill:"#888"});
+    svg.appendChild(el("line",{x1:gx,y1:H-PB,x2:gx,y2:H-PB+4,"class":"grid"}));
+    t=el("text",{x:gx,y:H-PB+16,"font-size":11,"text-anchor":"middle","class":"axis"});
     t.textContent=xlab(xv);svg.appendChild(t);
   }
-  svg.appendChild(el("line",{x1:PL,y1:PT,x2:PL,y2:H-PB,stroke:"#ccc"}));
+  svg.appendChild(el("line",{x1:PL,y1:PT,x2:PL,y2:H-PB,"class":"grid"}));
   var d="",pen=false;
   series.forEach(function(p){
     if(p[1]===null){pen=false;return;}
     d+=(pen?"L":"M")+sx(p[0]).toFixed(1)+" "+sy(p[1]).toFixed(1)+" ";pen=true;
   });
-  svg.appendChild(el("path",{d:d,fill:"none",stroke:"#1a6cae","stroke-width":2}));
+  svg.appendChild(el("path",{d:d,"class":"series"}));
 }
 function drawUsage(range){
   var svg=document.getElementById("usage-chart");clear(svg);
@@ -506,34 +532,47 @@ function fmtN(v){
   if(a>=1e3)return (v/1e3).toFixed(1)+"k";
   return Math.round(v)+"";
 }
-function hmLegend(){
+function isDark(){return document.documentElement.getAttribute("data-theme")==="dark";}
+function hmFill(val,max){
+  // Heatmap cells are data-driven, so they cannot be pure CSS like the rest of the
+  // chrome -- the ramp is picked per theme here. Light: pale->dark. Dark: INVERTED
+  // (dark->bright), else a low-value cell would glow brightest against a dark page.
+  if(val===null)return isDark()?"hsl(220,8%,26%)":"hsl(0,0%,88%)";
+  var f=max?val/max:0;
+  return isDark()?"hsl(210,75%,"+(20+f*45).toFixed(0)+"%)"
+                 :"hsl(210,80%,"+(92-f*62).toFixed(0)+"%)";
+}
+function hmLegend(max){
   var box=document.getElementById("hm-legend");clear(box);
   function sw(bg){var e=document.createElement("span");e.className="sw";e.style.background=bg;return e;}
   function txt(x){var e=document.createElement("span");e.textContent=x;return e;}
-  box.appendChild(txt("Low"));box.appendChild(sw("hsl(210,80%,92%)"));
-  box.appendChild(sw("hsl(210,80%,61%)"));box.appendChild(sw("hsl(210,80%,30%)"));
+  box.appendChild(txt("Low"));
+  box.appendChild(sw(hmFill(max*0.05,max)));
+  box.appendChild(sw(hmFill(max*0.5,max)));
+  box.appendChild(sw(hmFill(max,max)));
   box.appendChild(txt("High"));
-  box.appendChild(sw("hsl(0,0%,88%)"));box.appendChild(txt("no data"));
+  box.appendChild(sw(hmFill(null,max)));
+  box.appendChild(txt("no data"));
 }
 function drawHeatmap(){
   var svg=document.getElementById("heatmap");clear(svg);
   var g=D.heatmap,max=1,r,c,v;
   for(r=0;r<7;r++)for(c=0;c<24;c++){v=g[r][c];if(v!==null&&v>max)max=v;}
   var days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],cw=20,ch=20,lx=34,ty=18;
-  for(c=0;c<24;c+=3){var t=el("text",{x:lx+c*cw+cw/2,y:13,"font-size":12,"text-anchor":"middle",fill:"#777"});t.textContent=c;svg.appendChild(t);}
+  for(c=0;c<24;c+=3){var t=el("text",{x:lx+c*cw+cw/2,y:13,"font-size":12,"text-anchor":"middle","class":"axis"});t.textContent=c;svg.appendChild(t);}
   for(r=0;r<7;r++){
-    var lbl=el("text",{x:lx-5,y:ty+r*ch+ch/2+4,"font-size":12,"text-anchor":"end",fill:"#555"});
+    var lbl=el("text",{x:lx-5,y:ty+r*ch+ch/2+4,"font-size":12,"text-anchor":"end","class":"axis"});
     lbl.textContent=days[r];svg.appendChild(lbl);
     for(c=0;c<24;c++){
-      var val=g[r][c],fill,tip;
-      if(val===null){fill="hsl(0,0%,88%)";tip=days[r]+" "+c+":00 - no data";}
-      else{fill="hsl(210,80%,"+(92-(val/max)*62).toFixed(0)+"%)";tip=days[r]+" "+c+":00 - "+fmtN(val)+" tok/hr";}
-      var rect=el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:fill});
+      var val=g[r][c],tip;
+      if(val===null)tip=days[r]+" "+c+":00 - no data";
+      else tip=days[r]+" "+c+":00 - "+fmtN(val)+" tok/hr";
+      var rect=el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:hmFill(val,max)});
       var ttl=el("title",{});ttl.textContent=tip;rect.appendChild(ttl);
       svg.appendChild(rect);
     }
   }
-  hmLegend();
+  hmLegend(max);
 }
 drawUsage("all");drawHeatmap();
 var un=D.usage[D.usage.length-1];
@@ -541,6 +580,19 @@ document.getElementById("usage-now").textContent=un?(" - now "+Math.round(un[1])
 document.getElementById("meta").textContent="Generated "+new Date(D.generated*1000).toLocaleString();
 document.getElementById("ranges").addEventListener("click",function(e){
   var r=e.target.getAttribute("data-range");if(r)drawUsage(r);
+});
+function setTheme(t){
+  document.documentElement.setAttribute("data-theme",t);
+  document.getElementById("theme").textContent=(t==="dark")?"Light":"Dark";
+  try{localStorage.setItem("ccdash-theme",t);}catch(e){}
+  drawHeatmap();
+}
+var savedTheme=null;
+try{savedTheme=localStorage.getItem("ccdash-theme");}catch(e){}
+var prefDark=window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches;
+setTheme(savedTheme||(prefDark?"dark":"light"));
+document.getElementById("theme").addEventListener("click",function(){
+  setTheme(isDark()?"light":"dark");
 });
 """
 
