@@ -83,6 +83,22 @@ def notif_allowed(kind):
     # touches zero call sites -- that is the whole point of gating inside emit_notif.
 
 
+def sess_should_notify(old_status, new_status):
+    """De-dupe predicate for session notifications (NOTIF-02 / D-03). Pure: no I/O, no clock.
+
+    True iff the session just CHANGED into a notifiable state. A session sitting in
+    "waiting" re-sends "waiting" on every hook event; only a transition passes. A session
+    first seen already waiting has old_status None, which differs, so it notifies.
+    "running" and "end" are not notifiable states.
+
+    Deliberately takes no on-screen argument and must not grow one (D-04): a notification
+    fires on every waiting/done transition regardless of where the user is looking. The
+    already-looking-at-this-pane signal that serve() computes keeps gating ONLY the "!"
+    attention badge. That divergence is intentional -- do not "helpfully" wire it in here.
+    """
+    return new_status in ("waiting", "done") and old_status != new_status
+
+
 # Append-only usage history store (one JSON object per line). Phase 03 reads it.
 HISTORY_PATH = os.path.expanduser("~/.claude/usage-history.jsonl")
 # Retention window in days; records older than this are pruned. Env-overridable
@@ -1452,6 +1468,14 @@ def demo():
     # http:// is the SVG namespace -- stripping it leaves none behind.
     assert "<link" not in page and "src=" not in page and "https://" not in page
     assert page.replace("http://www.w3.org/2000/svg", "").find("http://") == -1
+    # sess_should_notify: the whole of NOTIF-02's de-dupe (D-03), and D-04's "always fire".
+    assert sess_should_notify(None, "waiting") is True  # first seen already waiting
+    assert sess_should_notify("running", "waiting") is True  # SESS-01
+    assert sess_should_notify("waiting", "done") is True  # SESS-02
+    assert sess_should_notify("waiting", "waiting") is False  # THE de-dupe (NOTIF-02)
+    assert sess_should_notify("done", "done") is False
+    assert sess_should_notify("waiting", "running") is False  # running never notifies
+    assert sess_should_notify("done", "end") is False  # end never notifies
     print("ok")
 
 
