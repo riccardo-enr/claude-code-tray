@@ -179,18 +179,43 @@ def fmt_countdown(secs):
     return "resets in %dh %dm" % (secs // 3600, (secs % 3600) // 60)
 
 
+def fmt_countdown_wk(secs):
+    """Weekly reset countdown: 352800 -> 'week resets in 4d 2h'; under a day falls
+    back to h/m; <= 0 -> 'week resets now'.
+
+    Separate from fmt_countdown on purpose: the 5h row's 'Xh Ym' shape is right for
+    a 5-hour window but a multi-day gap would render as 'resets in 98h 0m'.
+    """
+    secs = int(secs)
+    if secs <= 0:
+        return "week resets now"
+    if secs >= 86400:
+        return "week resets in %dd %dh" % (secs // 86400, (secs % 86400) // 3600)
+    return "week resets in %dh %dm" % (secs // 3600, (secs % 3600) // 60)
+
+
 def build_label(usage, attention):
     """Reconcile the usage-% badge and the attention-count badge into one label.
 
     `attention` is the number of sessions that need you (waiting on input, or
     just finished -> your turn). Usage leads ('47% 2!'), gains '!' above
     USAGE_THRESHOLD ('83%! 2!'). With no usage, falls back to the badge ('2!'/'').
+
+    The '!' also fires when the WEEKLY cap is above threshold even if the 5h window
+    is cool. Claude Code enforces both, and the weekly is often the binding one, so
+    a 95%-weekly / 10%-five-hour state previously produced NO warning at all. The
+    leading number stays the 5h one (swapping it would read as a glitch); the menu's
+    'week: N% used' row tells you which limit is hot.
     """
     wseg = ("%d!" % attention) if attention else ""
     if usage is None:
         return wseg
     seg = "%d%%" % round(usage["used_percentage"])
-    if usage["used_percentage"] > USAGE_THRESHOLD:
+    pct7 = usage.get("seven_day_pct")
+    hot = usage["used_percentage"] > USAGE_THRESHOLD or (
+        pct7 is not None and pct7 > USAGE_THRESHOLD
+    )
+    if hot:
         seg += "!"
     return " ".join(s for s in (seg, wseg) if s)
 
@@ -797,6 +822,10 @@ def demo():
     assert fmt_tokens(round(u["burn_rate_per_min"] * 60)) == "18.9M"
     assert fmt_countdown(7380) == "resets in 2h 3m"
     assert fmt_countdown(0) == "resets now"
+    # weekly countdown is days-aware (fmt_countdown would say "resets in 98h 0m").
+    assert fmt_countdown_wk(352800) == "week resets in 4d 2h"
+    assert fmt_countdown_wk(7380) == "week resets in 2h 3m"
+    assert fmt_countdown_wk(0) == "week resets now"
     # over-limit percent renders raw, never clamped to 100.
     assert round(473.5) == 474
     assert build_label({"used_percentage": 47}, 2) == "47% 2!"
@@ -804,6 +833,12 @@ def demo():
     assert build_label({"used_percentage": 47}, 0) == "47%"
     assert build_label(None, 2) == "2!"
     assert build_label(None, 0) == ""
+    # a HOT WEEKLY warns even when the 5h window is cool -- the 5h number still
+    # leads, but the '!' fires so a near-exhausted weekly cap cannot pass silently.
+    assert build_label({"used_percentage": 10, "seven_day_pct": 95}, 0) == "10%!"
+    assert build_label({"used_percentage": 10, "seven_day_pct": 40}, 0) == "10%"
+    # missing weekly (older CLI / no --api) behaves exactly as before.
+    assert build_label({"used_percentage": 10, "seven_day_pct": None}, 0) == "10%"
 
     # --- history logic (Phase 02) ---
     now0 = int(time.time())
@@ -1056,11 +1091,18 @@ class Monitor:
             )
         else:
             used = "%d%% used" % round(u["used_percentage"])
-        return [
+        rows = [
             used,
             fmt_countdown(u["resets_at_epoch"] - time.time()),
             "burn: %s tok/hr" % fmt_tokens(round(u["burn_rate_per_min"] * 60)),
         ]
+        # Weekly cap: only rendered when the payload actually carried it, so an
+        # older CLI / non---api poll degrades to the original three rows.
+        if u.get("seven_day_pct") is not None:
+            rows.append("week: %d%% used" % round(u["seven_day_pct"]))
+            if u.get("seven_day_reset") is not None:
+                rows.append(fmt_countdown_wk(u["seven_day_reset"] - time.time()))
+        return rows
 
     def trend_rows(self):
         """Insensitive trend-row strings from the self.trends cache (no file I/O).
