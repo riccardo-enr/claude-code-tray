@@ -416,11 +416,17 @@ def heatmap_buckets(records):
 # The ONE permitted http:// in the page is the SVG XML namespace passed to
 # createElementNS -- an identifier, never fetched. No <link, no src=, no https://.
 _DASH_STYLE = (
-    "body{font-family:sans-serif;background:#fafafa;color:#222;margin:0;padding:1.5em}"
-    "h1{font-size:1.3em}h2{font-size:1em;color:#444}"
-    "section{margin:0 0 1.8em}svg{max-width:100%;height:auto;background:#fff;border:1px solid #eee}"
-    "#ranges button{margin-right:.4em;padding:.2em .7em;border:1px solid #bbb;background:#fff;cursor:pointer}"
+    "body{font-family:sans-serif;background:#f4f5f7;color:#1a1a1a;"
+    "max-width:920px;margin:0 auto;padding:1.5em}"
+    "h1{font-size:1.3em;margin:.2em 0}"
+    "h2{font-size:1em;color:#333;margin:0 0 .6em}"
+    "section{background:#fff;border:1px solid #e6e6e6;border-radius:8px;"
+    "padding:.9em 1.1em;margin:0 0 1.1em;box-shadow:0 1px 3px rgba(0,0,0,.06)}"
+    "svg{max-width:100%;height:auto}"
+    "#ranges button{margin-right:.4em;padding:.25em .8em;border:1px solid #bbb;"
+    "background:#fff;border-radius:4px;cursor:pointer}"
     "#ranges button.active{background:#1a6cae;color:#fff;border-color:#1a6cae}"
+    "#usage-now{color:#1a6cae;font-weight:600}"
     "p.empty{color:#888}"
     "#meta{color:#888;font-size:.85em;margin:.2em 0 1.5em}"
     "#hm-legend{display:flex;align-items:center;gap:.4em;font-size:.85em;"
@@ -440,7 +446,7 @@ _DASH_EMPTY = (
 _DASH_BODY = (
     "<h1>Claude Code - Usage Dashboard</h1>"
     "<div id=\"meta\"></div>"
-    "<section><h2>Usage %</h2>"
+    "<section><h2>Usage %<span id=\"usage-now\"></span></h2>"
     "<div id=\"ranges\"><button data-range=\"day\">Day</button>"
     "<button data-range=\"week\">Week</button>"
     "<button data-range=\"all\" class=\"active\">All</button></div>"
@@ -460,7 +466,7 @@ _DASH_JS = """
 var NS="http://www.w3.org/2000/svg";
 function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
 function el(name,attrs){var e=document.createElementNS(NS,name);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
-function drawPoly(svg,series,yfloor){
+function drawPoly(svg,series,yfloor,unit){
   var W=600,H=200,PL=42,PR=12,PT=12,PB=30,xs=[],ys=[];
   series.forEach(function(p){if(p[1]!==null){xs.push(p[0]);ys.push(p[1]);}});
   if(!xs.length)return;
@@ -475,7 +481,7 @@ function drawPoly(svg,series,yfloor){
     yv=ymax*i/4;gy=sy(yv);
     svg.appendChild(el("line",{x1:PL,y1:gy,x2:W-PR,y2:gy,stroke:i?"#eee":"#ccc"}));
     t=el("text",{x:PL-5,y:gy+4,"font-size":11,"text-anchor":"end",fill:"#888"});
-    t.textContent=(ymax>=10?Math.round(yv):yv.toFixed(1));svg.appendChild(t);
+    t.textContent=(ymax>=10?Math.round(yv):yv.toFixed(1))+(unit||"");svg.appendChild(t);
   }
   for(i=0;i<=4;i++){
     xv=xmin+xr*i/4;gx=sx(xv);
@@ -496,7 +502,7 @@ function drawUsage(range){
   var pts=D.usage;
   if(range==="day")pts=pts.filter(function(p){return p[0]>=D.bounds.day;});
   else if(range==="week")pts=pts.filter(function(p){return p[0]>=D.bounds.week;});
-  drawPoly(svg,pts.map(function(p){return [p[0],p[1]];}),1);
+  drawPoly(svg,pts.map(function(p){return [p[0],p[1]];}),1,"%");
   var bs=document.querySelectorAll("#ranges button");
   for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-range")===range)?"active":"";
 }
@@ -521,6 +527,8 @@ function drawHeatmap(){
   }
 }
 drawUsage("all");drawHeatmap();
+var un=D.usage[D.usage.length-1];
+document.getElementById("usage-now").textContent=un?(" - now "+Math.round(un[1])+"%"):"";
 document.getElementById("meta").textContent="Generated "+new Date(D.generated*1000).toLocaleString();
 document.getElementById("ranges").addEventListener("click",function(e){
   var r=e.target.getAttribute("data-range");if(r)drawUsage(r);
