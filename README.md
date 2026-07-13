@@ -1,7 +1,8 @@
 # claude-code-tray
 
-A GNOME top-bar tray indicator for [Claude Code](https://claude.com/claude-code).
-At a glance from the top bar it shows:
+A GNOME top-bar tray indicator for
+[Claude Code](https://claude.com/claude-code). At a glance from the top bar it
+shows:
 
 - **Per-session status** (`running` / `waiting` / `done`); on click it jumps to
   the tmux pane that fired the session and raises the terminal window.
@@ -18,8 +19,8 @@ configurable.
 
 Claude Code hook processes are short-lived, so a per-hook `notify-send` can't
 reliably handle a notification click (the process exits before the click
-arrives). A single long-lived helper owns the tray and does the focusing;
-hooks just push events at it over a unix socket.
+arrives). A single long-lived helper owns the tray and does the focusing; hooks
+just push events at it over a unix socket.
 
 ## How it works
 
@@ -32,20 +33,21 @@ Claude Code hook ──(JSON over unix socket)──> claude-monitor.py ──> 
   tracks sessions by `session_id`, focuses on click, and polls the
   `claude-monitor` usage CLI on a background thread (so the multi-second CLI
   call never blocks the UI).
-- `claude-send.py` — tiny non-blocking hook sender; silent if the helper is down.
+- `claude-send.py` — tiny non-blocking hook sender; silent if the helper is
+  down.
 
 ### The icon badge
 
 The top-bar label combines two signals (ASCII, so it works in any theme):
 
-| Label | Meaning |
-|-------|---------|
-| `16%` | Current 5-hour usage (always shown when available) |
-| `83%!` | Usage above the high threshold (default 80%) |
+| Label    | Meaning                                                         |
+| -------- | --------------------------------------------------------------- |
+| `16%`    | Current 5-hour usage (always shown when available)              |
+| `83%!`   | Usage above the high threshold (default 80%)                    |
 | `16% 2!` | Usage, plus 2 sessions that need you (waiting or just finished) |
 
-The `!` attention count clears when you **switch to that session's pane**
-(auto, within ~2s), **click** its menu row, or **reply** in it (it goes back to
+The `!` attention count clears when you **switch to that session's pane** (auto,
+within ~2s), **click** its menu row, or **reply** in it (it goes back to
 `running`). If you're already looking at the pane when a session finishes, no
 `!` is raised.
 
@@ -85,28 +87,29 @@ click-to-focus keep working.
 ```
 
 Then merge `settings.hooks.json` into the `hooks` object of
-`~/.claude/settings.json`, and start the helper (the installer prints the
-exact command). It auto-starts on future logins via the installed
+`~/.claude/settings.json`, and start the helper (the installer prints the exact
+command). It auto-starts on future logins via the installed
 `~/.config/autostart/claude-monitor.desktop`.
 
 ## Config (env vars)
 
-| Var | Default | Purpose |
-|-----|---------|---------|
-| `CLAUDE_TRAY_ICON` | `claude-desktop` | Tray icon name from your theme |
-| `CLAUDE_TRAY_WM_CLASS` | `com.mitchellh.ghostty` | Terminal WM_CLASS to raise on click |
-| `CLAUDE_TRAY_PLAN` | `custom` | `claude-monitor` plan to query. `custom` = session-based dynamic (P90) limits, matching the CLI's own default; also `max5` / `max20` / `pro`; empty = the CLI's saved default (not recommended — it drifts) |
-| `CLAUDE_TRAY_POLL_INTERVAL` | `15` | Seconds between usage polls. The CLI itself takes ~5-10s, so that is the practical floor |
+| Var                         | Default                 | Purpose                                                                                                                                                                                                     |
+| --------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLAUDE_TRAY_ICON`          | `claude-desktop`        | Tray icon name from your theme                                                                                                                                                                              |
+| `CLAUDE_TRAY_WM_CLASS`      | `com.mitchellh.ghostty` | Terminal WM_CLASS to raise on click                                                                                                                                                                         |
+| `CLAUDE_TRAY_PLAN`          | `custom`                | `claude-monitor` plan to query. `custom` = session-based dynamic (P90) limits, matching the CLI's own default; also `max5` / `max20` / `pro`; empty = the CLI's saved default (not recommended — it drifts) |
+| `CLAUDE_TRAY_POLL_INTERVAL` | `15`                    | Seconds between usage polls. The CLI itself takes ~5-10s, so that is the practical floor                                                                                                                    |
 
 Set these in the autostart `.desktop`'s `Exec=` line to make them persist.
 
-## Honesty
+## Developement
 
 This project is heavily vibe-coded — built interactively with Claude Code in a
-single session, then organized with the [Get Shit Done (GSD)](https://github.com/opengsd/gsd-core)
-framework. It works on my setup (Ubuntu GNOME / X11 / tmux / Ghostty) but hasn't
-been battle-tested elsewhere. No CI; the only test is the pure parse/format
-self-check (`python3 claude-monitor.py --selfcheck`). PRs and bug reports welcome.
+single session, then organized with the
+[Get Shit Done (GSD)](https://github.com/opengsd/gsd-core) framework. It works
+on my setup (Ubuntu GNOME / X11 / tmux / Ghostty) but hasn't been battle-tested
+elsewhere. No CI; the only test is the pure parse/format self-check
+(`python3 claude-monitor.py --selfcheck`). PRs and bug reports welcome.
 
 ## License
 

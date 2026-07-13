@@ -443,21 +443,62 @@ def history_numeric(records):
 
 
 def heatmap_buckets(records):
-    """7x24 grid (dow Mon..Sun x hour 0..23) of mean(burn)*60 tok/hr (DASH-03, D-06).
+    """7x24 grid (dow Mon..Sun x hour 0..23) of MEAN USAGE % (DASH-03).
 
-    Accumulates each record's RAW per-minute `burn` into its local (weekday, hour)
-    bucket, then converts to per-hour exactly ONCE (mean * 60, matching
-    trend_burn/trend_peak_hour). Empty buckets stay None so "no data" is distinct
-    from a zero-value cell for the gray-vs-ramp rendering (D-07).
+    Buckets `pct` (percent of the 5h cap), NOT raw `burn`. The whole dashboard is
+    denominated in percent, and burn is a raw per-minute throughput estimate whose
+    tens-of-millions scale is unreadable -- the same reason the burn line chart was
+    dropped. mean(pct) answers the useful question: "how full is my quota at this
+    hour, typically". Empty buckets stay None so "no data" stays distinct from a
+    genuine 0% (gray vs ramp, D-07).
     """
     grid = [[None] * 24 for _ in range(7)]
     acc = {}
     for rec in records:
         dt = datetime.datetime.fromtimestamp(rec["t"])
-        acc.setdefault((dt.weekday(), dt.hour), []).append(rec["burn"])
+        acc.setdefault((dt.weekday(), dt.hour), []).append(rec["pct"])
     for (dow, hour), vals in acc.items():
-        grid[dow][hour] = sum(vals) / len(vals) * 60
+        grid[dow][hour] = sum(vals) / len(vals)
     return grid
+
+
+def _is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def reset_marks(records):
+    """Sorted unique 5h-window reset epochs seen in `records` (DASH: reset markers).
+
+    The usage-% line DROPS every time the window rolls. Without markers those drops
+    read as "usage fell" when they mean "the window reset" -- actively misleading.
+    Records written before the `reset` field existed simply contribute nothing.
+    """
+    return sorted({int(r["reset"]) for r in records if _is_num(r.get("reset"))})
+
+
+def usage7_series(records):
+    """[[t, weekly_pct], ...] for records carrying a numeric `pct7`, in order.
+
+    Empty for history written before the weekly cap was captured -- the weekly line
+    simply starts where the data starts rather than faking backfill.
+    """
+    return [[int(r["t"]), r["pct7"]] for r in records if _is_num(r.get("pct7"))]
+
+
+def latest_state(records):
+    """Newest record's current-quota fields, for the dashboard status card.
+
+    Picks by MAX t rather than trusting file order. Returns None-filled fields when
+    a legacy record lacks them, so the card renders only what it actually knows.
+    """
+    if not records:
+        return {"pct": None, "reset": None, "pct7": None, "reset7": None}
+    r = max(records, key=lambda x: x["t"])
+    out = {}
+    for k in ("pct", "reset", "pct7", "reset7"):
+        v = r.get(k)
+        out[k] = v if _is_num(v) else None
+    return out
 
 
 # --- Dashboard HTML (self-contained: inline CSS/JS, SVG charts, no CDN/deps) ---
@@ -468,14 +509,16 @@ def heatmap_buckets(records):
 # system theme). Kept as one string so the two selectors cannot drift apart.
 _DASH_DARK = (
     "--bg:#16181d;--fg:#e6e8ec;--card:#1e2128;--border:#2c313a;--muted:#8b929c;"
-    "--accent:#4a9eda;--grid:#3a414b;--gridlite:#2a2f37;--h2:#cfd3da;"
+    "--accent:#4a9eda;--accent2:#e0a458;--mark:#4a5261;--grid:#3a414b;"
+    "--gridlite:#2a2f37;--h2:#cfd3da;"
     "--btn:#252932;--btnbd:#3a414b;--legend:#9aa1ab;--swbd:#3a414b;"
     "--shadow:rgba(0,0,0,.35)"
 )
 
 _DASH_STYLE = (
     ":root{--bg:#f4f5f7;--fg:#1a1a1a;--card:#fff;--border:#e6e6e6;--muted:#888;"
-    "--accent:#1a6cae;--grid:#ccc;--gridlite:#eee;--h2:#333;--btn:#fff;"
+    "--accent:#1a6cae;--accent2:#c2670f;--mark:#c9ccd1;--grid:#ccc;"
+    "--gridlite:#eee;--h2:#333;--btn:#fff;"
     "--btnbd:#bbb;--legend:#555;--swbd:#ddd;--shadow:rgba(0,0,0,.06)}"
     "[data-theme=\"dark\"]{" + _DASH_DARK + "}"
     "@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]){"
@@ -492,6 +535,24 @@ _DASH_STYLE = (
     "svg .grid{stroke:var(--grid)}svg .gridlite{stroke:var(--gridlite)}"
     "svg .axis{fill:var(--muted)}"
     "svg .series{stroke:var(--accent);fill:none;stroke-width:2}"
+    "svg .series7{stroke:var(--accent2);fill:none;stroke-width:2}"
+    "svg .reset{stroke:var(--mark);stroke-dasharray:3 3}"
+    "#status{display:flex;flex-direction:column;gap:.55em}"
+    ".srow{display:grid;grid-template-columns:5em 3.2em 7em 1fr;align-items:center;"
+    "gap:.6em;font-size:.9em}"
+    ".sname{font-weight:600}"
+    ".sval{text-align:right;font-variant-numeric:tabular-nums}"
+    ".sbar{height:8px;background:var(--gridlite);border-radius:4px;"
+    "overflow:hidden;display:block}"
+    ".sfill{display:block;height:100%;background:var(--accent);border-radius:4px}"
+    ".sfill.hot{background:#d1495b}"
+    ".smeta{color:var(--muted);font-size:.9em}"
+    "#u-legend{display:flex;align-items:center;gap:.4em;font-size:.85em;"
+    "color:var(--legend);margin-top:.4em}"
+    "#u-legend .k{width:14px;height:3px;display:inline-block;vertical-align:middle}"
+    "#u-legend .k5{background:var(--accent)}"
+    "#u-legend .k7{background:var(--accent2)}"
+    "#u-legend .kr{background:var(--mark)}"
     "#ranges button,#theme{padding:.25em .8em;border:1px solid var(--btnbd);"
     "background:var(--btn);color:var(--fg);border-radius:4px;cursor:pointer;"
     "font:inherit}"
@@ -520,12 +581,16 @@ _DASH_BODY = (
     "<h1>Claude Code - Usage Dashboard"
     "<button id=\"theme\">Dark</button></h1>"
     "<div id=\"meta\"></div>"
-    "<section><h2>Usage %<span id=\"usage-now\"></span></h2>"
+    "<section><h2>Current quota</h2><div id=\"status\"></div></section>"
+    "<section><h2>Usage % over time<span id=\"usage-now\"></span></h2>"
     "<div id=\"ranges\"><button data-range=\"h24\">24h</button>"
     "<button data-range=\"d7\">7d</button>"
     "<button data-range=\"all\" class=\"active\">All</button></div>"
-    "<svg id=\"usage-chart\" viewBox=\"0 0 600 200\"></svg></section>"
-    "<section><h2>Peak usage heatmap (mean burn tok/hr)</h2>"
+    "<svg id=\"usage-chart\" viewBox=\"0 0 600 200\"></svg>"
+    "<div id=\"u-legend\"><span class=\"k k5\"></span><span>5-hour</span>"
+    "<span class=\"k k7\"></span><span>weekly</span>"
+    "<span class=\"k kr\"></span><span>window reset</span></div></section>"
+    "<section><h2>Usage by hour (mean % of the 5h cap)</h2>"
     "<svg id=\"heatmap\" viewBox=\"0 0 520 170\"></svg>"
     "<div id=\"hm-legend\"></div></section>"
 )
@@ -534,16 +599,17 @@ _DASH_JS = """
 var NS="http://www.w3.org/2000/svg";
 function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
 function el(name,attrs){var e=document.createElementNS(NS,name);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
-function drawPoly(svg,series,yfloor,unit){
+function two(n){return(n<10?"0":"")+n;}
+function drawChart(svg,seriesList,marks,unit,yfloor){
   var W=600,H=200,PL=42,PR=12,PT=12,PB=30,xs=[],ys=[];
-  series.forEach(function(p){if(p[1]!==null){xs.push(p[0]);ys.push(p[1]);}});
+  seriesList.forEach(function(s){s.pts.forEach(function(p){
+    if(p[1]!==null){xs.push(p[0]);ys.push(p[1]);}});});
   if(!xs.length)return;
   var xmin=Math.min.apply(null,xs),xmax=Math.max.apply(null,xs);
   var ymax=Math.max.apply(null,ys);if(ymax<yfloor)ymax=yfloor;if(ymax<=0)ymax=1;
   var xr=(xmax-xmin)||1,spanDays=xr/86400,i,yv,xv,gy,gx,t;
   function sx(x){return PL+(x-xmin)/xr*(W-PL-PR);}
   function sy(y){return H-PB-(y/ymax)*(H-PB-PT);}
-  function two(n){return(n<10?"0":"")+n;}
   function xlab(xv){var dt=new Date(xv*1000);return spanDays<2?(dt.getHours()+":"+two(dt.getMinutes())):((dt.getMonth()+1)+"/"+dt.getDate());}
   for(i=0;i<=4;i++){
     yv=ymax*i/4;gy=sy(yv);
@@ -558,27 +624,34 @@ function drawPoly(svg,series,yfloor,unit){
     t.textContent=xlab(xv);svg.appendChild(t);
   }
   svg.appendChild(el("line",{x1:PL,y1:PT,x2:PL,y2:H-PB,"class":"grid"}));
-  var d="",pen=false;
-  series.forEach(function(p){
-    if(p[1]===null){pen=false;return;}
-    d+=(pen?"L":"M")+sx(p[0]).toFixed(1)+" "+sy(p[1]).toFixed(1)+" ";pen=true;
+  // Window-reset markers, drawn UNDER the series: the usage line drops at these
+  // instants because the 5h window rolled, not because usage fell. Without them
+  // the sawtooth reads as "my usage went down", which is simply false.
+  (marks||[]).forEach(function(m){
+    if(m<xmin||m>xmax)return;
+    var mx=sx(m);
+    svg.appendChild(el("line",{x1:mx,y1:PT,x2:mx,y2:H-PB,"class":"reset"}));
   });
-  svg.appendChild(el("path",{d:d,"class":"series"}));
+  seriesList.forEach(function(s){
+    var d="",pen=false;
+    s.pts.forEach(function(p){
+      if(p[1]===null){pen=false;return;}
+      d+=(pen?"L":"M")+sx(p[0]).toFixed(1)+" "+sy(p[1]).toFixed(1)+" ";pen=true;
+    });
+    if(d)svg.appendChild(el("path",{d:d,"class":s.cls}));
+  });
 }
 function drawUsage(range){
   var svg=document.getElementById("usage-chart");clear(svg);
-  var pts=D.usage;
-  if(range==="h24")pts=pts.filter(function(p){return p[0]>=D.bounds.h24;});
-  else if(range==="d7")pts=pts.filter(function(p){return p[0]>=D.bounds.d7;});
-  drawPoly(svg,pts.map(function(p){return [p[0],p[1]];}),1,"%");
+  var lo=(range==="h24")?D.bounds.h24:(range==="d7")?D.bounds.d7:-Infinity;
+  function f(a){return (a||[]).filter(function(p){return p[0]>=lo;});}
+  var marks=(D.resets||[]).filter(function(m){return m>=lo;});
+  // yfloor 100: the axis always spans the whole cap, so 18% reads as "plenty of
+  // headroom" instead of filling the chart the way an auto-scaled axis would.
+  drawChart(svg,[{pts:f(D.usage),cls:"series"},{pts:f(D.usage7),cls:"series7"}],
+            marks,"%",100);
   var bs=document.querySelectorAll("#ranges button");
   for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-range")===range)?"active":"";
-}
-function fmtN(v){
-  var a=Math.abs(v);
-  if(a>=1e6)return (v/1e6).toFixed(1)+"M";
-  if(a>=1e3)return (v/1e3).toFixed(1)+"k";
-  return Math.round(v)+"";
 }
 function isDark(){return document.documentElement.getAttribute("data-theme")==="dark";}
 function hmFill(val,max){
@@ -614,7 +687,7 @@ function drawHeatmap(){
     for(c=0;c<24;c++){
       var val=g[r][c],tip;
       if(val===null)tip=days[r]+" "+c+":00 - no data";
-      else tip=days[r]+" "+c+":00 - "+fmtN(val)+" tok/hr";
+      else tip=days[r]+" "+c+":00 - "+val.toFixed(0)+"% mean";
       var rect=el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:hmFill(val,max)});
       var ttl=el("title",{});ttl.textContent=tip;rect.appendChild(ttl);
       svg.appendChild(rect);
@@ -642,6 +715,63 @@ setTheme(savedTheme||(prefDark?"dark":"light"));
 document.getElementById("theme").addEventListener("click",function(){
   setTheme(isDark()?"light":"dark");
 });
+var WIN5=18000,WIN7=604800;
+function fmtDur(s){
+  s=Math.max(0,Math.floor(s));
+  if(s>=86400)return Math.floor(s/86400)+"d "+Math.floor((s%86400)/3600)+"h";
+  if(s>=3600)return Math.floor(s/3600)+"h "+Math.floor((s%3600)/60)+"m";
+  return Math.floor(s/60)+"m";
+}
+function hhmm(ep){var d=new Date(ep*1000);return d.getHours()+":"+two(d.getMinutes());}
+function project(pct,reset,win){
+  // Honest, PERCENTAGE-based projection. claude-monitor ships forecast/status, but
+  // both are token-based and report "limit hit" under --api (token counts come back
+  // null), so using them would claim you are exhausted at 18%. Instead: the window
+  // began at reset-win, so the elapsed fraction is known exactly; extrapolating the
+  // current pct linearly over the window gives the projected % at reset, and when
+  // that crosses 100 we can say WHEN it would land.
+  if(pct===null||pct===undefined||reset===null||reset===undefined)return null;
+  var now=Date.now()/1000,start=reset-win,e=(now-start)/win;
+  if(e<=0.05)return {early:true};   // barely into the window -> pct/e explodes
+  if(e>1)e=1;
+  var out={proj:pct/e};
+  if(out.proj>100&&pct>0){
+    var exh=start+(100/pct)*(now-start);
+    if(exh<reset)out.exhaust=exh;
+  }
+  return out;
+}
+function addQuotaRow(box,name,pct,reset,win){
+  if(pct===null||pct===undefined)return;
+  var now=Date.now()/1000;
+  var row=document.createElement("div");row.className="srow";
+  function sp(cls,txt){var e=document.createElement("span");e.className=cls;e.textContent=txt;return e;}
+  row.appendChild(sp("sname",name));
+  row.appendChild(sp("sval",Math.round(pct)+"%"));
+  var bar=document.createElement("span");bar.className="sbar";
+  var fill=document.createElement("span");
+  fill.className=(pct>=80)?"sfill hot":"sfill";
+  fill.style.width=Math.min(100,Math.max(0,pct))+"%";
+  bar.appendChild(fill);row.appendChild(bar);
+  var txt=(reset!==null&&reset!==undefined)?("resets in "+fmtDur(reset-now)):"";
+  var p=project(pct,reset,win);
+  if(p&&p.exhaust!==undefined)txt+=" - projected to hit 100% at "+hhmm(p.exhaust);
+  else if(p&&p.early)txt+=" - too early to project";
+  else if(p)txt+=" - on track (projected "+Math.round(p.proj)+"% at reset)";
+  row.appendChild(sp("smeta",txt));
+  box.appendChild(row);
+}
+function statusCard(){
+  var box=document.getElementById("status");clear(box);
+  addQuotaRow(box,"5-hour",D.now.pct,D.now.reset,WIN5);
+  addQuotaRow(box,"Weekly",D.now.pct7,D.now.reset7,WIN7);
+  if(!box.firstChild)box.appendChild(document.createTextNode(
+    "No current quota data yet - it appears after the next poll."));
+}
+statusCard();
+// Countdowns and the projection are computed against the LIVE clock, so the card
+// stays truthful as this static page ages between the ~5min regenerations.
+setInterval(statusCard,20000);
 """
 
 
@@ -665,6 +795,9 @@ def render_dashboard(records, now):
         return _DASH_EMPTY
     payload = {
         "usage": [[int(r["t"]), r["pct"]] for r in records],
+        "usage7": usage7_series(records),
+        "resets": reset_marks(records),
+        "now": latest_state(records),
         "heatmap": heatmap_buckets(records),
         "bounds": {"h24": int(now - 86400), "d7": int(now - 7 * 86400)},
         "generated": int(now),
@@ -945,16 +1078,45 @@ def demo():
     inf_burn = {"t": 1, "pct": 1.0, "burn": float("inf")}
     far_t = {"t": 1e18, "pct": 1.0, "burn": 1.0}
     assert history_numeric([nan_t, inf_pct, inf_burn, far_t, ok1]) == [ok1]
-    # heatmap_buckets: two records local Monday 15:xx (burn 100,200) -> grid[0][15]=9000;
-    # an untouched cell is None; grid is 7x24.
+    # heatmap_buckets: MEAN USAGE % (not burn) -- two records local Monday 15:xx with
+    # pct 10,20 -> grid[0][15]=15.0; an untouched cell is None; grid is 7x24.
     mon = datetime.datetime(2024, 1, 1, 15)  # 2024-01-01 is a Monday
     hm = heatmap_buckets([
-        {"t": int(mon.timestamp()), "pct": 1.0, "burn": 100.0},
-        {"t": int(mon.replace(minute=30).timestamp()), "pct": 1.0, "burn": 200.0},
+        {"t": int(mon.timestamp()), "pct": 10.0, "burn": 100.0},
+        {"t": int(mon.replace(minute=30).timestamp()), "pct": 20.0, "burn": 200.0},
     ])
     assert len(hm) == 7 and all(len(row) == 24 for row in hm)
-    assert hm[0][15] == 9000.0
+    assert hm[0][15] == 15.0
     assert hm[2][3] is None
+    # reset_marks: unique + sorted; legacy records with no `reset` contribute nothing.
+    assert reset_marks(
+        [
+            {"t": 1, "reset": 300},
+            {"t": 2, "reset": 300},
+            {"t": 3, "reset": 100},
+            {"t": 4},
+        ]
+    ) == [100, 300]
+    assert reset_marks([{"t": 1, "pct": 1.0}]) == []
+    # usage7_series: only records carrying a numeric weekly pct.
+    assert usage7_series([{"t": 5, "pct7": 40.0}, {"t": 6}, {"t": 7, "pct7": None}]) == [
+        [5, 40.0]
+    ]
+    # latest_state: newest by MAX t (not file order); legacy fields -> None.
+    ls = latest_state(
+        [
+            {"t": 9, "pct": 3.0, "reset": 99, "pct7": 40.0, "reset7": 88},
+            {"t": 1, "pct": 1.0, "reset": 11},
+        ]
+    )
+    assert ls == {"pct": 3.0, "reset": 99, "pct7": 40.0, "reset7": 88}
+    assert latest_state([{"t": 1, "pct": 1.0}]) == {
+        "pct": 1.0,
+        "reset": None,
+        "pct7": None,
+        "reset7": None,
+    }
+    assert latest_state([])["pct"] is None
     # render_dashboard: good record -> real page (doctype + embedded const D marker).
     now_dash = int(time.time())
     page = render_dashboard([{"t": now_dash, "pct": 42.0, "burn": 10.0}], now_dash)
