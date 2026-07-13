@@ -447,8 +447,8 @@ _DASH_BODY = (
     "<h1>Claude Code - Usage Dashboard</h1>"
     "<div id=\"meta\"></div>"
     "<section><h2>Usage %<span id=\"usage-now\"></span></h2>"
-    "<div id=\"ranges\"><button data-range=\"day\">Day</button>"
-    "<button data-range=\"week\">Week</button>"
+    "<div id=\"ranges\"><button data-range=\"h24\">24h</button>"
+    "<button data-range=\"d7\">7d</button>"
     "<button data-range=\"all\" class=\"active\">All</button></div>"
     "<svg id=\"usage-chart\" viewBox=\"0 0 600 200\"></svg></section>"
     "<section><h2>Peak usage heatmap (mean burn tok/hr)</h2>"
@@ -494,8 +494,8 @@ function drawPoly(svg,series,yfloor,unit){
 function drawUsage(range){
   var svg=document.getElementById("usage-chart");clear(svg);
   var pts=D.usage;
-  if(range==="day")pts=pts.filter(function(p){return p[0]>=D.bounds.day;});
-  else if(range==="week")pts=pts.filter(function(p){return p[0]>=D.bounds.week;});
+  if(range==="h24")pts=pts.filter(function(p){return p[0]>=D.bounds.h24;});
+  else if(range==="d7")pts=pts.filter(function(p){return p[0]>=D.bounds.d7;});
   drawPoly(svg,pts.map(function(p){return [p[0],p[1]];}),1,"%");
   var bs=document.querySelectorAll("#ranges button");
   for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-range")===range)?"active":"";
@@ -551,18 +551,22 @@ def render_dashboard(records, now):
     Drops non-numeric records via history_numeric FIRST (review finding 1) so only
     numeric-safe data reaches the embedded payload and chart math. Empty (no input
     or everything dropped) -> a minimal "collecting history" page. Otherwise embeds
-    one payload (usage pairs filtered client-side per D-03, heatmap, daily burn,
-    local day/week bounds, generated stamp) via _embed_json and inline JS that draws
-    all three charts with plain DOM SVG -- no CDN, no library (DASH-06).
+    one payload (usage pairs filtered client-side per D-03, heatmap, ROLLING 24h/7d
+    bounds, generated stamp) via _embed_json and inline JS that draws the charts with
+    plain DOM SVG -- no CDN, no library (DASH-06).
+
+    Range bounds are ROLLING windows (now-24h, now-7d), not calendar boundaries: a
+    "day" that resets at local midnight and a "week" that resets on Monday hide the
+    most recent activity right after a reset. Rolling also mirrors how Claude's own
+    quota windows work. local_bounds() stays calendar-based for the tray trend rows.
     """
     records = history_numeric(records)
     if not records:
         return _DASH_EMPTY
-    day_start, week_start = local_bounds(now)
     payload = {
         "usage": [[int(r["t"]), r["pct"]] for r in records],
         "heatmap": heatmap_buckets(records),
-        "bounds": {"day": day_start, "week": week_start},
+        "bounds": {"h24": int(now - 86400), "d7": int(now - 7 * 86400)},
         "generated": int(now),
     }
     return (
