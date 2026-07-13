@@ -600,11 +600,12 @@ _DASH_STYLE = (
     "svg .dot7{fill:var(--accent2);stroke:none}"
     "svg .proj{stroke:var(--accent);stroke-dasharray:4 3;fill:none;"
     "stroke-width:2;opacity:.75}"
-    "svg .proj.over{stroke:#d1495b;opacity:.95}"
+    "svg .proj7{stroke:var(--accent2);stroke-dasharray:4 3;fill:none;"
+    "stroke-width:2;opacity:.75}"
+    "svg .proj.over,svg .proj7.over{stroke:#d1495b;opacity:.95}"
     "svg .projlab{fill:var(--accent);font-size:11px;font-weight:600}"
-    "svg .projlab.over{fill:#d1495b}"
-    "svg .limit{stroke:#d1495b;stroke-dasharray:5 4;opacity:.6}"
-    "svg .limitlab{fill:#d1495b;opacity:.8}"
+    "svg .projlab7{fill:var(--accent2);font-size:11px;font-weight:600}"
+    "svg .projlab.over,svg .projlab7.over{fill:#d1495b}"
     "#u-legend .kp{background:repeating-linear-gradient(90deg,"
     "var(--accent) 0 4px,transparent 4px 7px)}"
     "#status{display:flex;flex-direction:column;gap:.55em}"
@@ -700,17 +701,21 @@ var NS="http://www.w3.org/2000/svg";
 // projection. Left further down (beside the status card) `var` hoisting would give
 // it the name but not the value -- WIN5 would be undefined at first paint.
 var WIN5=18000,WIN7=604800;
+var DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
 function el(name,attrs){var e=document.createElementNS(NS,name);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
 function two(n){return(n<10?"0":"")+n;}
-function drawChart(svg,seriesList,marks,unit,yfloor,proj){
+function drawChart(svg,seriesList,marks,unit,yfloor,projs){
   var W=600,H=200,PL=42,PR=12,PT=12,PB=30,xs=[],ys=[];
   seriesList.forEach(function(s){s.pts.forEach(function(p){
     if(p[1]!==null){xs.push(p[0]);ys.push(p[1]);}});});
   if(!xs.length)return;
-  // The projection lands in the FUTURE (at the reset instant), so widen the domain
-  // to include it -- otherwise it would be drawn off the right edge of the chart.
-  if(proj){xs.push(proj.t1);ys.push(proj.p1);}
+  // A "to" projection lands in the FUTURE (the 5h reset), so widen the domain to
+  // include it or it would be drawn off the right edge. "rate" projections are
+  // deliberately NOT included -- see the note where they are drawn.
+  (projs||[]).forEach(function(pr){
+    if(pr.kind==="to"){xs.push(pr.t1);ys.push(pr.p1);}
+  });
   var xmin=Math.min.apply(null,xs),xmax=Math.max.apply(null,xs);
   var ymax=Math.max.apply(null,ys);if(ymax<yfloor)ymax=yfloor;if(ymax<=0)ymax=1;
   var xr=(xmax-xmin)||1,spanDays=xr/86400,i,yv,xv,gy,gx,t;
@@ -738,25 +743,26 @@ function drawChart(svg,seriesList,marks,unit,yfloor,proj){
     var mx=sx(m);
     svg.appendChild(el("line",{x1:mx,y1:PT,x2:mx,y2:H-PB,"class":"reset"}));
   });
-  // The 100% ceiling. Without it a rising line has no visible thing to hit.
-  if(yfloor>=100&&ymax>=100){
-    var ly=sy(100);
-    svg.appendChild(el("line",{x1:PL,y1:ly,x2:W-PR,y2:ly,"class":"limit"}));
-    var lt=el("text",{x:W-PR,y:ly-4,"font-size":10,"text-anchor":"end","class":"limitlab"});
-    lt.textContent="limit";svg.appendChild(lt);
-  }
-  // Projected trajectory: latest sample -> reset instant at the extrapolated %.
-  // Dashed (it is a guess, not data) and red when it would blow past the cap.
-  if(proj){
+  // Projected trajectories. Dashed because they are guesses, not data; red past 100.
+  // Two shapes:
+  //   kind "to"   - runs to a specific future point (the 5h reset is only hours out,
+  //                 so the domain above was widened to include it).
+  //   kind "rate" - runs to the chart's right edge at a known %/sec. Used for the
+  //                 WEEKLY: its reset is ~4 days out, and stretching the axis that far
+  //                 would squash the real history into a sliver, so the line shows the
+  //                 slope in view while the LABEL carries the projected-at-reset value.
+  (projs||[]).forEach(function(pr){
+    var x0=sx(pr.t0),y0=sy(pr.p0),x1,y1;
+    if(pr.kind==="rate"){x1=sx(xmax);y1=sy(pr.p0+pr.rate*(xmax-pr.t0));}
+    else{x1=sx(pr.t1);y1=sy(pr.p1);}
     svg.appendChild(el("path",{
-      d:"M"+sx(proj.t0).toFixed(1)+" "+sy(proj.p0).toFixed(1)+
-        "L"+sx(proj.t1).toFixed(1)+" "+sy(proj.p1).toFixed(1),
-      "class":proj.over?"proj over":"proj"}));
-    var pt=el("text",{x:sx(proj.t1)-3,y:sy(proj.p1)-6,"font-size":11,
-      "text-anchor":"end","class":proj.over?"projlab over":"projlab"});
-    pt.textContent=Math.round(proj.p1)+"%";
-    svg.appendChild(pt);
-  }
+      d:"M"+x0.toFixed(1)+" "+y0.toFixed(1)+"L"+x1.toFixed(1)+" "+y1.toFixed(1),
+      "class":pr.over?(pr.cls+" over"):pr.cls}));
+    var lt=el("text",{x:(x1-3).toFixed(1),y:(y1-6).toFixed(1),"font-size":11,
+      "text-anchor":"end","class":pr.over?(pr.lcls+" over"):pr.lcls});
+    lt.textContent=pr.lab;
+    svg.appendChild(lt);
+  });
   seriesList.forEach(function(s){
     var d="",pen=false,n=0;
     s.pts.forEach(function(p){if(p[1]!==null)n++;});
@@ -781,19 +787,32 @@ function drawUsage(range){
   var lo=(range==="h24")?D.bounds.h24:(range==="d7")?D.bounds.d7:-Infinity;
   function f(a){return (a||[]).filter(function(p){return p[0]>=lo;});}
   var marks=(D.resets||[]).filter(function(m){return m>=lo;});
-  // Projection for the CURRENT 5h window, drawn on the chart rather than only
-  // described in text: from the latest real sample to the reset instant.
-  var proj=null,pj=project(D.now.pct,D.now.reset,WIN5);
-  if(pj&&!pj.early){
-    var last=null,u=f(D.usage);
-    for(var j=u.length-1;j>=0;j--){if(u[j][1]!==null){last=u[j];break;}}
-    if(last)proj={t0:last[0],p0:last[1],t1:D.now.reset,p1:pj.proj,over:pj.proj>100};
+  function lastOf(a){for(var j=a.length-1;j>=0;j--){if(a[j][1]!==null)return a[j];}return null;}
+  var u5=f(D.usage),u7=f(D.usage7),projs=[];
+  // 5h: reset is only hours away -> project all the way TO it (domain widens to fit).
+  var pj5=project(D.now.pct,D.now.reset,WIN5),l5=lastOf(u5);
+  if(pj5&&!pj5.early&&l5){
+    projs.push({kind:"to",t0:l5[0],p0:l5[1],t1:D.now.reset,p1:pj5.proj,
+                over:pj5.proj>100,cls:"proj",lcls:"projlab",
+                lab:Math.round(pj5.proj)+"%"});
   }
-  // yfloor 100: the axis always spans the whole cap, so 18% reads as "plenty of
-  // headroom" instead of filling the chart the way an auto-scaled axis would.
-  drawChart(svg,[{pts:f(D.usage),cls:"series",dot:"dot"},
-                 {pts:f(D.usage7),cls:"series7",dot:"dot7"}],
-            marks,"%",100,proj);
+  // Weekly: reset is ~4 days out. Drawing TO it would stretch the axis 4 days into
+  // the future and squash the real history, so run the line at its true %/sec to the
+  // chart edge and let the label carry the number that matters (% at the weekly reset).
+  var pj7=project(D.now.pct7,D.now.reset7,WIN7),l7=lastOf(u7);
+  if(pj7&&!pj7.early&&l7){
+    var nowS=Date.now()/1000,start7=D.now.reset7-WIN7;
+    var rate7=D.now.pct7/(nowS-start7);
+    projs.push({kind:"rate",t0:l7[0],p0:l7[1],rate:rate7,
+                over:pj7.proj>100,cls:"proj7",lcls:"projlab7",
+                lab:Math.round(pj7.proj)+"% by "+DAYS[new Date(D.now.reset7*1000).getDay()]});
+  }
+  // yfloor 100: the axis always spans the whole cap, so 22% reads as "plenty of
+  // headroom" instead of filling the chart the way an auto-scaled axis would. The
+  // 100% gridline already says where the cap is -- no separate "limit" rule needed.
+  drawChart(svg,[{pts:u5,cls:"series",dot:"dot"},
+                 {pts:u7,cls:"series7",dot:"dot7"}],
+            marks,"%",100,projs);
   var bs=document.querySelectorAll("#ranges button");
   for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-range")===range)?"active":"";
 }
