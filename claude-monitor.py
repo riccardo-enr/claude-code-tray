@@ -1843,6 +1843,22 @@ def looking_at(pane, tmux):
 
 
 def serve(mon):
+    """Socket thread: hook events -> Monitor.handle on the Gtk main thread.
+
+    ponytail: the per-connection body is wrapped in a broad `except Exception`, mirroring
+    poll_loop. This thread is the ONLY thing feeding session events, so ANY raise escaping
+    one connection kills it permanently and the tray goes silently deaf to every session
+    forever -- the same failure shape as the corrupt-record bug (260713-fry), and what
+    NOTIF-04 is actually protecting. The guard is INSIDE the while, around the connection
+    body: one bad connection costs one connection, not the thread. Made OBSERVABLE rather
+    than silent -- traceback.print_exc() puts the full traceback in the journal on every
+    failing connection. accept() stays OUTSIDE the try: a raise there is the listening
+    socket itself dying, which is unrecoverable and has nothing useful to retry.
+
+    Monitor.handle is a new source of raises now that it emits notifications, but it runs
+    on the Gtk main thread via idle_add -- a raise there kills the idle source, not this
+    thread. emit_notif's own guards cover it.
+    """
     if os.path.exists(SOCK):
         os.unlink(SOCK)
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -1851,22 +1867,28 @@ def serve(mon):
     while True:
         conn, _ = srv.accept()
         try:
-            buf = conn.recv(65536).decode("utf-8", "replace")
-        finally:
-            conn.close()
-        for line in buf.splitlines():
-            line = line.strip()
-            if not line:
-                continue
             try:
-                msg = json.loads(line)
-            except Exception:
-                continue
-            # decide "already looking" here (background thread) so the xprop/tmux
-            # shell-outs never block the Gtk main loop.
-            if msg.get("event") in ("done", "waiting"):
-                msg["_onscreen"] = looking_at(msg.get("pane", ""), msg.get("tmux", ""))
-            GLib.idle_add(mon.handle, msg)
+                buf = conn.recv(65536).decode("utf-8", "replace")
+            finally:
+                conn.close()  # keep the close nested inside: a recv failure must not leak an fd
+            for line in buf.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except Exception:
+                    continue
+                # decide "already looking" here (background thread) so the xprop/tmux
+                # shell-outs never block the Gtk main loop.
+                if msg.get("event") in ("done", "waiting"):
+                    msg["_onscreen"] = looking_at(
+                        msg.get("pane", ""), msg.get("tmux", "")
+                    )
+                GLib.idle_add(mon.handle, msg)
+        except Exception:
+            traceback.print_exc()  # loud and repeated; the thread survives regardless
+            continue
 
 
 def poll_loop(mon):
