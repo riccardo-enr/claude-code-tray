@@ -99,6 +99,104 @@ def sess_should_notify(old_status, new_status):
     return new_status in ("waiting", "done") and old_status != new_status
 
 
+# Quota-window lengths in seconds. Same literals the dashboard JS carries at :787 -- if
+# one moves, move both (project() is duplicated there on purpose; see its docstring).
+WIN5 = 18000  # 5 hours
+WIN7 = 604800  # 7 days
+# D-05: the minimum lead a predictive alert needs to be worth showing. A projection that
+# says "you run out in 90 seconds" is not actionable, and the >80% badge already covers
+# "you are nearly there". 15 minutes is the floor for still being able to do something.
+ALERT_LEAD = 15 * 60
+
+
+def project(pct, reset, win, now):
+    """Projected quota use at window reset, from the elapsed fraction of the window.
+
+    Python port of the dashboard's project() (the JS at :972) -- QUOTA-03's arithmetic,
+    reused for ALERT-02/03. The window began at reset-win, so the elapsed fraction e is
+    known exactly; extrapolating the current pct linearly over the window gives the
+    projected % at reset, and when that crosses 100 we can say WHEN it would land.
+
+    Pure: `now` is an argument, never read off a clock, so demo() can pin every case.
+
+    Returns None (no data), {"early": True} (too soon to extrapolate), or {"proj": float}
+    which additionally carries an "exhaust" epoch, but ONLY when the projection strictly
+    exceeds 100.
+
+    DELIBERATE DUPLICATION -- the JS copy STAYS. It re-runs against a live browser clock
+    as the static dashboard page ages between regenerations, so it cannot be collapsed
+    into a value baked in from here. Same arithmetic, two clocks. Change one, change the
+    other; demo() pins this copy. ponytail: collapse the two only if the page ever stops
+    recomputing as it ages.
+    """
+    # seven_day_pct / seven_day_reset come back None on an older CLI (parse_usage lets
+    # them through unguarded, unlike used_percentage / resets_at_epoch). This guard is the
+    # ONE place the port is stricter than the JS -- JS coerces, Python would raise -- and
+    # it is what makes the 7d alert degrade silently, exactly as usage_rows already does.
+    if not _is_num(pct) or not _is_num(reset):
+        return None
+    start = reset - win
+    e = (now - start) / float(win)  # win is a nonzero constant -> no div-by-zero
+    if e <= 0.05:
+        # Barely into the window -> pct/e explodes. Doubles as the clock-skew guard: a
+        # negative e (a reset epoch further out than one whole window) lands here too.
+        return {"early": True}
+    if e > 1:
+        e = 1.0  # window already over -> the projection degrades to the current pct
+    out = {"proj": pct / e}
+    if out["proj"] > 100 and pct > 0:  # `pct > 0` is what guards the 100.0 / pct below
+        exh = start + (100.0 / pct) * (now - start)
+        if exh < reset:
+            out["exhaust"] = exh
+    return out
+
+
+def hhmm(epoch):
+    """Local wall-clock HH:MM for an epoch. D-08 wants the alert body to name a clock
+    reading, not a duration. stdlib, and it is right about DST.
+    """
+    return time.strftime("%H:%M", time.localtime(epoch))
+
+
+def alert_due(p, now):
+    """The D-05 lead predicate: is `p` (a project() result) worth alerting on? Pure.
+
+    Written as a membership test on the exhaust key ON PURPOSE, and this is the subtlest
+    line in the phase. project() sets that key only when the projection STRICTLY exceeds
+    100, so a predicate that first tests the projected value >= 100 and then reads the
+    exhaust key raises KeyError at exactly 100.0. The membership test SUBSUMES the
+    projection test -- there is no projection clause to write, and there must not be one.
+
+    Three decisions ride that single expression:
+      D-05  -- an exhaust nearer than ALERT_LEAD is not actionable, so it stays silent.
+      D-07  -- an already-exhausted cap has an exhaust in the PAST, so the same
+               subtraction rejects it. That is why D-07 needs no special case, no code.
+      early -- {"early": True} has no exhaust key either, so it is silent for free.
+    """
+    return bool(p) and "exhaust" in p and (p["exhaust"] - now) >= ALERT_LEAD
+
+
+def alert_should_fire(armed_reset, reset, p, now):
+    """One alert per cap per window, re-armed when the window rolls (D-06 / ALERT-04). Pure.
+
+    `armed_reset` is the resets_at_epoch of the window in which this cap last alerted
+    (None if it never has). That one value IS the whole state machine: a reset epoch is the
+    window's identity, so a CHANGED epoch is a new window, definitionally -- which re-arms
+    the cap for free, with no reset-detection code, no timer, and no clock math (ALERT-04).
+
+    Once a cap fires it stays silent for the remainder of that window even if the
+    projection climbs further (D-06). There is deliberately NO re-arm on the projection
+    dipping under 100 and climbing back inside the same window -- that flaps around the
+    boundary. ponytail: lead-step re-fires ("30m left") are deferred; add a second armed
+    threshold per cap if one alert per window ever proves too quiet.
+    """
+    if not _is_num(reset):
+        return False  # the 7d cap is absent on an older CLI -> degrade to silence
+    if armed_reset == reset:
+        return False  # already alerted in THIS window (D-06)
+    return alert_due(p, now)
+
+
 # Append-only usage history store (one JSON object per line). Phase 03 reads it.
 HISTORY_PATH = os.path.expanduser("~/.claude/usage-history.jsonl")
 # Retention window in days; records older than this are pruned. Env-overridable
