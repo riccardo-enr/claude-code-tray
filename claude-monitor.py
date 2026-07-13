@@ -477,6 +477,27 @@ def reset_marks(records):
     return sorted({int(r["reset"]) for r in records if _is_num(r.get("reset"))})
 
 
+GAP_MAX = 300  # seconds; a hole wider than this is a data gap, not a trend
+
+
+def with_gaps(series, max_gap=GAP_MAX):
+    """Insert [t, None] breaks wherever consecutive samples are >max_gap apart.
+
+    Without this the renderer joins the two samples either side of an outage with a
+    straight line, which reads as a smooth trend that never happened (e.g. a tidy
+    diagonal "decline" across a night when the tray simply was not running). None is
+    the renderer's existing pen-up signal, so the line breaks instead of lying.
+    """
+    out = []
+    prev = None
+    for t, v in series:
+        if prev is not None and t - prev > max_gap:
+            out.append([prev, None])
+        out.append([t, v])
+        prev = t
+    return out
+
+
 def usage7_series(records):
     """[[t, weekly_pct], ...] for records carrying a numeric `pct7`, in order.
 
@@ -575,6 +596,17 @@ _DASH_STYLE = (
     "svg .series{stroke:var(--accent);fill:none;stroke-width:2}"
     "svg .series7{stroke:var(--accent2);fill:none;stroke-width:2}"
     "svg .reset{stroke:var(--mark);stroke-dasharray:3 3}"
+    "svg .dot{fill:var(--accent);stroke:none}"
+    "svg .dot7{fill:var(--accent2);stroke:none}"
+    "svg .proj{stroke:var(--accent);stroke-dasharray:4 3;fill:none;"
+    "stroke-width:2;opacity:.75}"
+    "svg .proj.over{stroke:#d1495b;opacity:.95}"
+    "svg .projlab{fill:var(--accent);font-size:11px;font-weight:600}"
+    "svg .projlab.over{fill:#d1495b}"
+    "svg .limit{stroke:#d1495b;stroke-dasharray:5 4;opacity:.6}"
+    "svg .limitlab{fill:#d1495b;opacity:.8}"
+    "#u-legend .kp{background:repeating-linear-gradient(90deg,"
+    "var(--accent) 0 4px,transparent 4px 7px)}"
     "#status{display:flex;flex-direction:column;gap:.55em}"
     ".srow{display:grid;grid-template-columns:5em 3.2em 7em 1fr;align-items:center;"
     "gap:.6em;font-size:.9em}"
@@ -655,6 +687,7 @@ _DASH_BODY = (
     "<svg id=\"usage-chart\" viewBox=\"0 0 600 200\"></svg>"
     "<div id=\"u-legend\"><span class=\"k k5\"></span><span>5-hour</span>"
     "<span class=\"k k7\"></span><span>weekly</span>"
+    "<span class=\"k kp\"></span><span>projected</span>"
     "<span class=\"k kr\"></span><span>window reset</span></div></section>"
     "<section><h2>" + _IC_GRID + "Usage by hour (mean % of the 5h cap)</h2>"
     "<svg id=\"heatmap\" viewBox=\"0 0 520 170\"></svg>"
@@ -663,14 +696,21 @@ _DASH_BODY = (
 
 _DASH_JS = """
 var NS="http://www.w3.org/2000/svg";
+// Declared up here on purpose: drawUsage() runs during init and reads WIN5 for the
+// projection. Left further down (beside the status card) `var` hoisting would give
+// it the name but not the value -- WIN5 would be undefined at first paint.
+var WIN5=18000,WIN7=604800;
 function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
 function el(name,attrs){var e=document.createElementNS(NS,name);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
 function two(n){return(n<10?"0":"")+n;}
-function drawChart(svg,seriesList,marks,unit,yfloor){
+function drawChart(svg,seriesList,marks,unit,yfloor,proj){
   var W=600,H=200,PL=42,PR=12,PT=12,PB=30,xs=[],ys=[];
   seriesList.forEach(function(s){s.pts.forEach(function(p){
     if(p[1]!==null){xs.push(p[0]);ys.push(p[1]);}});});
   if(!xs.length)return;
+  // The projection lands in the FUTURE (at the reset instant), so widen the domain
+  // to include it -- otherwise it would be drawn off the right edge of the chart.
+  if(proj){xs.push(proj.t1);ys.push(proj.p1);}
   var xmin=Math.min.apply(null,xs),xmax=Math.max.apply(null,xs);
   var ymax=Math.max.apply(null,ys);if(ymax<yfloor)ymax=yfloor;if(ymax<=0)ymax=1;
   var xr=(xmax-xmin)||1,spanDays=xr/86400,i,yv,xv,gy,gx,t;
@@ -698,13 +738,42 @@ function drawChart(svg,seriesList,marks,unit,yfloor){
     var mx=sx(m);
     svg.appendChild(el("line",{x1:mx,y1:PT,x2:mx,y2:H-PB,"class":"reset"}));
   });
+  // The 100% ceiling. Without it a rising line has no visible thing to hit.
+  if(yfloor>=100&&ymax>=100){
+    var ly=sy(100);
+    svg.appendChild(el("line",{x1:PL,y1:ly,x2:W-PR,y2:ly,"class":"limit"}));
+    var lt=el("text",{x:W-PR,y:ly-4,"font-size":10,"text-anchor":"end","class":"limitlab"});
+    lt.textContent="limit";svg.appendChild(lt);
+  }
+  // Projected trajectory: latest sample -> reset instant at the extrapolated %.
+  // Dashed (it is a guess, not data) and red when it would blow past the cap.
+  if(proj){
+    svg.appendChild(el("path",{
+      d:"M"+sx(proj.t0).toFixed(1)+" "+sy(proj.p0).toFixed(1)+
+        "L"+sx(proj.t1).toFixed(1)+" "+sy(proj.p1).toFixed(1),
+      "class":proj.over?"proj over":"proj"}));
+    var pt=el("text",{x:sx(proj.t1)-3,y:sy(proj.p1)-6,"font-size":11,
+      "text-anchor":"end","class":proj.over?"projlab over":"projlab"});
+    pt.textContent=Math.round(proj.p1)+"%";
+    svg.appendChild(pt);
+  }
   seriesList.forEach(function(s){
-    var d="",pen=false;
+    var d="",pen=false,n=0;
+    s.pts.forEach(function(p){if(p[1]!==null)n++;});
     s.pts.forEach(function(p){
       if(p[1]===null){pen=false;return;}
       d+=(pen?"L":"M")+sx(p[0]).toFixed(1)+" "+sy(p[1]).toFixed(1)+" ";pen=true;
     });
     if(d)svg.appendChild(el("path",{d:d,"class":s.cls}));
+    // A 1-2 sample series cannot form a line and renders as a stray floating dash.
+    // Dot sparse series so a couple of samples read as DATA rather than an artifact.
+    if(n<=30&&s.dot){
+      s.pts.forEach(function(p){
+        if(p[1]===null)return;
+        svg.appendChild(el("circle",{cx:sx(p[0]).toFixed(1),cy:sy(p[1]).toFixed(1),
+          r:2.5,"class":s.dot}));
+      });
+    }
   });
 }
 function drawUsage(range){
@@ -712,10 +781,19 @@ function drawUsage(range){
   var lo=(range==="h24")?D.bounds.h24:(range==="d7")?D.bounds.d7:-Infinity;
   function f(a){return (a||[]).filter(function(p){return p[0]>=lo;});}
   var marks=(D.resets||[]).filter(function(m){return m>=lo;});
+  // Projection for the CURRENT 5h window, drawn on the chart rather than only
+  // described in text: from the latest real sample to the reset instant.
+  var proj=null,pj=project(D.now.pct,D.now.reset,WIN5);
+  if(pj&&!pj.early){
+    var last=null,u=f(D.usage);
+    for(var j=u.length-1;j>=0;j--){if(u[j][1]!==null){last=u[j];break;}}
+    if(last)proj={t0:last[0],p0:last[1],t1:D.now.reset,p1:pj.proj,over:pj.proj>100};
+  }
   // yfloor 100: the axis always spans the whole cap, so 18% reads as "plenty of
   // headroom" instead of filling the chart the way an auto-scaled axis would.
-  drawChart(svg,[{pts:f(D.usage),cls:"series"},{pts:f(D.usage7),cls:"series7"}],
-            marks,"%",100);
+  drawChart(svg,[{pts:f(D.usage),cls:"series",dot:"dot"},
+                 {pts:f(D.usage7),cls:"series7",dot:"dot7"}],
+            marks,"%",100,proj);
   var bs=document.querySelectorAll("#ranges button");
   for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-range")===range)?"active":"";
 }
@@ -781,7 +859,6 @@ setTheme(savedTheme||(prefDark?"dark":"light"));
 document.getElementById("theme").addEventListener("click",function(){
   setTheme(isDark()?"light":"dark");
 });
-var WIN5=18000,WIN7=604800;
 function fmtDur(s){
   s=Math.max(0,Math.floor(s));
   if(s>=86400)return Math.floor(s/86400)+"d "+Math.floor((s%86400)/3600)+"h";
@@ -873,8 +950,8 @@ def render_dashboard(records, now):
     if not records:
         return _DASH_EMPTY
     payload = {
-        "usage": [[int(r["t"]), r["pct"]] for r in records],
-        "usage7": usage7_series(records),
+        "usage": with_gaps([[int(r["t"]), r["pct"]] for r in records]),
+        "usage7": with_gaps(usage7_series(records)),
         "resets": reset_marks(records),
         "now": latest_state(records),
         "heatmap": heatmap_buckets(records),
@@ -1177,6 +1254,17 @@ def demo():
         ]
     ) == [100, 300]
     assert reset_marks([{"t": 1, "pct": 1.0}]) == []
+    # with_gaps: a hole wider than GAP_MAX gets a None break so the renderer lifts the
+    # pen instead of drawing a straight line across an outage (which reads as a real
+    # trend). Tight samples are left untouched.
+    assert with_gaps([[0, 1.0], [60, 2.0], [3000, 3.0]], 300) == [
+        [0, 1.0],
+        [60, 2.0],
+        [60, None],
+        [3000, 3.0],
+    ]
+    assert with_gaps([[0, 1.0], [60, 2.0]], 300) == [[0, 1.0], [60, 2.0]]
+    assert with_gaps([], 300) == []
     # usage7_series: only records carrying a numeric weekly pct.
     assert usage7_series([{"t": 5, "pct7": 40.0}, {"t": 6}, {"t": 7, "pct7": None}]) == [
         [5, 40.0]
