@@ -423,9 +423,11 @@ _DASH_STYLE = (
     "section{background:#fff;border:1px solid #e6e6e6;border-radius:8px;"
     "padding:.9em 1.1em;margin:0 0 1.1em;box-shadow:0 1px 3px rgba(0,0,0,.06)}"
     "svg{max-width:100%;height:auto}"
-    "#ranges button{margin-right:.4em;padding:.25em .8em;border:1px solid #bbb;"
-    "background:#fff;border-radius:4px;cursor:pointer}"
-    "#ranges button.active{background:#1a6cae;color:#fff;border-color:#1a6cae}"
+    "#ranges button,#hm-mode button{margin-right:.4em;padding:.25em .8em;"
+    "border:1px solid #bbb;background:#fff;border-radius:4px;cursor:pointer}"
+    "#ranges button.active,#hm-mode button.active{background:#1a6cae;color:#fff;"
+    "border-color:#1a6cae}"
+    "#hm-mode{margin:0 0 .6em}"
     "#usage-now{color:#1a6cae;font-weight:600}"
     "p.empty{color:#888}"
     "#meta{color:#888;font-size:.85em;margin:.2em 0 1.5em}"
@@ -452,14 +454,10 @@ _DASH_BODY = (
     "<button data-range=\"all\" class=\"active\">All</button></div>"
     "<svg id=\"usage-chart\" viewBox=\"0 0 600 200\"></svg></section>"
     "<section><h2>Peak usage heatmap (mean burn tok/hr)</h2>"
+    "<div id=\"hm-mode\"><button data-hm=\"abs\" class=\"active\">Absolute</button>"
+    "<button data-hm=\"rel\">vs average</button></div>"
     "<svg id=\"heatmap\" viewBox=\"0 0 520 170\"></svg>"
-    "<div id=\"hm-legend\"><span>Low</span>"
-    "<span class=\"sw\" style=\"background:hsl(210,80%,92%)\"></span>"
-    "<span class=\"sw\" style=\"background:hsl(210,80%,61%)\"></span>"
-    "<span class=\"sw\" style=\"background:hsl(210,80%,30%)\"></span>"
-    "<span>High</span>"
-    "<span class=\"sw\" style=\"background:hsl(0,0%,88%)\"></span>"
-    "<span>no data</span></div></section>"
+    "<div id=\"hm-legend\"></div></section>"
 )
 
 _DASH_JS = """
@@ -506,25 +504,68 @@ function drawUsage(range){
   var bs=document.querySelectorAll("#ranges button");
   for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-range")===range)?"active":"";
 }
+var hmMode="abs";
+function hmStats(g){
+  var vals=[],r,c,i,sum=0,maxdev=0;
+  for(r=0;r<7;r++)for(c=0;c<24;c++)if(g[r][c]!==null)vals.push(g[r][c]);
+  var max=1;
+  for(i=0;i<vals.length;i++){if(vals[i]>max)max=vals[i];sum+=vals[i];}
+  var mean=vals.length?sum/vals.length:0;
+  for(i=0;i<vals.length;i++){var d=Math.abs(vals[i]-mean);if(d>maxdev)maxdev=d;}
+  return {max:max,mean:mean,maxdev:maxdev||1};
+}
+function hmFill(val,s){
+  if(val===null)return "hsl(0,0%,88%)";
+  if(hmMode==="rel"){
+    var d=val-s.mean,f=Math.abs(d)/s.maxdev;
+    return "hsl("+(d>=0?0:210)+",70%,"+(90-f*45).toFixed(0)+"%)";
+  }
+  return "hsl(210,80%,"+(92-(val/s.max)*62).toFixed(0)+"%)";
+}
+function fmtN(v){
+  var a=Math.abs(v);
+  if(a>=1e6)return (v/1e6).toFixed(1)+"M";
+  if(a>=1e3)return (v/1e3).toFixed(1)+"k";
+  return Math.round(v)+"";
+}
+function hmTip(days,r,c,val,s){
+  var base=days[r]+" "+c+":00 - ";
+  if(val===null)return base+"no data";
+  var t=base+fmtN(val)+" tok/hr";
+  if(hmMode==="rel"){var d=val-s.mean;t+=" ("+(d>=0?"+":"")+fmtN(d)+" vs avg)";}
+  return t;
+}
+function hmLegend(s){
+  var box=document.getElementById("hm-legend");clear(box);
+  function sw(bg){var e=document.createElement("span");e.className="sw";e.style.background=bg;return e;}
+  function txt(x){var e=document.createElement("span");e.textContent=x;return e;}
+  if(hmMode==="rel"){
+    box.appendChild(txt("Below avg"));box.appendChild(sw("hsl(210,70%,50%)"));
+    box.appendChild(sw("hsl(0,0%,90%)"));box.appendChild(sw("hsl(0,70%,50%)"));
+    box.appendChild(txt("Above avg (avg "+fmtN(s.mean)+" tok/hr)"));
+  }else{
+    box.appendChild(txt("Low"));box.appendChild(sw("hsl(210,80%,92%)"));
+    box.appendChild(sw("hsl(210,80%,61%)"));box.appendChild(sw("hsl(210,80%,30%)"));
+    box.appendChild(txt("High"));
+  }
+  box.appendChild(sw("hsl(0,0%,88%)"));box.appendChild(txt("no data"));
+}
 function drawHeatmap(){
   var svg=document.getElementById("heatmap");clear(svg);
-  var g=D.heatmap,max=0,r,c;
-  for(r=0;r<7;r++)for(c=0;c<24;c++){var v=g[r][c];if(v!==null&&v>max)max=v;}
-  if(max<=0)max=1;
+  var g=D.heatmap,s=hmStats(g),r,c;
   var days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],cw=20,ch=20,lx=34,ty=18;
   for(c=0;c<24;c+=3){var t=el("text",{x:lx+c*cw+cw/2,y:13,"font-size":12,"text-anchor":"middle",fill:"#777"});t.textContent=c;svg.appendChild(t);}
   for(r=0;r<7;r++){
     var lbl=el("text",{x:lx-5,y:ty+r*ch+ch/2+4,"font-size":12,"text-anchor":"end",fill:"#555"});
     lbl.textContent=days[r];svg.appendChild(lbl);
     for(c=0;c<24;c++){
-      var val=g[r][c],fill,tip;
-      if(val===null){fill="hsl(0,0%,88%)";tip=days[r]+" "+c+":00 - no data";}
-      else{fill="hsl(210,80%,"+(92-(val/max)*62).toFixed(0)+"%)";tip=days[r]+" "+c+":00 - "+Math.round(val)+" tok/hr";}
-      var rect=el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:fill});
-      var ttl=el("title",{});ttl.textContent=tip;rect.appendChild(ttl);
+      var val=g[r][c];
+      var rect=el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:hmFill(val,s)});
+      var ttl=el("title",{});ttl.textContent=hmTip(days,r,c,val,s);rect.appendChild(ttl);
       svg.appendChild(rect);
     }
   }
+  hmLegend(s);
 }
 drawUsage("all");drawHeatmap();
 var un=D.usage[D.usage.length-1];
@@ -532,6 +573,13 @@ document.getElementById("usage-now").textContent=un?(" - now "+Math.round(un[1])
 document.getElementById("meta").textContent="Generated "+new Date(D.generated*1000).toLocaleString();
 document.getElementById("ranges").addEventListener("click",function(e){
   var r=e.target.getAttribute("data-range");if(r)drawUsage(r);
+});
+document.getElementById("hm-mode").addEventListener("click",function(e){
+  var m=e.target.getAttribute("data-hm");if(!m)return;
+  hmMode=m;
+  var bs=document.querySelectorAll("#hm-mode button");
+  for(var i=0;i<bs.length;i++)bs[i].className=(bs[i].getAttribute("data-hm")===m)?"active":"";
+  drawHeatmap();
 });
 """
 
