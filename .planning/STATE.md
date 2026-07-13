@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Notifications & Predictive Alerts
 current_phase: 5
-status: planning
-stopped_at: Phase 5 context gathered
-last_updated: "2026-07-13T11:38:00.806Z"
+status: ready_to_execute
+stopped_at: Phase 5 planned (3 plans)
+last_updated: "2026-07-13T12:21:55.000Z"
 last_activity: 2026-07-13
-last_activity_desc: v1.3 roadmap created (2 phases, 14/14 requirements mapped)
+last_activity_desc: Phase 5 planned (3 plans) — notification binding settled as Route B (org.freedesktop.Notifications via Gio.DBusProxy)
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-13)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** v1.3 roadmapped (Phases 5-6) — ready to plan Phase 5
+**Current focus:** Phase 5 planned (3 plans, waves 1-3) — ready to execute
 
 ## Current Position
 
-Phase: 5 — Notification Path & Event Producers (not started)
-Plan: —
-Status: Roadmap created, awaiting `/gsd-plan-phase 5`
-Last activity: 2026-07-13 — v1.3 roadmap created (2 phases, 14/14 requirements mapped)
+Phase: 5 — Notification Path & Event Producers (planned)
+Plan: 3 plans — 05-01 (shared path), 05-02 (SESS producer), 05-03 (ALERT producer)
+Status: Ready to execute (Phase 5 planned — 9/9 requirements, 9/9 decisions covered)
+Last activity: 2026-07-13 — Phase 5 planned; notification binding settled as Route B
 
 ## Performance Metrics
 
@@ -74,13 +74,19 @@ None yet.
 
 ### Blockers/Concerns
 
-Verified against `claude-monitor.py` during roadmapping — carry into Phase 5 planning:
+**The binding is SETTLED — Route B.** Phase 5's load-bearing decision is closed. `05-RESEARCH.md` settled it against gnome-shell 46.0's actual source (extracted from `/usr/lib/gnome-shell/libshell-14.so`) plus live D-Bus probes on the running session bus. Verdict: **`org.freedesktop.Notifications.Notify` over `Gio.DBusProxy`.** Route A (`Gio.Application` + `Gio.Notification`) is not merely costlier, it is *impossible* here — gnome-shell does `lookup_app(appId + '.desktop')`, throws `InvalidAppError`, and drops the notification silently. This is a single-file script with no install step and no `.desktop`.
 
-- **`project()` (QUOTA-03) is JavaScript-only.** It lives at `claude-monitor.py:931`, inside the dashboard HTML. There is **no Python-side projection**; `poll_loop` never computes one. ALERT-02/03 must evaluate it on the poll thread, so Phase 5 **ports** that ~15-line formula to Python (elapsed-fraction extrapolation, `e<=0.05` early guard, exhaust-time when `proj>100`) and asserts it in `--selfcheck`. Mechanical, not modeling — but do not plan it as "read an existing Python value", because that value does not exist. The JS copy must stay (it recomputes against a live browser clock).
-- **There is no `Gio.Application`** — `claude-monitor.py:1817` is a bare `Gtk.main()`. `Gio.Notification.send_notification` requires one, and notification *click actions* (NOTIF-03) additionally need an app id with a matching `.desktop`. Alternative: `org.freedesktop.Notifications.Notify` via `Gio.DBusProxy`, which supports `actions` + `ActionInvoked` with no app-id plumbing. **This is Phase 5's load-bearing decision** — settle it at plan time. NOTIF-01's "`Gio.Notification`" reads as intent (PyGObject, no new dependency), not a binding mandate.
-- **`serve()` is unguarded.** `poll_loop` gained a blanket `except` + traceback in `260713-fry`, so the alert producer inherits it. `serve()` (`claude-monitor.py:1705`) did not — a raise in its loop kills the socket thread and every session event, permanently. The session producer rides that thread. This is what NOTIF-04 is actually protecting.
-- Session transitions reach `Monitor.handle` via `GLib.idle_add` — i.e. on the **Gtk main thread**. The emit path must be non-blocking there (async D-Bus is; a `subprocess` shell-out is not).
-- Standing constraints: no new polling, no second data source, no new runtime dependencies, X11 only.
+Execution landmines — each one, if ignored, ships a silently broken feature. All are encoded as acceptance criteria in the plans:
+
+- **gnome-shell ignores `expire_timeout` entirely.** It destructures it as `timeout_` (the deliberately-unused convention) and never reads it; banner life is a hardcoded `NOTIFICATION_TIMEOUT = 4000`. D-02 ("`waiting` sticks, `done` expires") must be implemented via the **`urgency` hint** — `2`/CRITICAL never arms the dismiss timer, `1`/NORMAL gets 4s then falls to the notification list. An `expire_timeout=0` vs `-1` implementation wires a knob to nothing.
+- **Do not use the `resident` hint.** It means "survive being *clicked*", not "survive on screen". D-02's own parenthetical in CONTEXT.md invites this exact mistake.
+- **`ActionInvoked` is a broadcast signal** — we receive *every* application's notification clicks. The handler must filter on notification ids we own, or clicking an unrelated Slack notification yanks a tmux pane into focus. Correctness *and* security (threat T-05-01).
+- **The `Gio.DBusProxy` must be constructed on the Gtk main thread** (in `Monitor.__init__`, before `Gtk.main()`). Signals are delivered to the `GMainContext` the proxy was built on; construct it in `poll_loop` and clicks silently never fire.
+- **Keep the project `dir` in the notification title (summary), never the body.** The body is parsed as Pango markup unconditionally (`useBodyMarkup: true`); the summary is not. D-01's shape is accidentally the secure one — a repo named `<b>x</b>` is markup injection the moment it moves into an unescaped body (threat T-05-04).
+- **D-05's operative predicate is `"exhaust" in p and p["exhaust"] - now >= 900`**, not `proj >= 100` — the JS sets `exhaust` only when `proj > 100` *strictly*, so `proj >= 100` would `KeyError` at exactly 100.0. This predicate also delivers D-07 for free, confirming its "no special case, no code" claim.
+- **`serve()` is unguarded** (`claude-monitor.py:1699`) — a raise in its loop kills the socket thread and every session event, permanently. `poll_loop` gained a blanket `except` + traceback in `260713-fry`; `serve()` did not. The guard goes **inside the `while`, around the per-connection body** — not around the `accept()` loop, which would swallow the shutdown path. Success Criterion 5 is exactly this.
+- **`project()` (QUOTA-03) is JavaScript-only** at `claude-monitor.py:931`, inside the dashboard HTML. Phase 5 ports the ~15-line formula to Python for the poll thread and asserts it in `--selfcheck`. The JS copy **stays** — it recomputes against a live browser clock. The duplication is deliberate.
+- Standing constraints: no new polling, no second data source, no new runtime dependencies, X11 only, ASCII-only in code.
 
 ### Quick Tasks Completed
 
@@ -107,11 +113,12 @@ Verified against `claude-monitor.py` during roadmapping — carry into Phase 5 p
 
 ## Session Continuity
 
-Last session: 2026-07-13T11:38:00.800Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-notification-path-event-producers/05-CONTEXT.md
+Last session: 2026-07-13T12:21:55.000Z
+Stopped at: Phase 5 planned (3 plans, waves 1-3)
+Resume file: .planning/phases/05-notification-path-event-producers/05-01-PLAN.md
 
 ## Operator Next Steps
 
-- Plan the first phase with `/gsd-plan-phase 5`
-- Phase 5 must settle the notification-binding decision (`Gio.Application` + app id/.desktop vs. `Gio.DBusProxy` to `org.freedesktop.Notifications`) — NOTIF-03's click-to-focus depends on it
+- Execute the phase with `/gsd-execute-phase 5` — 3 plans, strictly sequential (every plan writes `claude-monitor.py`, so there is no real parallelism)
+- The notification binding is settled (Route B). Read `05-RESEARCH.md` before touching the emit path — it carries the working code sketch and the eight landmines listed under Blockers/Concerns
+- Verification is `--selfcheck` (projection port + de-dupe/arm as pure functions) plus human UAT on the live tray; the physical click producing `ActionInvoked` is the one thing research could not verify end-to-end

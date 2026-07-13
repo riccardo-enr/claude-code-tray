@@ -14,6 +14,7 @@ the user can context-switch away from the top bar and get pulled back only when
 a session needs them or quota is about to run out.
 
 Constraints that held across all three shipped milestones, and hold here: stdlib
+
 + PyGObject only, X11-only, one background poll, no new dependencies.
 
 Full phase detail for shipped milestones lives in `.planning/milestones/`;
@@ -76,20 +77,31 @@ them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
 ## Phase Details
 
 ### Phase 5: Notification Path & Event Producers
+
 **Goal**: The tray can pull the user back — one shared notification path, de-duped and click-to-focus, with both producers (session events, predictive quota alerts) riding it.
 **Depends on**: Phase 4 (QUOTA-03 projection semantics)
 **Requirements**: NOTIF-01, NOTIF-02, NOTIF-03, NOTIF-04, SESS-01, SESS-02, ALERT-02, ALERT-03, ALERT-04
 **Success Criteria** (what must be TRUE):
+
   1. When a session starts waiting for input, a desktop notification appears; when it finishes, a done notification appears — once per state transition, never once per tick.
   2. Clicking a session notification focuses that session's tmux pane and raises the terminal window — same outcome as clicking the tray row.
   3. When either cap (5-hour or 7-day) is projected to hit 100% before its window resets, a notification fires once; when the projection says usage coasts to reset, nothing fires.
   4. After a cap's window rolls over, that cap can alert again — a previous warning does not suppress the fresh window.
   5. With the notification daemon absent or failing, the tray keeps polling, rendering, and serving session events — no crash, no dead thread, no stalled menu.
+
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 05-01-PLAN.md — The shared notification path: `Gio.DBusProxy` to `org.freedesktop.Notifications`, one `emit_notif` choke point with the mute-gate seam and replace-in-place slots, an id-filtered `ActionInvoked` click dispatcher, and a hardened `serve()`
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 05-02-PLAN.md — SESS producer: `sess_should_notify` de-dupe + `Monitor.handle` emits `waiting` (sticky) / `done` (expiring) notifications that click through to the tmux pane
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 05-03-PLAN.md — ALERT producer: Python port of the QUOTA-03 `project()` formula plus the lead-time and arm/re-arm predicates, driving one predictive 5h/7d quota alert per window from `poll_loop`
 
 **Binding settled at plan time** (was the phase's open load-bearing decision):
@@ -121,6 +133,7 @@ the path generalizes by construction.
   against the same cases. **Not** modeling work, and **not** a new forecaster.
   The JS copy necessarily stays (it recomputes against a live browser clock); that
   duplication is deliberate and should be noted where it lands.
+
 - **There is no `Gio.Application`.** `claude-monitor.py:1817` is a bare
   `Gtk.main()`. `Gio.Notification` + `send_notification` needs a `Gio.Application`
   (and, for notification *actions* to route back — NOTIF-03 — an app id with a
@@ -129,11 +142,13 @@ the path generalizes by construction.
   app-id/.desktop plumbing. **This is the phase's load-bearing decision** — settle
   it in `/gsd-plan-phase 5`, not here. NOTIF-01's "`Gio.Notification`" is intent
   ("PyGObject, no new dependency"), not a binding choice.
+
 - **`serve()` is unguarded.** `poll_loop` got a blanket `except` + traceback from
   quick task `260713-fry`, so the alert producer inherits that protection.
   `serve()` (`claude-monitor.py:1705`) did **not** — a raise in its loop kills the
   socket thread and *all* session events, permanently. The session producer rides
   that thread. NOTIF-04 has real teeth here.
+
 - Session state transitions land in `Monitor.handle` via `GLib.idle_add`, i.e. on
   the Gtk main thread. Whatever emit path is chosen must be non-blocking there
   (D-Bus notify is async; a `subprocess` shell-out is not).
@@ -142,15 +157,18 @@ the path generalizes by construction.
 functions) + human UAT on the live tray.
 
 ### Phase 6: Notification Control & Config
+
 **Goal**: The user decides what fires — per-event toggles, one global mute, and a configurable badge threshold, persisted across restarts and safe against a corrupt config.
 **Depends on**: Phase 5 (all four event types must exist to be toggled)
 **Requirements**: CFG-01, CFG-02, CFG-03, CFG-04, CFG-05
 **Success Criteria** (what must be TRUE):
+
   1. Each of the four event types (waiting / done / 5h alert / 7d alert) can be switched on and off from the tray menu, and the next event honors the change with no restart.
   2. A single "mute all" tray toggle silences every notification while the tray rows and icon badge keep working.
   3. Toggle states survive a restart of the helper.
   4. A missing, unreadable, or malformed config file leaves the tray running on defaults — never a crash, matching the history store's total-tolerance bar.
   5. The high-usage badge threshold is configurable rather than a hard-coded 80%, and the badge follows the configured value.
+
 **Plans**: TBD
 
 **Notes:**
@@ -159,8 +177,10 @@ functions) + human UAT on the live tray.
   already killed the poll thread once (`260713-fry`). Config reads must be as
   total-tolerant as `parse_history` — malformed JSON, wrong shape, non-UTF8, and
   missing file all fall back to defaults.
+
 - CFG-05 closes the deferred "Alerting: configurable threshold" item and retires
   the fixed 80% constant used by the badge (both caps).
+
 - Open question carried from REQUIREMENTS.md: whether the config file subsumes the
   existing `CLAUDE_TRAY_*` env vars or layers over them (lean: env as default, menu
   as override). Settle at plan time.
