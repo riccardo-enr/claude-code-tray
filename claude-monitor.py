@@ -1303,6 +1303,29 @@ def demo():
         "reset7": None,
     }
     assert latest_state([])["pct"] is None
+    # T-04-01 regression guard for the NEWER payload fields. history_numeric only
+    # validates t/pct/burn, so a record can be "numeric-clean" by its lights while
+    # carrying hostile junk in pct7/reset/reset7. Those fields reach the inline
+    # <script> through usage7_series / reset_marks / latest_state, which each filter
+    # with _is_num -- this asserts that, so adding a payload field without a filter
+    # cannot silently reopen the injection hole.
+    _evil = "</" + "script><script>evil"
+    _hostile = {
+        "t": now0,
+        "pct": 10.0,
+        "burn": 5.0,
+        "pct7": _evil,
+        "reset": _evil,
+        "reset7": _evil,
+    }
+    assert history_numeric([_hostile]) == [_hostile]  # it really does pass that gate
+    assert usage7_series([_hostile]) == []
+    assert reset_marks([_hostile]) == []
+    assert latest_state([_hostile])["pct7"] is None
+    assert latest_state([_hostile])["reset"] is None
+    _hpage = render_dashboard([_hostile], now0)
+    assert "evil" not in _hpage
+    assert _hpage.count("</" + "script>") == 1
     # render_dashboard: good record -> real page (doctype + embedded const D marker).
     now_dash = int(time.time())
     page = render_dashboard([{"t": now_dash, "pct": 42.0, "burn": 10.0}], now_dash)
