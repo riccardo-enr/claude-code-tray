@@ -1452,11 +1452,6 @@ def demo():
     # http:// is the SVG namespace -- stripping it leaves none behind.
     assert "<link" not in page and "src=" not in page and "https://" not in page
     assert page.replace("http://www.w3.org/2000/svg", "").find("http://") == -1
-
-    # --- notification mute gate (NOTIF-02 seam) ---
-    # Open in Phase 5: all four event-type keys pass. Phase 6 replaces the body; these
-    # assertions then become the toggle table's fixtures.
-    assert all(notif_allowed(k) for k in ("waiting", "done", "5h", "7d"))
     print("ok")
 
 
@@ -1467,6 +1462,35 @@ class Monitor:
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
         self.trends = None  # cached trend row strings, or None (collecting/empty state)
         self.dash_ready = False  # True after the first successful dashboard write (gates the menu item)
+
+        self.notif_slots = {}  # ("sess", sid) / ("cap", "5h") -> daemon notification id
+        self.notif_acts = {}  # daemon notification id -> ("focus", pane, tmux) | ("dash",)
+        self.notif = None
+        try:
+            # Constructed HERE, on the Gtk main thread, ON PURPOSE. A GDBusProxy captures
+            # the thread-default main context at construction and dispatches every signal
+            # and async callback there. Built inside poll_loop instead, popups would still
+            # appear but ActionInvoked would be queued into a context with no running main
+            # loop -- clicks would silently never fire, with no error to grep for.
+            #
+            # What the try is actually for: constructing the proxy does NOT raise when the
+            # notification daemon is absent (it returns a proxy whose get_name_owner() is
+            # None; that failure surfaces later at call time as a GLib.Error). It DOES raise
+            # when the SESSION BUS ITSELF is unreachable -- a bare TTY, a stripped systemd
+            # unit. That is the NOTIF-04 case: self.notif stays None, every emit is a no-op,
+            # and the tray keeps polling, rendering and serving session events regardless.
+            self.notif = Gio.DBusProxy.new_for_bus_sync(
+                Gio.BusType.SESSION,
+                Gio.DBusProxyFlags.NONE,
+                None,
+                NOTIF_BUS,
+                NOTIF_PATH,
+                NOTIF_BUS,
+                None,
+            )
+            self.notif.connect("g-signal", self.on_notif_signal)
+        except Exception:
+            self.notif = None  # no bus -> no notifications; everything else keeps working
 
         self.ind = AppIndicator.Indicator.new(
             "claude-monitor", ICON, AppIndicator.IndicatorCategory.APPLICATION_STATUS
@@ -1497,6 +1521,98 @@ class Monitor:
     # spaces/special chars, unlike string concat (review finding 3); stdlib-only.
     def open_dashboard(self, *_):
         webbrowser.open(pathlib.Path(DASH_PATH).resolve().as_uri())
+
+    def emit_notif(self, key, kind, title, body, action, urgency):
+        """The single shared notification emit path (NOTIF-01). Safe from BOTH threads.
+
+        Called from Monitor.handle (Gtk main thread) and from poll_loop (daemon thread).
+        Uses the ASYNC proxy.call() in both cases: the synchronous call form would block the
+        Gtk main loop on a bus round-trip (PROJECT.md forbids it), and async is verified to
+        work from a worker thread. The reply callback always lands on the Gtk main thread, so
+        notif_slots/notif_acts are only ever mutated from one thread -- no lock needed.
+
+        `key` names the notification SLOT (D-03): one per session, one per quota cap.
+        Handing the slot's previous id back as replaces_id makes the daemon overwrite that
+        popup in place instead of stacking a second one. N live sessions -> at most N
+        popups, ever.
+
+        `action` is what a click should do, stashed against the returned id for
+        on_notif_signal to dispatch (NOTIF-03 / D-09).
+
+        ponytail: the daemon caps a source at 3 retained notifications and destroys the
+        oldest beyond that (MAX_NOTIFICATIONS_PER_SOURCE). Banners still display; only the
+        message-list backlog is capped. Accepted -- 4+ simultaneously-waiting sessions is
+        not the common case and the tray rows remain the complete picture. Upgrade path:
+        collapse multiple sessions into one summary notification if it ever bites.
+        """
+        if self.notif is None or not notif_allowed(kind):
+            return
+        prev = self.notif_slots.get(key, 0)
+        args = GLib.Variant(
+            "(susssasa{sv}i)",
+            (
+                "claude-monitor",  # app_name
+                prev,  # replaces_id: 0 = new slot, else overwrite that popup in place
+                ICON,  # app_icon: the tray's own icon, for free consistency
+                title,  # summary (NOT markup-parsed -- this is where session-derived
+                #          strings belong; the body IS parsed as Pango markup)
+                body,  # body
+                ["default", "Focus"],  # "default" makes a click on the BODY emit
+                #                        ActionInvoked; its label is never drawn. Omit it
+                #                        and a body click falls through to source.open().
+                {"urgency": GLib.Variant("y", urgency)},  # D-02, and the ONLY hint we pass
+                -1,  # expire_timeout: gnome-shell never reads it. Inert.
+            ),
+        )
+
+        def done(proxy, res, _):
+            try:
+                nid = proxy.call_finish(res).unpack()[0]
+            except Exception:
+                return  # daemon vanished mid-call -> no popup this time (NOTIF-04)
+            # Re-store on EVERY reply, not just the first. A clicked notification is
+            # destroyed daemon-side and dropped from its table, so a later Notify carrying
+            # that stale replaces_id allocates a FRESH id. Keep the dead one and popups
+            # start stacking the moment the user interacts once.
+            self.notif_slots[key] = nid
+            self.notif_acts[nid] = action
+
+        try:
+            self.notif.call("Notify", args, Gio.DBusCallFlags.NONE, -1, None, done, None)
+        except Exception:
+            return  # degrade to "no popup", never a raise (NOTIF-04)
+
+    def on_notif_signal(self, _proxy, _sender, signame, params):
+        """Notification click dispatcher (NOTIF-03 / D-09). Runs on the GTK MAIN THREAD.
+
+        No GLib.idle_add anywhere in here: a GDBusProxy dispatches on the main context
+        captured at construction, which is the Gtk main thread (see __init__). focus() and
+        open_dashboard therefore run exactly where the existing on_click menu handler
+        already runs them today. The extra hop would be dead code.
+
+        ActionInvoked is a BROADCAST on /org/freedesktop/Notifications -- we receive it for
+        EVERY application's notifications, not just ours. The notif_acts lookup is the trust
+        boundary: without it, a click on an unrelated app's popup would drive focus() and
+        yank a tmux pane into view.
+        """
+        try:
+            if signame == "ActionInvoked":
+                act = self.notif_acts.get(params[0])
+                if act is None:
+                    return  # not one of ours -> ignore (broadcast signal)
+                if act[0] == "focus":
+                    self.focus(act[1], act[2])  # NOTIF-03
+                elif act[0] == "dash":
+                    self.open_dashboard()  # D-09
+            if signame in ("ActionInvoked", "NotificationClosed"):
+                # Clicked or dismissed -> the daemon destroyed it. Drop our bookkeeping so
+                # the next emit for that slot starts a clean notification.
+                self.notif_acts.pop(params[0], None)
+                for k, v in list(self.notif_slots.items()):
+                    if v == params[0]:
+                        del self.notif_slots[k]
+        except Exception:
+            return  # runs inside a GLib callback -- a raise here can kill the signal source
 
     # menu click: acknowledge (clears the session's "!" attention) and focus it.
     def on_click(self, s):
