@@ -1816,12 +1816,31 @@ class Monitor:
         pane = msg.get("pane") or ""
         tmux = msg.get("tmux") or ""
         s = self.sessions.setdefault(sid, {})
+        old = s.get("status")  # MUST be read before the update below overwrites it --
+        # read it after and old == event always, so sess_should_notify never fires.
         # a fresh event re-arms the "!" -- unless serve() found you were already
         # looking at this pane, in which case pre-acknowledge it (no alert).
         s.update(
             dir=d, status=event, pane=pane, tmux=tmux, cwd=cwd,
             acked=bool(msg.get("_onscreen")),
         )
+        # SESS-01 / SESS-02. Fires on EVERY waiting/done transition -- the pre-ack above
+        # gates only the "!" badge, never this (D-04). `d` (the project dir) goes in the
+        # TITLE: the summary is not markup-parsed, the body is, and a repo can be named
+        # anything (T-05-04). The two bodies are fixed literals, interpolating nothing.
+        # ponytail: gnome-shell retains at most 3 notifications per source and drops the
+        # oldest beyond that -- banners still show, only the message-list backlog is capped.
+        # 4+ sessions waiting at once is not the common case and the tray rows stay complete.
+        # Upgrade path: coalesce into one summary notification if it ever bites.
+        if sess_should_notify(old, event):
+            self.emit_notif(
+                ("sess", sid),  # one slot per session: a later transition replaces in place (D-03)
+                event,  # "waiting" / "done" -- two of notif_allowed's four keys
+                d,
+                "Waiting for input" if event == "waiting" else "Session finished",
+                ("focus", pane, tmux),  # NOTIF-03: same outcome as clicking the tray row
+                URGENCY_CRITICAL if event == "waiting" else URGENCY_NORMAL,  # D-02
+            )
         self.rebuild_menu()
         return False
 
