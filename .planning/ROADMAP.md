@@ -85,7 +85,24 @@ them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
   3. When either cap (5-hour or 7-day) is projected to hit 100% before its window resets, a notification fires once; when the projection says usage coasts to reset, nothing fires.
   4. After a cap's window rolls over, that cap can alert again — a previous warning does not suppress the fresh window.
   5. With the notification daemon absent or failing, the tray keeps polling, rendering, and serving session events — no crash, no dead thread, no stalled menu.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — The shared notification path: `Gio.DBusProxy` to `org.freedesktop.Notifications`, one `emit_notif` choke point with the mute-gate seam and replace-in-place slots, an id-filtered `ActionInvoked` click dispatcher, and a hardened `serve()`
+- [ ] 05-02-PLAN.md — SESS producer: `sess_should_notify` de-dupe + `Monitor.handle` emits `waiting` (sticky) / `done` (expiring) notifications that click through to the tmux pane
+- [ ] 05-03-PLAN.md — ALERT producer: Python port of the QUOTA-03 `project()` formula plus the lead-time and arm/re-arm predicates, driving one predictive 5h/7d quota alert per window from `poll_loop`
+
+**Binding settled at plan time** (was the phase's open load-bearing decision):
+Route B — `org.freedesktop.Notifications.Notify` over `Gio.DBusProxy`. Route A
+(`Gio.Application` + `Gio.Notification`) is not merely costlier but *impossible* here:
+gnome-shell's `GtkNotificationDaemonAppSource` looks up `appId + '.desktop'` and **drops the
+notification entirely** when it is absent, and this app is a single-file script with no
+install step. Verified against gnome-shell 46.0's own source and live D-Bus probes
+(`05-RESEARCH.md`). Two consequences the plans encode: D-02's divergent lifetimes ride the
+`urgency` hint (2 = critical/sticky, 1 = normal/expiring), **not** `expire_timeout`, which
+this daemon destructures and never reads; and `ActionInvoked` is a **broadcast**, so the
+click handler must filter on notification ids we own or a click on any other app's
+notification would drive `Monitor.focus()`.
 
 **Why both producers land in one phase:** the deliverable is the *shared path*
 (emit + de-dupe + mute hook + click-to-focus), not either ping. Building the path
