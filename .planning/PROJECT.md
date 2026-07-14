@@ -48,7 +48,17 @@ trends, and a self-contained browser dashboard over the same store.
 the two live seeds, SEED-002 (predictive quota alerts) and SEED-004 (session-finished
 notification), which converge on the same shared notification path.
 
-## Current Milestone: v1.3 Notifications & Predictive Alerts
+## Current Milestones (two parallel workstreams)
+
+Planning is split across two workstreams (`.planning/workstreams/`). Both are open;
+both write `claude-monitor.py`, so keep their edits small and disjoint.
+
+| Workstream | Milestone | Status |
+|------------|-----------|--------|
+| `notifications-predictive-alerts` | v1.3 Notifications & Predictive Alerts | Phase 05 done; Phase 06 (config) unplanned |
+| `vscode` | v1.4 VS Code Usage Surface | Roadmapping |
+
+### v1.3 Notifications & Predictive Alerts (workstream `notifications-predictive-alerts`)
 
 **Goal:** Give the tray a push voice — one notification subsystem that pulls the user
 back to Claude Code when a session needs them or when quota is about to run out, so
@@ -77,6 +87,42 @@ they can context-switch away from the top bar entirely.
   (ALERT-01) stays the reactive signal; this milestone adds the *predictive* one.
 - Closes SEED-002 and SEED-004; the config surface also absorbs the deferred
   "configurable alert threshold" item.
+
+### v1.4 VS Code Usage Surface (workstream `vscode`)
+
+**Goal:** Put the tray's quota and session picture inside VS Code, so usage is visible
+in the same field as the code — no GNOME top bar in peripheral vision, and no separate
+terminal monitor. Second frontend over the same data, not a second data pipeline.
+
+**Target features:**
+
+- A **VS Code extension** (TypeScript) — a genuinely new deployment target: package,
+  activation events, install story. No precedent in this repo, which is Python +
+  PyGObject today.
+- **Status bar item** — usage % + reset countdown. The direct analogue of the tray icon.
+- **Hover detail** — both caps (5-hour, 7-day), burn rate, projected usage at reset.
+- **Webview dashboard** — the v1.2 self-contained HTML page in a VS Code tab. Nearly
+  free: DASH-06 already forbids external refs, so it drops into a webview as-is.
+- **Session status + in-editor notifications** — running / waiting / done.
+- **Predictive quota alert** in-editor, off a TypeScript port of `project()`.
+
+**Key context:**
+
+- **Data source: read `~/.claude/usage-history.jsonl` directly.** No new IPC, no second
+  poll of the slow CLI, no listening socket — upholds the SEED-001 precedent that made
+  the dashboard a static `file://` page. Accepted cost: VS Code sees usage only while
+  the tray is running and polling.
+- **One change to the tray:** `self.sessions` (`claude-monitor.py:1554`) is an in-memory
+  dict today, so nothing outside the process can see session status. Mirror it to
+  `~/.claude/sessions.json` on each transition. Keeps the extension file-based and
+  consistent with the JSONL choice; ~10 lines.
+- **`project()` gets a third copy** (TypeScript, alongside the Python poll-thread port
+  and the dashboard's JS). Consistent with the duplication already accepted deliberately
+  in v1.3 — the JS copy stays because it recomputes against a live browser clock.
+- **Cross-workstream conflict:** `claude-monitor.py` is written by both v1.3 (Phase 06
+  config toggles) and v1.4 (session mirror). Keep the v1.4 edit to the session mirror
+  alone so the merge stays trivial.
+- Closes SEED-005.
 
 ## Requirements
 
@@ -109,12 +155,17 @@ they can context-switch away from the top bar entirely.
 
 ### Active
 
-v1.3 (Notifications & Predictive Alerts) — REQ-IDs defined in `REQUIREMENTS.md`:
-shared notification path with de-dupe and click-to-focus (NOTIF-*), session
-waiting/done events (SESS-*), predictive quota alert off the QUOTA-03 projection
-(ALERT-*), menu-toggle config with global mute (CFG-*).
+**v1.3 (Notifications & Predictive Alerts)** — REQ-IDs in
+`workstreams/notifications-predictive-alerts/REQUIREMENTS.md`: shared notification path
+with de-dupe and click-to-focus (NOTIF-*), session waiting/done events (SESS-*),
+predictive quota alert off the QUOTA-03 projection (ALERT-*), menu-toggle config with
+global mute (CFG-*).
 
-Still deferred, not in v1.3: raw data export (HIST-F1 / DASH-F2), configurable
+**v1.4 (VS Code Usage Surface)** — REQ-IDs in `workstreams/vscode/REQUIREMENTS.md`:
+extension scaffold and packaging (EXT-*), status bar + hover (VSC-*), webview dashboard
+(VSCD-*), session mirror and in-editor session/quota notifications (VSCN-*).
+
+Still deferred, in neither: raw data export (HIST-F1 / DASH-F2), configurable
 ranges (TREND-F1 / DASH-F3).
 
 ### Out of Scope
@@ -168,4 +219,9 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-13 — milestone v1.3 (Notifications & Predictive Alerts) started. Merges SEED-002 + SEED-004 into one notification subsystem; SEED-002's token-based forecast superseded by the QUOTA-03 percentage projection. Phase numbering continues from 4.*
+*Last updated: 2026-07-14 — milestone v1.4 (VS Code Usage Surface) started in the new
+`vscode` workstream, in parallel with v1.3 (Phase 06 still open in
+`notifications-predictive-alerts`). Planning split into workstreams; PROJECT.md,
+MILESTONES.md and seeds/ remain shared. v1.4 closes SEED-005: a second frontend over the
+existing JSONL, not a second data pipeline. Both workstreams write `claude-monitor.py` —
+keep their edits disjoint.*
