@@ -453,16 +453,32 @@ def history_numeric(records):
 
 
 def heatmap_buckets(records):
-    """7x24 grid (dow Mon..Sun x hour 0..23) of mean usage %.
+    """7x24 grid (dow Mon..Sun x hour 0..23) of mean quota % *consumed in that hour*.
+
+    `pct` is cumulative within the rolling 5h window, so averaging it directly just
+    shows how late in a window a sample landed. Here we take the per-sample rise
+    instead. A drop, a first sample, or a sampling gap wider than GAP_MAX all mean
+    we cannot difference against the previous sample, and the `pct` we see is itself
+    the consumption to attribute. Per-hour rises are summed per calendar day, then
+    averaged across the days that hour actually saw data.
+
     Empty buckets stay None so "no data" stays distinct from a genuine 0%.
     """
     grid = [[None] * 24 for _ in range(7)]
-    acc = {}
-    for rec in records:
+    acc = {}  # (dow, hour) -> {date: consumed%}
+    prev = None  # (t, pct) of previous sample
+    for rec in sorted(records, key=lambda r: r["t"]):
         dt = datetime.datetime.fromtimestamp(rec["t"])
-        acc.setdefault((dt.weekday(), dt.hour), []).append(rec["pct"])
-    for (dow, hour), vals in acc.items():
-        grid[dow][hour] = sum(vals) / len(vals)
+        pct = rec["pct"]
+        if prev and pct >= prev[1] and rec["t"] - prev[0] <= GAP_MAX:
+            delta = pct - prev[1]
+        else:
+            delta = pct
+        prev = (rec["t"], pct)
+        day = acc.setdefault((dt.weekday(), dt.hour), {})
+        day[dt.date()] = day.get(dt.date(), 0.0) + max(0.0, delta)
+    for (dow, hour), days in acc.items():
+        grid[dow][hour] = sum(days.values()) / len(days)
     return grid
 
 
@@ -829,7 +845,7 @@ function drawHeatmap(){
     for(c=0;c<24;c++){
       var val=g[r][c],tip;
       if(val===null)tip=days[r]+" "+c+":00 - no data";
-      else tip=days[r]+" "+c+":00 - "+val.toFixed(0)+"% mean";
+      else tip=days[r]+" "+c+":00 - "+val.toFixed(1)+"% quota used (mean/hour)";
       var rect=el("rect",{x:lx+c*cw,y:ty+r*ch,width:cw-1,height:ch-1,fill:hmFill(val,max)});
       var ttl=el("title",{});ttl.textContent=tip;rect.appendChild(ttl);
       svg.appendChild(rect);
@@ -1210,13 +1226,22 @@ def demo():
     far_t = {"t": 1e18, "pct": 1.0, "burn": 1.0}
     assert history_numeric([nan_t, inf_pct, inf_burn, far_t, ok1]) == [ok1]
     mon = datetime.datetime(2024, 1, 1, 15)  # 2024-01-01 is a Monday
+    t0 = int(mon.timestamp())
     hm = heatmap_buckets([
-        {"t": int(mon.timestamp()), "pct": 10.0, "burn": 100.0},
-        {"t": int(mon.replace(minute=30).timestamp()), "pct": 20.0, "burn": 200.0},
+        {"t": t0, "pct": 10.0, "burn": 100.0},
+        {"t": t0 + 60, "pct": 20.0, "burn": 200.0},
     ])
     assert len(hm) == 7 and all(len(row) == 24 for row in hm)
-    assert hm[0][15] == 15.0
+    assert hm[0][15] == 20.0  # 10 (first sample) + 10 rise -- consumed, not mean of 10/20
     assert hm[2][3] is None
+    # a drop means the 5h window rolled: the new pct is fresh consumption, not a -35 rise
+    tue = int(datetime.datetime(2024, 1, 2, 9).timestamp())
+    hm = heatmap_buckets([
+        {"t": tue, "pct": 40.0},
+        {"t": tue + 60, "pct": 5.0},
+        {"t": tue + 7 * 86400, "pct": 30.0},  # same weekday+hour, next week
+    ])
+    assert hm[1][9] == 37.5  # mean of day1 (40+5) and day2 (30), not their sum
     assert reset_marks(
         [
             {"t": 1, "reset": 300},
