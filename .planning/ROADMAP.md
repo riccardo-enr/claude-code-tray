@@ -71,7 +71,7 @@ usage at reset (QUOTA-03). Descoped during UAT: DASH-04 burn-rate trend chart
 so the user can leave the top bar and still be pulled back when a session needs
 them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
 
-- [ ] **Phase 5: Notification Path & Event Producers** - One shared emit path, with session waiting/done events and predictive 5h/7d quota alerts riding it
+- [x] **Phase 5: Notification Path & Event Producers** - One shared emit path, with session waiting/done events and predictive 5h/7d quota alerts riding it
 - [ ] **Phase 6: Notification Control & Config** - Per-event tray toggles, global mute, and a configurable badge threshold, persisted and corruption-tolerant
 
 ## Phase Details
@@ -89,7 +89,7 @@ them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
   4. After a cap's window rolls over, that cap can alert again — a previous warning does not suppress the fresh window.
   5. With the notification daemon absent or failing, the tray keeps polling, rendering, and serving session events — no crash, no dead thread, no stalled menu.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed (UAT PASS 2026-07-14)
 
 Plans:
 **Wave 1**
@@ -195,5 +195,5 @@ functions) + human UAT on the live tray.
 | 2. Usage History Persistence | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 3. Usage Trends in the Tray | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
-| 5. Notification Path & Event Producers | v1.3 | 2/3 | In Progress|  |
+| 5. Notification Path & Event Producers | v1.3 | 3/3 | Complete | 2026-07-14 |
 | 6. Notification Control & Config | v1.3 | 0/TBD | Not started | - |
