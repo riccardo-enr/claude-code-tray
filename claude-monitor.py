@@ -455,28 +455,40 @@ def history_numeric(records):
 def heatmap_buckets(records):
     """7x24 grid (dow Mon..Sun x hour 0..23) of mean quota % *consumed in that hour*.
 
-    `pct` is cumulative within the rolling 5h window, so averaging it directly just
-    shows how late in a window a sample landed. Here we take the per-sample rise
-    instead. A drop, a first sample, or a sampling gap wider than GAP_MAX all mean
-    we cannot difference against the previous sample, and the `pct` we see is itself
-    the consumption to attribute. Per-hour rises are summed per calendar day, then
-    averaged across the days that hour actually saw data.
+    `pct` is cumulative within the rolling 5h window, so averaging it directly measures
+    how late in a window a sample landed, not how hard that hour was worked. We sum the
+    per-sample RISE in `pct` instead, per calendar day, then average each (dow, hour)
+    across the days it actually saw data.
+
+    Only rises count; a drop contributes 0. A drop is either upstream jitter (`pct` is a
+    recomputed estimate and does wobble down mid-window) or a genuine 5h roll, and we do
+    not need to tell them apart: at POLL_INTERVAL granularity the first sample after a
+    roll is still near 0%, so there is no real consumption to recover from the drop
+    itself -- the rises that follow pick it up. Reading a drop as "the window rolled, so
+    this pct is all fresh usage" instead re-adds the whole cumulative value on every
+    jitter blip, and reports impossible >100%/hour buckets.
+
+    A rise is trusted only if it can honestly be attributed to this hour: it must not
+    span a data gap (the usage may belong to hours we never sampled) and must be
+    physically plausible (see RISE_MAX). An untrusted rise contributes 0 rather than a
+    clamped value -- clamping would still book usage that never happened.
 
     Empty buckets stay None so "no data" stays distinct from a genuine 0%.
     """
     grid = [[None] * 24 for _ in range(7)]
-    acc = {}  # (dow, hour) -> {date: consumed%}
-    prev = None  # (t, pct) of previous sample
+    acc = {}  # (dow, hour) -> {date: % consumed that hour, that day}
+    prev = None  # (t, pct) of the previous sample
     for rec in sorted(records, key=lambda r: r["t"]):
         dt = datetime.datetime.fromtimestamp(rec["t"])
         pct = rec["pct"]
-        if prev and pct >= prev[1] and rec["t"] - prev[0] <= GAP_MAX:
-            delta = pct - prev[1]
-        else:
-            delta = pct
+        rise = 0.0
+        if prev is not None and rec["t"] - prev[0] <= GAP_MAX:
+            rise = pct - prev[1]
+            if rise < 0 or rise > RISE_MAX:
+                rise = 0.0
         prev = (rec["t"], pct)
         day = acc.setdefault((dt.weekday(), dt.hour), {})
-        day[dt.date()] = day.get(dt.date(), 0.0) + max(0.0, delta)
+        day[dt.date()] = day.get(dt.date(), 0.0) + rise
     for (dow, hour), days in acc.items():
         grid[dow][hour] = sum(days.values()) / len(days)
     return grid
@@ -494,6 +506,13 @@ def reset_marks(records):
 
 
 GAP_MAX = 300  # seconds; a hole wider than this is a data gap, not a trend
+
+# ponytail: flat ceiling on a believable one-sample jump in usage %. Upstream sometimes
+# pins `pct` to 100 for minutes (burn spikes with it) then drops straight back -- nobody
+# burns ~98% of a window between two 15s polls. Observed genuine rises top out near 11;
+# 25 leaves generous headroom. Upgrade path if real bursts ever get swallowed: bound the
+# rise by `burn` * elapsed instead of a constant.
+RISE_MAX = 25.0
 
 
 def with_gaps(series, max_gap=GAP_MAX):
@@ -1229,19 +1248,47 @@ def demo():
     t0 = int(mon.timestamp())
     hm = heatmap_buckets([
         {"t": t0, "pct": 10.0, "burn": 100.0},
-        {"t": t0 + 60, "pct": 20.0, "burn": 200.0},
+        {"t": t0 + 15, "pct": 20.0, "burn": 200.0},
+        {"t": t0 + 30, "pct": 26.0, "burn": 200.0},
     ])
     assert len(hm) == 7 and all(len(row) == 24 for row in hm)
-    assert hm[0][15] == 20.0  # 10 (first sample) + 10 rise -- consumed, not mean of 10/20
+    assert hm[0][15] == 16.0  # rises 10->20->26, NOT the cumulative mean (18.7)
     assert hm[2][3] is None
-    # a drop means the 5h window rolled: the new pct is fresh consumption, not a -35 rise
+    # pct wobbles down mid-window (upstream jitter) and drops hard on a 5h roll. Neither
+    # may be re-counted as fresh usage -- only the rises are real consumption.
     tue = int(datetime.datetime(2024, 1, 2, 9).timestamp())
     hm = heatmap_buckets([
         {"t": tue, "pct": 40.0},
-        {"t": tue + 60, "pct": 5.0},
-        {"t": tue + 7 * 86400, "pct": 30.0},  # same weekday+hour, next week
+        {"t": tue + 15, "pct": 32.0},  # jitter drop, not consumption
+        {"t": tue + 30, "pct": 36.0},  # +4
+        {"t": tue + 45, "pct": 1.0},   # window rolled; ~0% consumed since reset
+        {"t": tue + 60, "pct": 6.0},   # +5
     ])
-    assert hm[1][9] == 37.5  # mean of day1 (40+5) and day2 (30), not their sum
+    assert hm[1][9] == 9.0  # 4 + 5, not 40+32+36+1+6
+    # upstream pins pct at 100 for a stretch then falls back: not 98% burned in 15s
+    hm = heatmap_buckets([
+        {"t": tue, "pct": 1.6},
+        {"t": tue + 15, "pct": 100.0},  # rise > RISE_MAX -> untrusted, contributes 0
+        {"t": tue + 30, "pct": 100.0},
+        {"t": tue + 45, "pct": 3.0},    # back to reality
+        {"t": tue + 60, "pct": 5.0},    # +2
+    ])
+    assert hm[1][9] == 2.0
+    # a rise spanning a data gap belongs to hours we never sampled -- do not attribute it
+    hm = heatmap_buckets([
+        {"t": tue, "pct": 10.0},
+        {"t": tue + GAP_MAX + 1, "pct": 18.0},   # +8 across a gap -> ignored
+        {"t": tue + GAP_MAX + 16, "pct": 21.0},  # +3 contiguous -> counted
+    ])
+    assert hm[1][9] == 3.0
+    # the same weekday+hour on another day averages, it does not accumulate
+    hm = heatmap_buckets([
+        {"t": tue, "pct": 10.0},
+        {"t": tue + 15, "pct": 30.0},               # day 1: +20
+        {"t": tue + 7 * 86400, "pct": 50.0},        # next week: rise spans a gap -> 0
+        {"t": tue + 7 * 86400 + 15, "pct": 60.0},   # +10 -> day 2 total 10
+    ])
+    assert hm[1][9] == 15.0  # mean(20, 10)
     assert reset_marks(
         [
             {"t": 1, "reset": 300},
