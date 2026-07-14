@@ -1656,7 +1656,11 @@ class Monitor:
         self.dash_ready = False  # True after the first successful dashboard write (gates the menu item)
 
         self.notif_slots = {}  # ("sess", sid) / ("cap", "5h") -> daemon notification id
-        self.notif_acts = {}  # daemon notification id -> ("focus", pane, tmux) | ("dash",)
+        self.notif_acts = {}  # daemon notification id -> a click-action tuple (focus | dash)
+        # Cap key ("5h" / "7d") -> the resets_at_epoch of the window in which that cap last
+        # alerted. D-06: one alert per cap per window. In-memory only, and correctly lost on
+        # restart -- a restart legitimately re-arms every cap. No file, no persistence.
+        self.alert_armed = {}
         self.notif = None
         try:
             # Constructed HERE, on the Gtk main thread, ON PURPOSE. A GDBusProxy captures
@@ -2131,6 +2135,40 @@ def poll_loop(mon):
             now = time.time()
             if usage is not None:
                 append_history(history_record(usage, now))
+                # Predictive quota alerts (ALERT-02/03/04). Rides the tick that already
+                # happened: every value comes out of the `usage` dict parse_usage just
+                # produced, so this adds no poll, no interval, no thread, no data source.
+                # emit_notif is async and safe from this daemon thread (its reply lands on
+                # the Gtk main thread), so nothing here blocks the Gtk main loop and no
+                # idle_add is needed. A raise is caught by the blanket except below.
+                for cap, pct, reset, win, title in (
+                    ("5h", usage["used_percentage"], usage["resets_at_epoch"], WIN5, "5-hour quota"),
+                    # .get(): the 7d block is absent on an older CLI. project()'s _is_num
+                    # guard and alert_should_fire's own turn that into silence, not a
+                    # crash -- so no second, redundant guard here.
+                    ("7d", usage.get("seven_day_pct"), usage.get("seven_day_reset"), WIN7, "7-day quota"),
+                ):
+                    p = project(pct, reset, win, now)
+                    if alert_should_fire(mon.alert_armed.get(cap), reset, p, now):
+                        # p["proj"] and p["exhaust"] are safe to read UNGUARDED here: the
+                        # predicate returned True, which required "exhaust" in p, which
+                        # only happens when the projection exceeds 100. A defensive .get()
+                        # would only hide a broken predicate.
+                        mon.emit_notif(
+                            ("cap", cap),  # D-03: one slot per cap, so a later alert
+                            cap,  # overwrites this popup in place instead of stacking
+                            title,  # D-08: the cap is the title...
+                            # ...and the body carries the severity and the actionable
+                            # clock reading. Both interpolated values are numbers we
+                            # computed ourselves (a rounded float, a strftime output), so
+                            # no payload-derived string reaches the markup-parsed body
+                            # (T-05-07). round(): "Projected 140.237%" helps nobody.
+                            "Projected %d%% at reset -- runs out ~%s"
+                            % (round(p["proj"]), hhmm(p["exhaust"])),
+                            ("dash",),  # D-09: the dashboard is where you go to look
+                            URGENCY_NORMAL,  # informational; it need not block the screen
+                        )
+                        mon.alert_armed[cap] = reset  # arm: silent until this reset changes
             # recompute trends off the Gtk main thread, AFTER the append (so the fresh
             # record is included) and BEFORE the idle_add (so this poll's redraw sees it).
             if now - last_trend >= TREND_INTERVAL:
