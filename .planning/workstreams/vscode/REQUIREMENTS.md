@@ -81,4 +81,29 @@ session state to a file that does not exist yet.
 
 ## Traceability
 
-Filled by the roadmapper.
+Every v1.4 requirement maps to exactly one phase. Phases defined in
+`workstreams/vscode/ROADMAP.md`.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| EXT-01 | Phase 1 — Extension Foundation & Usage in the Status Bar | Pending |
+| EXT-02 | Phase 1 — Extension Foundation & Usage in the Status Bar | Pending |
+| EXT-03 | Phase 1 — Extension Foundation & Usage in the Status Bar | Pending |
+| EXT-04 | Phase 1 — Extension Foundation & Usage in the Status Bar | Pending |
+| VSC-01 | Phase 1 — Extension Foundation & Usage in the Status Bar | Pending |
+| VSC-02 | Phase 1 — Extension Foundation & Usage in the Status Bar | Pending |
+| VSC-03 | Phase 1 — Extension Foundation & Usage in the Status Bar | Pending |
+| VSC-04 | Phase 1 — Extension Foundation & Usage in the Status Bar | Pending |
+| VSCD-01 | Phase 2 — Usage Dashboard in a VS Code Tab | Pending |
+| VSCD-02 | Phase 2 — Usage Dashboard in a VS Code Tab | Pending |
+| VSCD-03 | Phase 2 — Usage Dashboard in a VS Code Tab | Pending |
+| VSCN-01 | Phase 3 — Session Mirror & In-Editor Notifications | Pending |
+| VSCN-02 | Phase 3 — Session Mirror & In-Editor Notifications | Pending |
+| VSCN-03 | Phase 3 — Session Mirror & In-Editor Notifications | Pending |
+| VSCN-04 | Phase 3 — Session Mirror & In-Editor Notifications | Pending |
+| VSCN-05 | Phase 3 — Session Mirror & In-Editor Notifications | Pending |
+| VSCN-06 | Phase 3 — Session Mirror & In-Editor Notifications | Pending |
+
+**Coverage: 17/17 mapped. No orphans, no duplicates.**
+
+Not mapped by design: VSC-F1, VSC-F2, VSC-F3 (deferred above).
