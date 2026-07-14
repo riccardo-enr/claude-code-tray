@@ -41,9 +41,9 @@ GHOSTTY_CLASS = os.environ.get("CLAUDE_TRAY_WM_CLASS", "com.mitchellh.ghostty")
 # CLI shares the bare name "claude-monitor" with this helper (claude-monitor.py).
 USAGE_CLI = os.path.expanduser("~/.local/bin/claude-monitor")
 # Which claude-monitor plan to query, passed as --plan. Default "custom" =
-# session-based dynamic limits (P90), matching claude-monitor's own default view.
-# An explicit plan is deterministic; the CLI's saved default (CLAUDE_TRAY_PLAN="")
-# is NOT — it flips as different --plan values are used, so avoid relying on it.
+# session-based dynamic limits (P90). An explicit plan is deterministic; the CLI's
+# saved default (CLAUDE_TRAY_PLAN="") is NOT -- it flips as different --plan values
+# are used, so avoid relying on it.
 # Override with CLAUDE_TRAY_PLAN (max5, max20, custom, pro, or "" for saved default).
 PLAN = os.environ.get("CLAUDE_TRAY_PLAN", "custom")
 # Seconds to sleep between CLI polls. The CLI itself takes ~5-10s (it re-parses
@@ -54,8 +54,8 @@ try:
 except ValueError:
     POLL_INTERVAL = 15  # bad env -> default
 POLL_TIMEOUT = 15  # subprocess seconds
-# High-usage badge threshold (percent). Hardcoded on purpose: env-configurability
-# is deferred (ALERT-F1). Do NOT add an env lookup here.
+# High-usage badge threshold (percent). Hardcoded on purpose: do NOT add an env
+# lookup here.
 USAGE_THRESHOLD = 80
 
 # Desktop notifications, spoken over the session bus as raw freedesktop
@@ -64,58 +64,52 @@ USAGE_THRESHOLD = 80
 # outright when there is no installed .desktop -- and this script has none.
 NOTIF_BUS = "org.freedesktop.Notifications"
 NOTIF_PATH = "/org/freedesktop/Notifications"
-# GNOME Shell urgency levels. This is the ONLY knob that changes banner lifetime here:
-# Notify's 8th argument (expire_timeout) is destructured by gnome-shell 46 as an unused
-# name and never read again -- banner life is a hardcoded 4000ms. Pass -1 for it and do
-# not reason about its value.
-URGENCY_NORMAL = 1  # 4s banner -> GNOME's notification list (SESS-02 "done")
-URGENCY_CRITICAL = 2  # no dismiss timer armed; sticks until clicked (SESS-01 "waiting")
+# GNOME Shell urgency levels. The ONLY knob that changes banner lifetime here: Notify's
+# 8th argument (expire_timeout) is destructured by gnome-shell 46 as an unused name and
+# never read again -- banner life is a hardcoded 4000ms. Pass -1 for it and do not reason
+# about its value.
+URGENCY_NORMAL = 1  # 4s banner -> GNOME's notification list ("done")
+URGENCY_CRITICAL = 2  # no dismiss timer armed; sticks until clicked ("waiting")
 
 
 def notif_allowed(kind):
-    """Mute gate (NOTIF-02 seam). Phase 6 wires the config in HERE and nowhere else.
+    """Mute gate. `kind` is one of "waiting", "done", "5h", "7d".
 
-    `kind` is one of the four event-type keys "waiting", "done", "5h", "7d". Phase 5
-    ships the seam open: every event fires. Phase 6's global mute (CFG-02) is a
-    `return False` for all four, so no fifth key and no separate global gate is needed.
+    Currently open: every event fires.
     """
-    return True  # ponytail: seam only. Phase 6 (CFG-01/02) replaces this body and
-    # touches zero call sites -- that is the whole point of gating inside emit_notif.
+    return True  # ponytail: seam only. A config-driven mute replaces this body and
+    # touches zero call sites.
 
 
 def sess_should_notify(old_status, new_status):
-    """De-dupe predicate for session notifications (NOTIF-02 / D-03). Pure: no I/O, no clock.
+    """De-dupe predicate for session notifications. Pure: no I/O, no clock.
 
-    True iff the session just CHANGED into a notifiable state. A session sitting in
-    "waiting" re-sends "waiting" on every hook event; only a transition passes. A session
-    first seen already waiting has old_status None, which differs, so it notifies.
-    "running" and "end" are not notifiable states.
+    True iff the session just CHANGED into a notifiable state ("waiting"/"done"). A
+    session sitting in "waiting" re-sends "waiting" on every hook event; only a
+    transition passes. First seen already waiting -> old_status None -> notifies.
 
-    Deliberately takes no on-screen argument and must not grow one (D-04): a notification
-    fires on every waiting/done transition regardless of where the user is looking. The
-    already-looking-at-this-pane signal that serve() computes keeps gating ONLY the "!"
-    attention badge. That divergence is intentional -- do not "helpfully" wire it in here.
+    Deliberately takes no on-screen argument and must not grow one: a notification fires
+    on every waiting/done transition regardless of where the user is looking. The
+    already-looking-at-this-pane signal serve() computes gates ONLY the "!" badge.
     """
     return new_status in ("waiting", "done") and old_status != new_status
 
 
-# Quota-window lengths in seconds. Same literals the dashboard JS carries at :787 -- if
-# one moves, move both (project() is duplicated there on purpose; see its docstring).
+# Quota-window lengths in seconds. Same literals the dashboard JS carries -- if one
+# moves, move both (project() is duplicated there on purpose; see its docstring).
 WIN5 = 18000  # 5 hours
 WIN7 = 604800  # 7 days
-# D-05: the minimum lead a predictive alert needs to be worth showing. A projection that
-# says "you run out in 90 seconds" is not actionable, and the >80% badge already covers
-# "you are nearly there". 15 minutes is the floor for still being able to do something.
+# Minimum lead a predictive alert needs to be worth showing. "You run out in 90 seconds"
+# is not actionable, and the >80% badge already covers "you are nearly there".
 ALERT_LEAD = 15 * 60
 
 
 def project(pct, reset, win, now):
     """Projected quota use at window reset, from the elapsed fraction of the window.
 
-    Python port of the dashboard's project() (the JS at :972) -- QUOTA-03's arithmetic,
-    reused for ALERT-02/03. The window began at reset-win, so the elapsed fraction e is
-    known exactly; extrapolating the current pct linearly over the window gives the
-    projected % at reset, and when that crosses 100 we can say WHEN it would land.
+    The window began at reset-win, so the elapsed fraction e is known exactly;
+    extrapolating the current pct linearly over the window gives the projected % at
+    reset, and when that crosses 100 we can say WHEN it would land.
 
     Pure: `now` is an argument, never read off a clock, so demo() can pin every case.
 
@@ -125,14 +119,12 @@ def project(pct, reset, win, now):
 
     DELIBERATE DUPLICATION -- the JS copy STAYS. It re-runs against a live browser clock
     as the static dashboard page ages between regenerations, so it cannot be collapsed
-    into a value baked in from here. Same arithmetic, two clocks. Change one, change the
-    other; demo() pins this copy. ponytail: collapse the two only if the page ever stops
-    recomputing as it ages.
+    into a value baked in from here. Same arithmetic, two clocks: change one, change the
+    other. ponytail: collapse the two only if the page ever stops recomputing as it ages.
     """
-    # seven_day_pct / seven_day_reset come back None on an older CLI (parse_usage lets
-    # them through unguarded, unlike used_percentage / resets_at_epoch). This guard is the
-    # ONE place the port is stricter than the JS -- JS coerces, Python would raise -- and
-    # it is what makes the 7d alert degrade silently, exactly as usage_rows already does.
+    # seven_day_pct / seven_day_reset come back None on an older CLI. This guard is where
+    # the port is stricter than the JS (JS coerces, Python would raise), and it is what
+    # makes the 7d alert degrade silently.
     if not _is_num(pct) or not _is_num(reset):
         return None
     start = reset - win
@@ -152,52 +144,46 @@ def project(pct, reset, win, now):
 
 
 def hhmm(epoch):
-    """Local wall-clock HH:MM for an epoch. D-08 wants the alert body to name a clock
-    reading, not a duration. stdlib, and it is right about DST.
-    """
+    """Local wall-clock HH:MM for an epoch. stdlib, and it is right about DST."""
     return time.strftime("%H:%M", time.localtime(epoch))
 
 
 def alert_due(p, now):
-    """The D-05 lead predicate: is `p` (a project() result) worth alerting on? Pure.
+    """Is `p` (a project() result) worth alerting on, given the ALERT_LEAD floor? Pure.
 
-    Written as a membership test on the exhaust key ON PURPOSE, and this is the subtlest
-    line in the phase. project() sets that key only when the projection STRICTLY exceeds
-    100, so a predicate that first tests the projected value >= 100 and then reads the
-    exhaust key raises KeyError at exactly 100.0. The membership test SUBSUMES the
-    projection test -- there is no projection clause to write, and there must not be one.
+    A membership test on the exhaust key ON PURPOSE. project() sets that key only when
+    the projection STRICTLY exceeds 100, so a predicate that first tests proj >= 100 and
+    then reads the exhaust key raises KeyError at exactly 100.0. The membership test
+    subsumes the projection test -- there is no projection clause to write.
 
-    Three decisions ride that single expression:
-      D-05  -- an exhaust nearer than ALERT_LEAD is not actionable, so it stays silent.
-      D-07  -- an already-exhausted cap has an exhaust in the PAST, so the same
-               subtraction rejects it. That is why D-07 needs no special case, no code.
-      early -- {"early": True} has no exhaust key either, so it is silent for free.
+    It also subsumes two other cases for free: an already-exhausted cap has an exhaust in
+    the PAST, so the same subtraction rejects it; {"early": True} has no exhaust key.
     """
     return bool(p) and "exhaust" in p and (p["exhaust"] - now) >= ALERT_LEAD
 
 
 def alert_should_fire(armed_reset, reset, p, now):
-    """One alert per cap per window, re-armed when the window rolls (D-06 / ALERT-04). Pure.
+    """One alert per cap per window, re-armed when the window rolls. Pure.
 
     `armed_reset` is the resets_at_epoch of the window in which this cap last alerted
-    (None if it never has). That one value IS the whole state machine: a reset epoch is the
-    window's identity, so a CHANGED epoch is a new window, definitionally -- which re-arms
-    the cap for free, with no reset-detection code, no timer, and no clock math (ALERT-04).
+    (None if it never has). That one value IS the whole state machine: a reset epoch is
+    the window's identity, so a CHANGED epoch is a new window -- which re-arms the cap
+    with no reset-detection code, no timer, no clock math.
 
     Once a cap fires it stays silent for the remainder of that window even if the
-    projection climbs further (D-06). There is deliberately NO re-arm on the projection
-    dipping under 100 and climbing back inside the same window -- that flaps around the
-    boundary. ponytail: lead-step re-fires ("30m left") are deferred; add a second armed
-    threshold per cap if one alert per window ever proves too quiet.
+    projection climbs further. There is deliberately NO re-arm on the projection dipping
+    under 100 and climbing back inside the same window -- that flaps around the boundary.
+    ponytail: lead-step re-fires ("30m left") are deferred; add a second armed threshold
+    per cap if one alert per window ever proves too quiet.
     """
     if not _is_num(reset):
         return False  # the 7d cap is absent on an older CLI -> degrade to silence
     if armed_reset == reset:
-        return False  # already alerted in THIS window (D-06)
+        return False  # already alerted in THIS window
     return alert_due(p, now)
 
 
-# Append-only usage history store (one JSON object per line). Phase 03 reads it.
+# Append-only usage history store (one JSON object per line).
 HISTORY_PATH = os.path.expanduser("~/.claude/usage-history.jsonl")
 # Retention window in days; records older than this are pruned. Env-overridable
 # via CLAUDE_TRAY_HISTORY_DAYS, guarded the same way as POLL_INTERVAL above.
@@ -205,17 +191,15 @@ try:
     HISTORY_DAYS = int(os.environ.get("CLAUDE_TRAY_HISTORY_DAYS", "30"))
 except ValueError:
     HISTORY_DAYS = 30  # bad env -> default
-# Opportunistic-prune cadence in seconds (>= 6h per CONTEXT; planner-picked).
-PRUNE_INTERVAL = 6 * 3600
+PRUNE_INTERVAL = 6 * 3600  # opportunistic-prune cadence (seconds)
 
 # Regenerated dashboard artifact. A derived cache file (NOT under ~/.claude/), so
-# it lives under the XDG cache dir per D-01.
+# it lives under the XDG cache dir.
 DASH_DIR = os.path.join(
     os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "claude-tray"
 )
 DASH_PATH = os.path.join(DASH_DIR, "dashboard.html")
 
-# --- Phase 03 trend rendering constants ---
 # Auto-scale ramp for the 24h usage sparkline; index 0 = lowest, -1 = highest.
 # These 8 block glyphs + SPARK_GAP are the ONLY intended non-ASCII in this file.
 SPARK_GLYPHS = "▁▂▃▄▅▆▇█"
@@ -251,10 +235,9 @@ def parse_usage(stdout):
             "used_percentage": five["used_percentage"],
             "resets_at_epoch": five["resets_at_epoch"],
             "burn_rate_per_min": local.get("burn_rate_tokens_per_minute", 0),
-            # Weekly (7-day) cap. Claude Code enforces BOTH a rolling 5h window and
-            # a rolling 7d one, and the weekly is often the binding constraint, so
-            # capture it. OPTIONAL by design: older CLIs and non---api modes omit
-            # the block entirely -- see the degrade-to-None rule below.
+            # Weekly (7-day) cap. Claude Code enforces BOTH a rolling 5h window and a
+            # rolling 7d one, and the weekly is often the binding constraint. OPTIONAL:
+            # older CLIs and non---api modes omit the block entirely.
             "seven_day_pct": seven.get("used_percentage"),
             "seven_day_reset": seven.get("resets_at_epoch"),
         }
