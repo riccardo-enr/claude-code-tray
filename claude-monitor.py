@@ -59,6 +59,73 @@ NOTIF_PATH = "/org/freedesktop/Notifications"
 URGENCY_NORMAL = 1  # 4s banner, then GNOME's notification list
 URGENCY_CRITICAL = 2  # no dismiss timer; sticks until clicked
 
+# Sibling to HISTORY_PATH; "tray-" matches the existing CLAUDE_TRAY_* env var family (D-02).
+CONFIG_PATH = os.path.expanduser("~/.claude/tray-config.json")
+THRESHOLD_CHOICES = (70, 80, 90, 95)  # fixed badge-threshold presets (D-05)
+DEFAULT_CONFIG = {
+    "notify_waiting": True,
+    "notify_done": True,
+    "notify_5h": True,
+    "notify_7d": True,
+    "mute_all": False,
+    "usage_threshold": USAGE_THRESHOLD,
+}
+# Maps notif_allowed's `kind` values (from Monitor.handle's `event` and poll_loop's `cap`)
+# to their DEFAULT_CONFIG / tray-config.json key.
+NOTIF_KEYS = {"waiting": "notify_waiting", "done": "notify_done", "5h": "notify_5h", "7d": "notify_7d"}
+
+
+def parse_config(text):
+    """Tolerant loader for a single JSON object (not JSONL -- tolerance is per-KEY here,
+    not per-LINE). Malformed JSON, a non-dict root, or any individual key with the wrong
+    type all fall back to DEFAULT_CONFIG -- but only for the affected key: a single bad
+    key must never discard every other still-valid setting the user has saved. Never raises.
+    """
+    try:
+        raw = json.loads(text)
+    except Exception:
+        return dict(DEFAULT_CONFIG)
+    if not isinstance(raw, dict):
+        return dict(DEFAULT_CONFIG)
+    cfg = dict(DEFAULT_CONFIG)
+    for key in ("notify_waiting", "notify_done", "notify_5h", "notify_7d", "mute_all"):
+        if isinstance(raw.get(key), bool):
+            cfg[key] = raw[key]
+    if raw.get("usage_threshold") in THRESHOLD_CHOICES:
+        cfg["usage_threshold"] = raw["usage_threshold"]
+    return cfg
+
+
+def load_config():
+    """Read + parse CONFIG_PATH. A missing/unreadable file -> full default, never raises."""
+    try:
+        with open(CONFIG_PATH, errors="replace") as f:
+            return parse_config(f.read())
+    except OSError:
+        return dict(DEFAULT_CONFIG)
+
+
+def save_config(cfg):
+    """Atomic write: temp file + os.replace, mirroring prune_history. On any OSError the
+    write just doesn't happen -- the caller's in-memory config (already updated before this
+    is called) is unaffected either way.
+    """
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(CONFIG_PATH))
+        with os.fdopen(fd, "w") as f:
+            json.dump(cfg, f)
+        os.replace(tmp, CONFIG_PATH)
+        tmp = None  # replace succeeded; nothing to clean up
+    except OSError:
+        return
+    finally:
+        if tmp is not None:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
 
 def notif_allowed(kind):
     """Mute gate. `kind` is one of "waiting", "done", "5h", "7d". Currently always open."""
