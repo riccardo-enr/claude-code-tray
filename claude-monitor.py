@@ -47,7 +47,9 @@ try:
 except ValueError:
     POLL_INTERVAL = 15  # bad env -> default
 POLL_TIMEOUT = 15  # subprocess seconds
-# High-usage badge threshold (percent). Hardcoded on purpose: do NOT add an env lookup.
+# High-usage badge threshold (percent). This is only the startup default now -- overridable
+# via ~/.claude/tray-config.json and the tray's Badge threshold menu (CFG-05), not via an
+# env var, which stays out of this phase's scope (D-01).
 USAGE_THRESHOLD = 80
 
 # Raw freedesktop D-Bus, NOT Gio.Notification: gnome-shell's GTK path does
@@ -127,9 +129,13 @@ def save_config(cfg):
                 pass
 
 
-def notif_allowed(kind):
-    """Mute gate. `kind` is one of "waiting", "done", "5h", "7d". Currently always open."""
-    return True  # ponytail: seam only; a config-driven mute replaces this body.
+def notif_allowed(kind, config):
+    """Mute gate. `kind` is one of "waiting", "done", "5h", "7d". `config` is a dict shaped
+    like DEFAULT_CONFIG. Mute wins: config["mute_all"] short-circuits before the per-event
+    key is even looked up (D-04) -- the per-event flag is read from config unconditionally,
+    never reset by this function.
+    """
+    return not config["mute_all"] and config[NOTIF_KEYS[kind]]
 
 
 def sess_should_notify(old_status, new_status):
@@ -311,18 +317,19 @@ def fmt_countdown_wk(secs):
     return "week resets in %dh %dm" % (secs // 3600, (secs % 3600) // 60)
 
 
-def build_label(usage, attention):
+def build_label(usage, attention, threshold=USAGE_THRESHOLD):
     """Tray label: usage % leads, attention count follows ('47% 2!', '83%! 2!', '2!', '').
     `attention` counts sessions needing you. '!' fires when EITHER cap is above
-    USAGE_THRESHOLD, but the leading number is always the 5h one.
+    `threshold`, but the leading number is always the 5h one. `threshold` defaults to
+    USAGE_THRESHOLD so every pre-existing two-positional-arg call site keeps working.
     """
     wseg = ("%d!" % attention) if attention else ""
     if usage is None:
         return wseg
     seg = "%d%%" % round(usage["used_percentage"])
     pct7 = usage.get("seven_day_pct")
-    hot = usage["used_percentage"] > USAGE_THRESHOLD or (
-        pct7 is not None and pct7 > USAGE_THRESHOLD
+    hot = usage["used_percentage"] > threshold or (
+        pct7 is not None and pct7 > threshold
     )
     if hot:
         seg += "!"
@@ -1505,6 +1512,7 @@ def demo():
 
 class Monitor:
     def __init__(self):
+        self.config = load_config()  # CFG-01..05: mute/per-event toggles + badge threshold
         self.sessions = {}  # session_id -> {dir,status,pane,tmux,cwd}
         self.usage = None  # latest parse_usage() dict, or None if unavailable
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
@@ -1567,7 +1575,7 @@ class Monitor:
         ponytail: gnome-shell retains only 3 per source; collapse into one summary if that
         ever bites.
         """
-        if self.notif is None or not notif_allowed(kind):
+        if self.notif is None or not notif_allowed(kind, self.config):
             return
         prev = self.notif_slots.get(key, 0)
         args = GLib.Variant(
@@ -1664,7 +1672,7 @@ class Monitor:
             for s in self.sessions.values()
             if s["status"] in ("waiting", "done") and not s.get("acked")
         )
-        self.ind.set_label(build_label(self.usage, attention), "")
+        self.ind.set_label(build_label(self.usage, attention, self.config["usage_threshold"]), "")
 
     def usage_rows(self):
         """Menu-row strings from self.usage: 'unavailable', else used/countdown/burn."""
