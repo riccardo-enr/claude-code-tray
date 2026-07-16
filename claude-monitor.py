@@ -1655,6 +1655,42 @@ class Monitor:
         self.rebuild_menu()
         self.focus(s["pane"], s["tmux"])
 
+    def on_notif_toggle(self, item, key):
+        """Shared CheckMenuItem "toggled" handler for the mute-all row and the four
+        per-event rows -- they differ only in which config key `key` names. Same
+        mutate/persist/redraw sequence apply_usage/handle/on_click already use.
+        """
+        self.config[key] = item.get_active()
+        save_config(self.config)
+        self.rebuild_menu()
+
+    def notif_submenu(self):
+        """Builds the "Notifications" submenu fresh from self.config every call (no
+        incremental diffing, matching rebuild_menu's own full-teardown style): mute-all,
+        then the four ordered event checkboxes.
+        """
+        sub = Gtk.Menu()
+
+        mute = Gtk.CheckMenuItem.new_with_label("Mute all")
+        mute.set_active(self.config["mute_all"])  # BEFORE connect: avoids a spurious
+        mute.connect("toggled", self.on_notif_toggle, "mute_all")  # save+rebuild on every build
+        sub.append(mute)
+        sub.append(Gtk.SeparatorMenuItem.new())
+
+        event_rows = (
+            ("Waiting for input", "notify_waiting"),
+            ("Session finished", "notify_done"),
+            ("5-hour quota alert", "notify_5h"),
+            ("7-day quota alert", "notify_7d"),
+        )
+        for label, key in event_rows:
+            row = Gtk.CheckMenuItem.new_with_label(label)
+            row.set_active(self.config[key])  # BEFORE connect, same reason as mute above
+            row.connect("toggled", self.on_notif_toggle, key)
+            sub.append(row)
+
+        return sub
+
     def rebuild_menu(self):
         for c in self.menu.get_children():
             self.menu.remove(c)
@@ -1680,6 +1716,9 @@ class Monitor:
         dash.connect("activate", self.open_dashboard)
         dash.set_sensitive(self.dash_ready)
         self.menu.append(dash)
+        notif = Gtk.MenuItem.new_with_label("Notifications")
+        notif.set_submenu(self.notif_submenu())
+        self.menu.append(notif)
         self.menu.append(Gtk.SeparatorMenuItem.new())
         q = Gtk.MenuItem.new_with_label("Quit monitor")
         q.connect("activate", lambda _w: Gtk.main_quit())
