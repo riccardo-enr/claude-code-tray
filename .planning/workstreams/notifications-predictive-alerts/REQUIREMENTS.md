@@ -33,9 +33,9 @@ not from tokens. Under `--api` (quick task `260712-ndo`) the CLI's token counts 
 back `null`, so SEED-002's original `tokens_remaining` / EWMA forecaster is not
 buildable on the data we poll, and is superseded.
 
-- [ ] **ALERT-02**: User is notified when the **5-hour** cap is projected to reach 100% *before its window resets* — not merely "usage is high". If the projection says the user coasts to reset, no alert fires.
-- [ ] **ALERT-03**: User is notified when the **7-day** cap is projected to reach 100% before its window resets.
-- [ ] **ALERT-04**: A cap's predictive alert **re-arms when its window resets**, so a fresh window can alert again after the previous one was already warned about.
+- [x] **ALERT-02**: User is notified when the **5-hour** cap is projected to reach 100% *before its window resets* — not merely "usage is high". If the projection says the user coasts to reset, no alert fires.
+- [x] **ALERT-03**: User is notified when the **7-day** cap is projected to reach 100% before its window resets.
+- [x] **ALERT-04**: A cap's predictive alert **re-arms when its window resets**, so a fresh window can alert again after the previous one was already warned about.
 
 ### Configuration (CFG)
 
@@ -74,15 +74,15 @@ buildable on the data we poll, and is superseded.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIF-01 | Phase 5 | Planned |
-| NOTIF-02 | Phase 5 | Planned |
-| NOTIF-03 | Phase 5 | Planned |
-| NOTIF-04 | Phase 5 | Planned |
-| SESS-01 | Phase 5 | Planned |
-| SESS-02 | Phase 5 | Planned |
-| ALERT-02 | Phase 5 | Planned |
-| ALERT-03 | Phase 5 | Planned |
-| ALERT-04 | Phase 5 | Planned |
+| NOTIF-01 | Phase 5 | Delivered |
+| NOTIF-02 | Phase 5 | Delivered |
+| NOTIF-03 | Phase 5 | Delivered |
+| NOTIF-04 | Phase 5 | Delivered |
+| SESS-01 | Phase 5 | Delivered |
+| SESS-02 | Phase 5 | Delivered |
+| ALERT-02 | Phase 5 | Delivered |
+| ALERT-03 | Phase 5 | Delivered |
+| ALERT-04 | Phase 5 | Delivered |
 | CFG-01 | Phase 6 | Planned |
 | CFG-02 | Phase 6 | Planned |
 | CFG-03 | Phase 6 | Planned |
