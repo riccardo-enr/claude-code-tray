@@ -1664,6 +1664,15 @@ class Monitor:
         save_config(self.config)
         self.rebuild_menu()
 
+    def on_threshold_toggle(self, item, val):
+        # RadioMenuItem "toggled" fires for BOTH the item losing active state and the
+        # item gaining it -- ignore the losing fire or usage_threshold gets written
+        # twice per click, once to the old value.
+        if not item.get_active(): return
+        self.config["usage_threshold"] = val
+        save_config(self.config)
+        self.rebuild_menu()
+
     def notif_submenu(self):
         """Builds the "Notifications" submenu fresh from self.config every call (no
         incremental diffing, matching rebuild_menu's own full-teardown style): mute-all,
@@ -1688,6 +1697,19 @@ class Monitor:
             row.set_active(self.config[key])  # BEFORE connect, same reason as mute above
             row.connect("toggled", self.on_notif_toggle, key)
             sub.append(row)
+
+        sub.append(Gtk.SeparatorMenuItem.new())
+        threshold_item = Gtk.MenuItem.new_with_label("Badge threshold")
+        threshold_menu = Gtk.Menu()
+        group = None
+        for val in THRESHOLD_CHOICES:  # fixed ascending order (D-05); never sorted/reversed
+            radio = Gtk.RadioMenuItem.new_with_label_from_widget(group, "%d%%" % val)
+            radio.set_active(self.config["usage_threshold"] == val)  # BEFORE connect
+            radio.connect("toggled", self.on_threshold_toggle, val)
+            threshold_menu.append(radio)
+            group = radio
+        threshold_item.set_submenu(threshold_menu)
+        sub.append(threshold_item)
 
         return sub
 
