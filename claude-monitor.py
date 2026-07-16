@@ -797,6 +797,9 @@ function drawChart(svg,seriesList,marks,unit,yfloor,projs){
   });
 }
 function drawUsage(range){
+  try{localStorage.setItem("ccdash-range",range);}catch(e){}
+  var btns=document.querySelectorAll("#ranges button");
+  for(var bi=0;bi<btns.length;bi++)btns[bi].classList.toggle("active",btns[bi].getAttribute("data-range")===range);
   var svg=document.getElementById("usage-chart");clear(svg);
   var lo=(range==="h24")?D.bounds.h24:(range==="d7")?D.bounds.d7:-Infinity;
   function f(a){return (a||[]).filter(function(p){return p[0]>=lo;});}
@@ -872,7 +875,9 @@ function drawHeatmap(){
   }
   hmLegend(max);
 }
-drawUsage("all");drawHeatmap();
+var savedRange=null;
+try{savedRange=localStorage.getItem("ccdash-range");}catch(e){}
+drawUsage(savedRange||"all");drawHeatmap();
 var un=D.usage[D.usage.length-1];
 document.getElementById("usage-now").textContent=un?(" - now "+Math.round(un[1])+"%"):"";
 document.getElementById("meta").textContent="Generated "+new Date(D.generated*1000).toLocaleString();
