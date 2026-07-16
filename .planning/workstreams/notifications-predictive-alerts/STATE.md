@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Notifications & Predictive Alerts
 current_phase: 06
-current_phase_name: Notification Control & Config
+current_phase_name: notification-control-config
 status: executing
-stopped_at: Phase 6 context gathered
-last_updated: "2026-07-16T12:12:12.517Z"
-last_activity: 2026-07-14
-last_activity_desc: Phase 05 verified
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-07-16T12:29:08.640Z"
+last_activity: 2026-07-16
+last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 50
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-13)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 06 — Notification Control & Config
+**Current focus:** Phase 06 — notification-control-config
 
 ## Current Position
 
-Phase: 06 (Notification Control & Config) — PLANNED (2 plans, 2 waves)
-Plan: -
+Phase: 06 (notification-control-config) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-07-14 — Phase 05 verified
+Last activity: 2026-07-16 — Phase 06 execution started
 
 ## Performance Metrics
 
@@ -57,6 +57,11 @@ Last activity: 2026-07-14 — Phase 05 verified
 
 *Updated after each plan completion*
 | Phase 05 P02 | 15 min | 2 tasks | 1 files |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 06 P01 | 8 min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -71,6 +76,7 @@ Recent decisions affecting current work:
 - ALERT-* reuses v1.2's QUOTA-03 **percentage** projection. It is not a new forecaster; SEED-002's token-based EWMA plan is superseded (token counts are `null` under `--api`, quick task `260712-ndo`).
 - [Phase 05]: SESS de-dupe is one pure expression: notifiable state AND a change from the previous status -- no timestamps, no seen-set (NOTIF-02, D-03)
 - [Phase 05]: Structural greps/AST checks over claude-monitor.py are defeated by prose naming the symbol they forbid (docstrings are in ast.dump) -- second occurrence this phase
+- [Phase 06]: notif_allowed(kind, config) short-circuits on mute_all before the per-event lookup (D-04) -- mute wins, never OR-merges with the per-event flag
 
 ### Pending Todos
 
@@ -117,9 +123,9 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-16T09:39:37.893Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/workstreams/notifications-predictive-alerts/phases/06-notification-control-config/06-CONTEXT.md
+Last session: 2026-07-16T12:28:55.598Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

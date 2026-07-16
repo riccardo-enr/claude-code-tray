@@ -40,10 +40,10 @@ buildable on the data we poll, and is superseded.
 ### Configuration (CFG)
 
 - [ ] **CFG-01**: User can toggle each notification event type (waiting / done / 5h alert / 7d alert) on and off from the tray menu, with the change taking effect without a restart.
-- [ ] **CFG-02**: User can mute **all** notifications with a single tray toggle.
-- [ ] **CFG-03**: Notification settings persist across restarts, in a small JSON config under `~/.claude/`.
-- [ ] **CFG-04**: Config I/O is corruption-tolerant — a missing, unreadable, or malformed config falls back to defaults and never crashes the helper (same total-tolerance bar as the history store, which a corrupt record did once crash: quick task `260713-fry`).
-- [ ] **CFG-05**: User can configure the high-usage badge threshold (currently a fixed 80%) through the same config. *(Closes the deferred "Alerting: configurable threshold" item.)*
+- [x] **CFG-02**: User can mute **all** notifications with a single tray toggle.
+- [x] **CFG-03**: Notification settings persist across restarts, in a small JSON config under `~/.claude/`.
+- [x] **CFG-04**: Config I/O is corruption-tolerant — a missing, unreadable, or malformed config falls back to defaults and never crashes the helper (same total-tolerance bar as the history store, which a corrupt record did once crash: quick task `260713-fry`).
+- [x] **CFG-05**: User can configure the high-usage badge threshold (currently a fixed 80%) through the same config. *(Closes the deferred "Alerting: configurable threshold" item.)*
 
 ## Future Requirements (deferred)
 
