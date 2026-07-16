@@ -169,7 +169,7 @@ functions) + human UAT on the live tray.
   4. A missing, unreadable, or malformed config file leaves the tray running on defaults — never a crash, matching the history store's total-tolerance bar.
   5. The high-usage badge threshold is configurable rather than a hard-coded 80%, and the badge follows the configured value.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
@@ -178,7 +178,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-02-PLAN.md — Tray menu UI: "Notifications" submenu (mute-all + four event checkboxes, D-03) and a nested "Badge threshold" radio submenu (D-05), both persisting through Plan 1's config layer
+- [x] 06-02-PLAN.md — Tray menu UI: "Notifications" submenu (mute-all + four event checkboxes, D-03) and a nested "Badge threshold" radio submenu (D-05), both persisting through Plan 1's config layer
 
 **Notes:**
 
@@ -205,4 +205,4 @@ Plans:
 | 3. Usage Trends in the Tray | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
 | 5. Notification Path & Event Producers | v1.3 | 3/3 | Complete | 2026-07-14 |
-| 6. Notification Control & Config | v1.3 | 1/2 | In Progress|  |
+| 6. Notification Control & Config | v1.3 | 2/2 | In Progress|  |

@@ -39,7 +39,7 @@ buildable on the data we poll, and is superseded.
 
 ### Configuration (CFG)
 
-- [ ] **CFG-01**: User can toggle each notification event type (waiting / done / 5h alert / 7d alert) on and off from the tray menu, with the change taking effect without a restart.
+- [x] **CFG-01**: User can toggle each notification event type (waiting / done / 5h alert / 7d alert) on and off from the tray menu, with the change taking effect without a restart.
 - [x] **CFG-02**: User can mute **all** notifications with a single tray toggle.
 - [x] **CFG-03**: Notification settings persist across restarts, in a small JSON config under `~/.claude/`.
 - [x] **CFG-04**: Config I/O is corruption-tolerant — a missing, unreadable, or malformed config falls back to defaults and never crashes the helper (same total-tolerance bar as the history store, which a corrupt record did once crash: quick task `260713-fry`).
@@ -83,11 +83,11 @@ buildable on the data we poll, and is superseded.
 | ALERT-02 | Phase 5 | Delivered |
 | ALERT-03 | Phase 5 | Delivered |
 | ALERT-04 | Phase 5 | Delivered |
-| CFG-01 | Phase 6 | Planned |
-| CFG-02 | Phase 6 | Planned |
-| CFG-03 | Phase 6 | Planned |
-| CFG-04 | Phase 6 | Planned |
-| CFG-05 | Phase 6 | Planned |
+| CFG-01 | Phase 6 | Delivered |
+| CFG-02 | Phase 6 | Delivered |
+| CFG-03 | Phase 6 | Delivered |
+| CFG-04 | Phase 6 | Delivered |
+| CFG-05 | Phase 6 | Delivered |
 
 **Coverage:** 14/14 v1.3 requirements mapped, no orphans, no duplicates.
 

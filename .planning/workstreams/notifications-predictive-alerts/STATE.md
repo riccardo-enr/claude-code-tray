@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: Notifications & Predictive Alerts
 current_phase: 06
 current_phase_name: notification-control-config
-status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-07-16T12:29:08.640Z"
+status: verifying
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-07-16T12:35:33.840Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
-  percent: 50
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 
 Phase: 06 (notification-control-config) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-16 — Phase 06 execution started
 
 ## Performance Metrics
@@ -62,6 +62,7 @@ Last activity: 2026-07-16 — Phase 06 execution started
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 06 P01 | 8 min | 3 tasks | 1 files |
+| Phase 06 P02 | 6min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ Recent decisions affecting current work:
 - [Phase 05]: SESS de-dupe is one pure expression: notifiable state AND a change from the previous status -- no timestamps, no seen-set (NOTIF-02, D-03)
 - [Phase 05]: Structural greps/AST checks over claude-monitor.py are defeated by prose naming the symbol they forbid (docstrings are in ast.dump) -- second occurrence this phase
 - [Phase 06]: notif_allowed(kind, config) short-circuits on mute_all before the per-event lookup (D-04) -- mute wins, never OR-merges with the per-event flag
+- [Phase 06]: on_notif_toggle/on_threshold_toggle follow set_active-before-connect ordering on every new widget to avoid a spurious save+rebuild on menu construction
 
 ### Pending Todos
 
@@ -123,8 +125,8 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-16T12:28:55.598Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-07-16T12:35:33.829Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
