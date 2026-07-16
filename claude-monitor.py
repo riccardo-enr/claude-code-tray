@@ -1507,6 +1507,25 @@ def demo():
     dead = project(200.0, R, WIN5, R + WIN5 // 2)  # expired AND over 100
     assert dead["exhaust"] < R + WIN5 // 2
     assert alert_should_fire(None, R, dead, R + WIN5 // 2) is False
+
+    # --- config / gate / threshold (CFG-01..05) ---
+    assert parse_config("") == DEFAULT_CONFIG
+    assert parse_config("not json") == DEFAULT_CONFIG
+    assert parse_config("[]") == DEFAULT_CONFIG
+    assert parse_config('{"mute_all": "yes"}')["mute_all"] is False
+    assert parse_config('{"usage_threshold": 85}')["usage_threshold"] == 80
+    assert parse_config('{"usage_threshold": 90}')["usage_threshold"] == 90
+    assert parse_config(json.dumps({"mute_all": True}))["notify_waiting"] is True
+    assert parse_config(json.dumps(DEFAULT_CONFIG)) == DEFAULT_CONFIG
+
+    assert notif_allowed("waiting", {**DEFAULT_CONFIG, "mute_all": True}) is False
+    assert notif_allowed("waiting", {**DEFAULT_CONFIG, "notify_waiting": False}) is False
+    assert notif_allowed("waiting", DEFAULT_CONFIG) is True
+    assert notif_allowed("5h", {**DEFAULT_CONFIG, "notify_5h": True, "mute_all": False}) is True
+
+    assert build_label({"used_percentage": 80}, 0, 80) == "80%"
+    assert build_label({"used_percentage": 81}, 0, 80) == "81%!"
+    assert build_label({"used_percentage": 75}, 0, 70) == "75%!"
     print("ok")
 
 
