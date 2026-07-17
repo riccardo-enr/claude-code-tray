@@ -4,11 +4,11 @@ milestone: v1.3
 milestone_name: Notifications & Predictive Alerts
 current_phase: 06
 current_phase_name: notification-control-config
-status: verifying
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-07-16T12:35:33.840Z"
-last_activity: 2026-07-16
-last_activity_desc: Phase 06 execution started
+status: complete
+stopped_at: Phase 06 verified (UAT 6/6 pass)
+last_updated: "2026-07-17T17:20:00.000Z"
+last_activity: 2026-07-17
+last_activity_desc: Phase 06 UAT passed; v1.3 milestone complete
 progress:
   total_phases: 2
   completed_phases: 2
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 
 ## Current Position
 
-Phase: 06 (notification-control-config) — EXECUTING
+Phase: 06 (notification-control-config) — COMPLETE
 Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-07-16 — Phase 06 execution started
+Status: Verified — UAT 6/6 pass; v1.3 milestone complete
+Last activity: 2026-07-17 — Phase 06 UAT passed
 
 ## Performance Metrics
 

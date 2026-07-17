@@ -65,14 +65,14 @@ usage at reset (QUOTA-03). Descoped during UAT: DASH-04 burn-rate trend chart
 
 </details>
 
-### 🚧 v1.3 Notifications & Predictive Alerts (Phases 5-6) — IN PROGRESS
+### ✅ v1.3 Notifications & Predictive Alerts (Phases 5-6) — COMPLETE
 
 **Milestone Goal:** One notification subsystem that all tray events route through,
 so the user can leave the top bar and still be pulled back when a session needs
 them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
 
 - [x] **Phase 5: Notification Path & Event Producers** - One shared emit path, with session waiting/done events and predictive 5h/7d quota alerts riding it
-- [ ] **Phase 6: Notification Control & Config** - Per-event tray toggles, global mute, and a configurable badge threshold, persisted and corruption-tolerant
+- [x] **Phase 6: Notification Control & Config** - Per-event tray toggles, global mute, and a configurable badge threshold, persisted and corruption-tolerant
 
 ## Phase Details
 
@@ -205,4 +205,4 @@ Plans:
 | 3. Usage Trends in the Tray | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
 | 5. Notification Path & Event Producers | v1.3 | 3/3 | Complete | 2026-07-14 |
-| 6. Notification Control & Config | v1.3 | 2/2 | In Progress|  |
+| 6. Notification Control & Config | v1.3 | 2/2 | Complete | 2026-07-17 |
