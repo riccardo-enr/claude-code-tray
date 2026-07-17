@@ -2,18 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Notifications & Predictive Alerts
-current_phase: 5
-status: ready_to_execute
-stopped_at: Phase 5 planned (3 plans)
-last_updated: "2026-07-13T12:21:55.000Z"
-last_activity: 2026-07-13
-last_activity_desc: Phase 5 planned (3 plans) — notification binding settled as Route B (org.freedesktop.Notifications via Gio.DBusProxy)
+current_phase: 06
+current_phase_name: notification-control-config
+status: complete
+stopped_at: Phase 06 verified (UAT 6/6 pass)
+last_updated: "2026-07-17T17:20:00.000Z"
+last_activity: 2026-07-17
+last_activity_desc: Phase 06 UAT passed; v1.3 milestone complete
 progress:
   total_phases: 2
-  completed_phases: 0
-  total_plans: 3
-  completed_plans: 0
-  percent: 0
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -23,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-13)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 5 planned (3 plans, waves 1-3) — ready to execute
+**Current focus:** Phase 06 — notification-control-config
 
 ## Current Position
 
-Phase: 5 — Notification Path & Event Producers (planned)
-Plan: 3 plans — 05-01 (shared path), 05-02 (SESS producer), 05-03 (ALERT producer)
-Status: Ready to execute (Phase 5 planned — 9/9 requirements, 9/9 decisions covered)
-Last activity: 2026-07-13 — Phase 5 planned; notification binding settled as Route B
+Phase: 06 (notification-control-config) — COMPLETE
+Plan: 2 of 2
+Status: Verified — UAT 6/6 pass; v1.3 milestone complete
+Last activity: 2026-07-17 — Phase 06 UAT passed
 
 ## Performance Metrics
 
@@ -55,6 +56,13 @@ Last activity: 2026-07-13 — Phase 5 planned; notification binding settled as R
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 05 P02 | 15 min | 2 tasks | 1 files |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 06 P01 | 8 min | 3 tasks | 1 files |
+| Phase 06 P02 | 6min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -67,6 +75,10 @@ Recent decisions affecting current work:
 - **Both producers (SESS-* and ALERT-*) land in Phase 5, not separate phases.** The deliverable is the shared emit path (de-dupe, mute hook, click-to-focus); building it against one producer and bolting the second on later is how it grows two heads — the exact failure SEED-004 called out.
 - **Config (CFG-*) comes last (Phase 6)** because CFG-01 enumerates all four event types — they must exist before they can be toggled.
 - ALERT-* reuses v1.2's QUOTA-03 **percentage** projection. It is not a new forecaster; SEED-002's token-based EWMA plan is superseded (token counts are `null` under `--api`, quick task `260712-ndo`).
+- [Phase 05]: SESS de-dupe is one pure expression: notifiable state AND a change from the previous status -- no timestamps, no seen-set (NOTIF-02, D-03)
+- [Phase 05]: Structural greps/AST checks over claude-monitor.py are defeated by prose naming the symbol they forbid (docstrings are in ast.dump) -- second occurrence this phase
+- [Phase 06]: notif_allowed(kind, config) short-circuits on mute_all before the per-event lookup (D-04) -- mute wins, never OR-merges with the per-event flag
+- [Phase 06]: on_notif_toggle/on_threshold_toggle follow set_active-before-connect ordering on every new widget to avoid a spurious save+rebuild on menu construction
 
 ### Pending Todos
 
@@ -113,12 +125,11 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-13T12:21:55.000Z
-Stopped at: Phase 5 planned (3 plans, waves 1-3)
-Resume file: .planning/phases/05-notification-path-event-producers/05-01-PLAN.md
+Last session: 2026-07-16T12:35:33.829Z
+Stopped at: Completed 06-02-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
-- Execute the phase with `/gsd-execute-phase 5` — 3 plans, strictly sequential (every plan writes `claude-monitor.py`, so there is no real parallelism)
-- The notification binding is settled (Route B). Read `05-RESEARCH.md` before touching the emit path — it carries the working code sketch and the eight landmines listed under Blockers/Concerns
-- Verification is `--selfcheck` (projection port + de-dupe/arm as pure functions) plus human UAT on the live tray; the physical click producing `ActionInvoked` is the one thing research could not verify end-to-end
+- Phase 5 is complete (3/3 plans, UAT PASS 5/5, `05-03-SUMMARY.md` backfilled 2026-07-16) — next up is `/gsd-plan-phase 6`
+- Phase 6 (Notification Control & Config) context is already gathered and marked ready for planning — see `06-CONTEXT.md`

@@ -48,7 +48,15 @@ trends, and a self-contained browser dashboard over the same store.
 the two live seeds, SEED-002 (predictive quota alerts) and SEED-004 (session-finished
 notification), which converge on the same shared notification path.
 
-## Current Milestone: v1.3 Notifications & Predictive Alerts
+## Current Milestone
+
+One workstream is open (`.planning/workstreams/`).
+
+| Workstream | Milestone | Status |
+|------------|-----------|--------|
+| `notifications-predictive-alerts` | v1.3 Notifications & Predictive Alerts | Phase 05 done; Phase 06 (config) unplanned |
+
+### v1.3 Notifications & Predictive Alerts (workstream `notifications-predictive-alerts`)
 
 **Goal:** Give the tray a push voice — one notification subsystem that pulls the user
 back to Claude Code when a session needs them or when quota is about to run out, so
@@ -109,12 +117,13 @@ they can context-switch away from the top bar entirely.
 
 ### Active
 
-v1.3 (Notifications & Predictive Alerts) — REQ-IDs defined in `REQUIREMENTS.md`:
-shared notification path with de-dupe and click-to-focus (NOTIF-*), session
-waiting/done events (SESS-*), predictive quota alert off the QUOTA-03 projection
-(ALERT-*), menu-toggle config with global mute (CFG-*).
+**v1.3 (Notifications & Predictive Alerts)** — REQ-IDs in
+`workstreams/notifications-predictive-alerts/REQUIREMENTS.md`: shared notification path
+with de-dupe and click-to-focus (NOTIF-*), session waiting/done events (SESS-*),
+predictive quota alert off the QUOTA-03 projection (ALERT-*), menu-toggle config with
+global mute (CFG-*).
 
-Still deferred, not in v1.3: raw data export (HIST-F1 / DASH-F2), configurable
+Still deferred: raw data export (HIST-F1 / DASH-F2), configurable
 ranges (TREND-F1 / DASH-F3).
 
 ### Out of Scope
@@ -126,6 +135,7 @@ ranges (TREND-F1 / DASH-F3).
 - Hosted / multi-user / network-exposed dashboard — local, single-user, `file://` over the local JSONL
 - Wayland support — the app is X11-only
 - Bundling/replacing the `claude-monitor` CLI — we consume it, not vendor it
+- **A VS Code extension surface (former v1.4, SEED-005)** — planned as a status bar item, webview dashboard, and in-editor notifications, then dropped before any code was written: the user no longer works in VS Code, so the whole milestone served a frontend nobody would open. The tray remains the only frontend besides the browser dashboard.
 
 *(Removed from Out of Scope: "7-day / weekly limit display — the CLI reports it
 as null for this account". It does populate under `limits.seven_day`; delivered
@@ -168,4 +178,8 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-13 — milestone v1.3 (Notifications & Predictive Alerts) started. Merges SEED-002 + SEED-004 into one notification subsystem; SEED-002's token-based forecast superseded by the QUOTA-03 percentage projection. Phase numbering continues from 4.*
+*Last updated: 2026-07-14 — milestone v1.4 (VS Code Usage Surface) dropped before
+execution and its `vscode` workstream deleted: the user no longer works in VS Code.
+SEED-005 removed with it; see Out of Scope for the record. `notifications-predictive-alerts`
+(v1.3, Phase 06 still open) is again the only workstream, so `claude-monitor.py` has a
+single writer and the cross-workstream edit-disjointness constraint is retired.*

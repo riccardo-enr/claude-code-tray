@@ -65,14 +65,14 @@ usage at reset (QUOTA-03). Descoped during UAT: DASH-04 burn-rate trend chart
 
 </details>
 
-### 🚧 v1.3 Notifications & Predictive Alerts (Phases 5-6) — IN PROGRESS
+### ✅ v1.3 Notifications & Predictive Alerts (Phases 5-6) — COMPLETE
 
 **Milestone Goal:** One notification subsystem that all tray events route through,
 so the user can leave the top bar and still be pulled back when a session needs
 them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
 
-- [ ] **Phase 5: Notification Path & Event Producers** - One shared emit path, with session waiting/done events and predictive 5h/7d quota alerts riding it
-- [ ] **Phase 6: Notification Control & Config** - Per-event tray toggles, global mute, and a configurable badge threshold, persisted and corruption-tolerant
+- [x] **Phase 5: Notification Path & Event Producers** - One shared emit path, with session waiting/done events and predictive 5h/7d quota alerts riding it
+- [x] **Phase 6: Notification Control & Config** - Per-event tray toggles, global mute, and a configurable badge threshold, persisted and corruption-tolerant
 
 ## Phase Details
 
@@ -89,16 +89,16 @@ them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
   4. After a cap's window rolls over, that cap can alert again — a previous warning does not suppress the fresh window.
   5. With the notification daemon absent or failing, the tray keeps polling, rendering, and serving session events — no crash, no dead thread, no stalled menu.
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans executed (UAT PASS 2026-07-14)
 
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — The shared notification path: `Gio.DBusProxy` to `org.freedesktop.Notifications`, one `emit_notif` choke point with the mute-gate seam and replace-in-place slots, an id-filtered `ActionInvoked` click dispatcher, and a hardened `serve()`
+- [x] 05-01-PLAN.md — The shared notification path: `Gio.DBusProxy` to `org.freedesktop.Notifications`, one `emit_notif` choke point with the mute-gate seam and replace-in-place slots, an id-filtered `ActionInvoked` click dispatcher, and a hardened `serve()`
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md — SESS producer: `sess_should_notify` de-dupe + `Monitor.handle` emits `waiting` (sticky) / `done` (expiring) notifications that click through to the tmux pane
+- [x] 05-02-PLAN.md — SESS producer: `sess_should_notify` de-dupe + `Monitor.handle` emits `waiting` (sticky) / `done` (expiring) notifications that click through to the tmux pane
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -169,7 +169,16 @@ functions) + human UAT on the live tray.
   4. A missing, unreadable, or malformed config file leaves the tray running on defaults — never a crash, matching the history store's total-tolerance bar.
   5. The high-usage badge threshold is configurable rather than a hard-coded 80%, and the badge follows the configured value.
 
-**Plans**: TBD
+**Plans**: 2/2 plans executed
+
+Plans:
+**Wave 1**
+
+- [x] 06-01-PLAN.md — Config data layer: tolerant `parse_config`/atomic `save_config` for `~/.claude/tray-config.json`, a config-driven `notif_allowed(kind, config)` (mute wins, D-04), and a configurable `build_label` threshold
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 06-02-PLAN.md — Tray menu UI: "Notifications" submenu (mute-all + four event checkboxes, D-03) and a nested "Badge threshold" radio submenu (D-05), both persisting through Plan 1's config layer
 
 **Notes:**
 
@@ -195,5 +204,5 @@ functions) + human UAT on the live tray.
 | 2. Usage History Persistence | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 3. Usage Trends in the Tray | v1.1 | 1/1 | Complete | 2026-07-12 |
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
-| 5. Notification Path & Event Producers | v1.3 | 0/TBD | Not started | - |
-| 6. Notification Control & Config | v1.3 | 0/TBD | Not started | - |
+| 5. Notification Path & Event Producers | v1.3 | 3/3 | Complete | 2026-07-14 |
+| 6. Notification Control & Config | v1.3 | 2/2 | Complete | 2026-07-17 |

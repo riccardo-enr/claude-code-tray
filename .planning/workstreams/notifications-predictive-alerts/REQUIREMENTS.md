@@ -15,15 +15,15 @@ polling, nothing on the Gtk main loop, X11 only.
 
 The shared path. This is the actual deliverable — the individual pings are producers.
 
-- [ ] **NOTIF-01**: Tray events are delivered as GNOME desktop notifications via a single shared emit path (`Gio.Notification` / PyGObject — no new dependency).
-- [ ] **NOTIF-02**: An event notifies **once per state transition**, not once per poll — de-duped so a session sitting in `waiting`, or a cap sitting over its projection, does not re-notify on every tick.
-- [ ] **NOTIF-03**: Clicking a session notification focuses the originating tmux pane and raises the terminal window, reusing the tray's existing click-to-focus action.
-- [ ] **NOTIF-04**: Notification delivery never blocks the Gtk main loop and never kills the helper — a failing/absent notification daemon degrades silently, matching the HIST-03 / POLL-02 posture.
+- [x] **NOTIF-01**: Tray events are delivered as GNOME desktop notifications via a single shared emit path (`Gio.Notification` / PyGObject — no new dependency).
+- [x] **NOTIF-02**: An event notifies **once per state transition**, not once per poll — de-duped so a session sitting in `waiting`, or a cap sitting over its projection, does not re-notify on every tick.
+- [x] **NOTIF-03**: Clicking a session notification focuses the originating tmux pane and raises the terminal window, reusing the tray's existing click-to-focus action.
+- [x] **NOTIF-04**: Notification delivery never blocks the Gtk main loop and never kills the helper — a failing/absent notification daemon degrades silently, matching the HIST-03 / POLL-02 posture.
 
 ### Session events (SESS)
 
-- [ ] **SESS-01**: User is notified when a Claude Code session is **waiting for input** (permission prompt / question), fed by the existing hook -> unix socket status pipeline.
-- [ ] **SESS-02**: User is notified when a Claude Code session **finishes (done)**, same pipeline.
+- [x] **SESS-01**: User is notified when a Claude Code session is **waiting for input** (permission prompt / question), fed by the existing hook -> unix socket status pipeline.
+- [x] **SESS-02**: User is notified when a Claude Code session **finishes (done)**, same pipeline.
 
 ### Predictive quota alerts (ALERT)
 
@@ -33,17 +33,17 @@ not from tokens. Under `--api` (quick task `260712-ndo`) the CLI's token counts 
 back `null`, so SEED-002's original `tokens_remaining` / EWMA forecaster is not
 buildable on the data we poll, and is superseded.
 
-- [ ] **ALERT-02**: User is notified when the **5-hour** cap is projected to reach 100% *before its window resets* — not merely "usage is high". If the projection says the user coasts to reset, no alert fires.
-- [ ] **ALERT-03**: User is notified when the **7-day** cap is projected to reach 100% before its window resets.
-- [ ] **ALERT-04**: A cap's predictive alert **re-arms when its window resets**, so a fresh window can alert again after the previous one was already warned about.
+- [x] **ALERT-02**: User is notified when the **5-hour** cap is projected to reach 100% *before its window resets* — not merely "usage is high". If the projection says the user coasts to reset, no alert fires.
+- [x] **ALERT-03**: User is notified when the **7-day** cap is projected to reach 100% before its window resets.
+- [x] **ALERT-04**: A cap's predictive alert **re-arms when its window resets**, so a fresh window can alert again after the previous one was already warned about.
 
 ### Configuration (CFG)
 
-- [ ] **CFG-01**: User can toggle each notification event type (waiting / done / 5h alert / 7d alert) on and off from the tray menu, with the change taking effect without a restart.
-- [ ] **CFG-02**: User can mute **all** notifications with a single tray toggle.
-- [ ] **CFG-03**: Notification settings persist across restarts, in a small JSON config under `~/.claude/`.
-- [ ] **CFG-04**: Config I/O is corruption-tolerant — a missing, unreadable, or malformed config falls back to defaults and never crashes the helper (same total-tolerance bar as the history store, which a corrupt record did once crash: quick task `260713-fry`).
-- [ ] **CFG-05**: User can configure the high-usage badge threshold (currently a fixed 80%) through the same config. *(Closes the deferred "Alerting: configurable threshold" item.)*
+- [x] **CFG-01**: User can toggle each notification event type (waiting / done / 5h alert / 7d alert) on and off from the tray menu, with the change taking effect without a restart.
+- [x] **CFG-02**: User can mute **all** notifications with a single tray toggle.
+- [x] **CFG-03**: Notification settings persist across restarts, in a small JSON config under `~/.claude/`.
+- [x] **CFG-04**: Config I/O is corruption-tolerant — a missing, unreadable, or malformed config falls back to defaults and never crashes the helper (same total-tolerance bar as the history store, which a corrupt record did once crash: quick task `260713-fry`).
+- [x] **CFG-05**: User can configure the high-usage badge threshold (currently a fixed 80%) through the same config. *(Closes the deferred "Alerting: configurable threshold" item.)*
 
 ## Future Requirements (deferred)
 
@@ -74,20 +74,20 @@ buildable on the data we poll, and is superseded.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIF-01 | Phase 5 | Planned |
-| NOTIF-02 | Phase 5 | Planned |
-| NOTIF-03 | Phase 5 | Planned |
-| NOTIF-04 | Phase 5 | Planned |
-| SESS-01 | Phase 5 | Planned |
-| SESS-02 | Phase 5 | Planned |
-| ALERT-02 | Phase 5 | Planned |
-| ALERT-03 | Phase 5 | Planned |
-| ALERT-04 | Phase 5 | Planned |
-| CFG-01 | Phase 6 | Planned |
-| CFG-02 | Phase 6 | Planned |
-| CFG-03 | Phase 6 | Planned |
-| CFG-04 | Phase 6 | Planned |
-| CFG-05 | Phase 6 | Planned |
+| NOTIF-01 | Phase 5 | Delivered |
+| NOTIF-02 | Phase 5 | Delivered |
+| NOTIF-03 | Phase 5 | Delivered |
+| NOTIF-04 | Phase 5 | Delivered |
+| SESS-01 | Phase 5 | Delivered |
+| SESS-02 | Phase 5 | Delivered |
+| ALERT-02 | Phase 5 | Delivered |
+| ALERT-03 | Phase 5 | Delivered |
+| ALERT-04 | Phase 5 | Delivered |
+| CFG-01 | Phase 6 | Delivered |
+| CFG-02 | Phase 6 | Delivered |
+| CFG-03 | Phase 6 | Delivered |
+| CFG-04 | Phase 6 | Delivered |
+| CFG-05 | Phase 6 | Delivered |
 
 **Coverage:** 14/14 v1.3 requirements mapped, no orphans, no duplicates.
 
