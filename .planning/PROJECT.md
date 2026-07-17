@@ -48,15 +48,13 @@ trends, and a self-contained browser dashboard over the same store.
 the two live seeds, SEED-002 (predictive quota alerts) and SEED-004 (session-finished
 notification), which converge on the same shared notification path.
 
-## Current Milestones (two parallel workstreams)
+## Current Milestone
 
-Planning is split across two workstreams (`.planning/workstreams/`). Both are open;
-both write `claude-monitor.py`, so keep their edits small and disjoint.
+One workstream is open (`.planning/workstreams/`).
 
 | Workstream | Milestone | Status |
 |------------|-----------|--------|
 | `notifications-predictive-alerts` | v1.3 Notifications & Predictive Alerts | Phase 05 done; Phase 06 (config) unplanned |
-| `vscode` | v1.4 VS Code Usage Surface | Roadmapping |
 
 ### v1.3 Notifications & Predictive Alerts (workstream `notifications-predictive-alerts`)
 
@@ -87,42 +85,6 @@ they can context-switch away from the top bar entirely.
   (ALERT-01) stays the reactive signal; this milestone adds the *predictive* one.
 - Closes SEED-002 and SEED-004; the config surface also absorbs the deferred
   "configurable alert threshold" item.
-
-### v1.4 VS Code Usage Surface (workstream `vscode`)
-
-**Goal:** Put the tray's quota and session picture inside VS Code, so usage is visible
-in the same field as the code — no GNOME top bar in peripheral vision, and no separate
-terminal monitor. Second frontend over the same data, not a second data pipeline.
-
-**Target features:**
-
-- A **VS Code extension** (TypeScript) — a genuinely new deployment target: package,
-  activation events, install story. No precedent in this repo, which is Python +
-  PyGObject today.
-- **Status bar item** — usage % + reset countdown. The direct analogue of the tray icon.
-- **Hover detail** — both caps (5-hour, 7-day), burn rate, projected usage at reset.
-- **Webview dashboard** — the v1.2 self-contained HTML page in a VS Code tab. Nearly
-  free: DASH-06 already forbids external refs, so it drops into a webview as-is.
-- **Session status + in-editor notifications** — running / waiting / done.
-- **Predictive quota alert** in-editor, off a TypeScript port of `project()`.
-
-**Key context:**
-
-- **Data source: read `~/.claude/usage-history.jsonl` directly.** No new IPC, no second
-  poll of the slow CLI, no listening socket — upholds the SEED-001 precedent that made
-  the dashboard a static `file://` page. Accepted cost: VS Code sees usage only while
-  the tray is running and polling.
-- **One change to the tray:** `self.sessions` (`claude-monitor.py:1554`) is an in-memory
-  dict today, so nothing outside the process can see session status. Mirror it to
-  `~/.claude/sessions.json` on each transition. Keeps the extension file-based and
-  consistent with the JSONL choice; ~10 lines.
-- **`project()` gets a third copy** (TypeScript, alongside the Python poll-thread port
-  and the dashboard's JS). Consistent with the duplication already accepted deliberately
-  in v1.3 — the JS copy stays because it recomputes against a live browser clock.
-- **Cross-workstream conflict:** `claude-monitor.py` is written by both v1.3 (Phase 06
-  config toggles) and v1.4 (session mirror). Keep the v1.4 edit to the session mirror
-  alone so the merge stays trivial.
-- Closes SEED-005.
 
 ## Requirements
 
@@ -161,11 +123,7 @@ with de-dupe and click-to-focus (NOTIF-*), session waiting/done events (SESS-*),
 predictive quota alert off the QUOTA-03 projection (ALERT-*), menu-toggle config with
 global mute (CFG-*).
 
-**v1.4 (VS Code Usage Surface)** — REQ-IDs in `workstreams/vscode/REQUIREMENTS.md`:
-extension scaffold and packaging (EXT-*), status bar + hover (VSC-*), webview dashboard
-(VSCD-*), session mirror and in-editor session/quota notifications (VSCN-*).
-
-Still deferred, in neither: raw data export (HIST-F1 / DASH-F2), configurable
+Still deferred: raw data export (HIST-F1 / DASH-F2), configurable
 ranges (TREND-F1 / DASH-F3).
 
 ### Out of Scope
@@ -177,6 +135,7 @@ ranges (TREND-F1 / DASH-F3).
 - Hosted / multi-user / network-exposed dashboard — local, single-user, `file://` over the local JSONL
 - Wayland support — the app is X11-only
 - Bundling/replacing the `claude-monitor` CLI — we consume it, not vendor it
+- **A VS Code extension surface (former v1.4, SEED-005)** — planned as a status bar item, webview dashboard, and in-editor notifications, then dropped before any code was written: the user no longer works in VS Code, so the whole milestone served a frontend nobody would open. The tray remains the only frontend besides the browser dashboard.
 
 *(Removed from Out of Scope: "7-day / weekly limit display — the CLI reports it
 as null for this account". It does populate under `limits.seven_day`; delivered
@@ -219,9 +178,8 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-14 — milestone v1.4 (VS Code Usage Surface) started in the new
-`vscode` workstream, in parallel with v1.3 (Phase 06 still open in
-`notifications-predictive-alerts`). Planning split into workstreams; PROJECT.md,
-MILESTONES.md and seeds/ remain shared. v1.4 closes SEED-005: a second frontend over the
-existing JSONL, not a second data pipeline. Both workstreams write `claude-monitor.py` —
-keep their edits disjoint.*
+*Last updated: 2026-07-14 — milestone v1.4 (VS Code Usage Surface) dropped before
+execution and its `vscode` workstream deleted: the user no longer works in VS Code.
+SEED-005 removed with it; see Out of Scope for the record. `notifications-predictive-alerts`
+(v1.3, Phase 06 still open) is again the only workstream, so `claude-monitor.py` has a
+single writer and the cross-workstream edit-disjointness constraint is retired.*
