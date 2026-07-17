@@ -50,13 +50,35 @@ notification), which converge on the same shared notification path.
 
 ## Current Milestone
 
-One workstream is open (`.planning/workstreams/`).
+One workstream is open (`.planning/workstreams/`). v1.3 shipped 2026-07-17 (tag `v1.3`).
 
 | Workstream | Milestone | Status |
 |------------|-----------|--------|
-| `notifications-predictive-alerts` | v1.3 Notifications & Predictive Alerts | Phase 05 done; Phase 06 (config) unplanned |
+| `notifications-predictive-alerts` | v1.4 Session Dashboard | Phase 07 — planning |
 
-### v1.3 Notifications & Predictive Alerts (workstream `notifications-predictive-alerts`)
+### v1.4 Session Dashboard (workstream `notifications-predictive-alerts`)
+
+**Goal:** See all live Claude Code sessions and their status at a glance in the existing
+web dashboard, not just the tray menu.
+
+**Target features:**
+
+- A **live session panel** in the v1.2 self-contained dashboard: every tray-tracked
+  session with its status (running / waiting / done), project directory, and time-in-state
+- **Live refresh** off the dashboard's existing meta-refresh — the tray embeds its current
+  in-memory `self.sessions` snapshot into the generated HTML each poll tick
+- A clean **empty state** when no sessions are active
+
+**Key context:**
+
+- Live-only by choice — no session **persistence/history** this milestone. Reads the tray's
+  in-memory state, mirrored into the generated page; no new IPC, socket, or on-disk store.
+- Extends the v1.2 dashboard (`file://` static page), so DASH-06 (self-contained, no
+  external refs) still holds.
+- Out of scope: click-to-focus a pane from the page (the static page can't; that stays the
+  tray's job), and per-session token accounting.
+
+### v1.3 Notifications & Predictive Alerts (workstream `notifications-predictive-alerts`) — SHIPPED 2026-07-17
 
 **Goal:** Give the tray a push voice — one notification subsystem that pulls the user
 back to Claude Code when a session needs them or when quota is about to run out, so

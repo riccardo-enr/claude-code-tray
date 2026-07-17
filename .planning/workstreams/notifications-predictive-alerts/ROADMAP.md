@@ -25,7 +25,8 @@ per-phase artifacts remain under `.planning/phases/`.
 - ✅ **v1.0 Usage & Quota Monitoring** — Phase 1 (shipped 2026-07-11)
 - ✅ **v1.1 Usage History & Trends** — Phases 2-3 (shipped 2026-07-12)
 - ✅ **v1.2 Usage Web Dashboard** — Phase 4 (shipped 2026-07-13) — [archive](./milestones/v1.2-ROADMAP.md)
-- 🚧 **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (in progress)
+- ✅ **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (shipped 2026-07-17)
+- 🚧 **v1.4 Session Dashboard** — Phase 7 (planning)
 
 ## Phases
 
@@ -73,6 +74,14 @@ them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
 
 - [x] **Phase 5: Notification Path & Event Producers** - One shared emit path, with session waiting/done events and predictive 5h/7d quota alerts riding it
 - [x] **Phase 6: Notification Control & Config** - Per-event tray toggles, global mute, and a configurable badge threshold, persisted and corruption-tolerant
+
+### 🚧 v1.4 Session Dashboard (Phase 7) — PLANNING
+
+**Milestone Goal:** See all live Claude Code sessions and their status at a glance in
+the existing web dashboard, not just in the tray menu. Live-only, extends the v1.2
+self-contained dashboard; no new IPC, socket, or persistence.
+
+- [ ] **Phase 7: Live Session View in the Dashboard** - Embed the tray's current in-memory session snapshot into the generated dashboard HTML, rendered as a live-refreshing session panel
 
 ## Phase Details
 
@@ -194,9 +203,24 @@ Plans:
   existing `CLAUDE_TRAY_*` env vars or layers over them (lean: env as default, menu
   as override). Settle at plan time.
 
+### Phase 7: Live Session View in the Dashboard
+
+**Goal**: See all currently-tracked Claude Code sessions and their status at a glance in the existing web dashboard, refreshed live, without leaving the top bar or opening the tray menu.
+**Depends on**: Phase 4 (the self-contained dashboard + its regeneration/refresh path)
+**Requirements**: SESSVIEW-01, SESSVIEW-02, SESSVIEW-03, SESSVIEW-04, SESSVIEW-05
+**Success Criteria** (what must be TRUE):
+
+  1. The dashboard shows every session the tray currently tracks, each with its status (running / waiting / done).
+  2. Each session row shows its project directory and how long it has been in its current state.
+  3. The session panel reflects the tray's live in-memory session state and updates on the dashboard's existing meta-refresh cadence — no new IPC, socket, or persistence is introduced.
+  4. With no active sessions, the panel shows a clean empty state instead of breaking or rendering blank.
+  5. The dashboard remains fully self-contained (no external references), consistent with DASH-06.
+
+**Plans**: not yet planned
+
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 5 → 6
+**Execution Order:** Phases execute in numeric order: 5 → 6 → 7
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -206,3 +230,4 @@ Plans:
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
 | 5. Notification Path & Event Producers | v1.3 | 3/3 | Complete | 2026-07-14 |
 | 6. Notification Control & Config | v1.3 | 2/2 | Complete | 2026-07-17 |
+| 7. Live Session View in the Dashboard | v1.4 | 0/? | Planning | - |

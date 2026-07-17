@@ -45,6 +45,22 @@ buildable on the data we poll, and is superseded.
 - [x] **CFG-04**: Config I/O is corruption-tolerant — a missing, unreadable, or malformed config falls back to defaults and never crashes the helper (same total-tolerance bar as the history store, which a corrupt record did once crash: quick task `260713-fry`).
 - [x] **CFG-05**: User can configure the high-usage badge threshold (currently a fixed 80%) through the same config. *(Closes the deferred "Alerting: configurable threshold" item.)*
 
+## v1.4 Requirements (Session Dashboard)
+
+Milestone goal: see all live Claude Code sessions and their status at a glance in the
+existing v1.2 web dashboard, not just in the tray menu. Live-only — the tray already
+regenerates the self-contained `file://` dashboard each poll tick, so it embeds the
+current in-memory session snapshot into the generated HTML and the existing meta-refresh
+keeps it current. No new IPC, socket, or persistence.
+
+### Session view (SESSVIEW)
+
+- [ ] **SESSVIEW-01**: The web dashboard shows all sessions the tray currently tracks, each with its status (running / waiting / done).
+- [ ] **SESSVIEW-02**: Each session shows its project directory and how long it has been in its current state (especially waiting).
+- [ ] **SESSVIEW-03**: The session view reflects the tray's current in-memory session state, refreshed on the dashboard's existing meta-refresh cadence — no new IPC, socket, or persistence is introduced.
+- [ ] **SESSVIEW-04**: With no active sessions, the view shows a clean empty state rather than breaking or rendering blank.
+- [ ] **SESSVIEW-05**: The session view stays self-contained (no external references), consistent with DASH-06.
+
 ## Future Requirements (deferred)
 
 - **NOTIF-F1**: Quiet hours — suppress notifications in a configured time range. Deliberately deferred: a plain global mute (CFG-02) ships the value; add scheduling only if the mute proves insufficient. GNOME already has its own global Do Not Disturb.
@@ -88,8 +104,13 @@ buildable on the data we poll, and is superseded.
 | CFG-03 | Phase 6 | Delivered |
 | CFG-04 | Phase 6 | Delivered |
 | CFG-05 | Phase 6 | Delivered |
+| SESSVIEW-01 | Phase 7 | Planned |
+| SESSVIEW-02 | Phase 7 | Planned |
+| SESSVIEW-03 | Phase 7 | Planned |
+| SESSVIEW-04 | Phase 7 | Planned |
+| SESSVIEW-05 | Phase 7 | Planned |
 
-**Coverage:** 14/14 v1.3 requirements mapped, no orphans, no duplicates.
+**Coverage:** 14/14 v1.3 requirements delivered; 5/5 v1.4 requirements mapped to Phase 7. No orphans, no duplicates.
 
 ### Note on the QUOTA-03 reuse (ALERT-02/03)
 
