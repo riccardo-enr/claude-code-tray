@@ -1,6 +1,7 @@
 ---
 id: SEED-004
-status: dormant
+status: implemented
+implemented_in: v1.3 (Phase 05 — session waiting/done desktop notifications on the shared path)
 planted: 2026-07-13
 planted_during: v1.2 / Phase 04 usage-web-dashboard
 trigger_when: next milestone (v1.3)

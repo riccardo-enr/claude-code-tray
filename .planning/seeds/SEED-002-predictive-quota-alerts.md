@@ -1,6 +1,7 @@
 ---
 id: SEED-002
-status: dormant
+status: implemented
+implemented_in: v1.3 (Phase 05 — predictive 5h/7d quota alerts on the shared notification path)
 planted: 2026-07-12
 planted_during: v1.1 Phase 3 (Usage Trends in the Tray)
 trigger_when: after v1.2 ships (web dashboard complete); milestone v1.3
