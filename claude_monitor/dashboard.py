@@ -133,6 +133,17 @@ _DASH_STYLE = (
     "border-color:var(--accent)}"
     "#usage-now{color:var(--accent);font-weight:600}"
     "p.empty{color:var(--muted)}"
+    "#sess-tbl{width:100%;border-collapse:collapse;font-size:.9em}"
+    "#sess-tbl th{color:var(--muted);text-align:left;font-weight:600;"
+    "padding:.3em .4em}"
+    "#sess-tbl td{border-top:1px solid var(--border);padding:.3em .4em}"
+    ".sd{width:.7em;height:.7em;border-radius:50%;display:inline-block;"
+    "margin-right:.45em;vertical-align:middle}"
+    ".sd-waiting{background:var(--accent2)}"
+    ".sd-running{background:var(--accent)}"
+    ".sd-done{background:var(--muted)}"
+    ".sess-done{opacity:.5}"
+    ".sdur{text-align:right;font-variant-numeric:tabular-nums}"
     "#meta{color:var(--muted);font-size:.85em;margin:.2em 0 1.5em}"
     "#hm-legend{display:flex;align-items:center;gap:.4em;font-size:.85em;"
     "color:var(--legend);margin-top:.5em}"
@@ -176,6 +187,10 @@ _DASH_BODY = (
     "Claude Code - Usage Dashboard</span>"
     "<button id=\"theme\">Dark</button></h1>"
     "<div id=\"meta\"></div>"
+    "<section><h2>Sessions</h2>"
+    "<table id=\"sess-tbl\"><thead><tr>"
+    "<th>Project</th><th>Status</th><th>Duration</th></tr></thead>"
+    "<tbody id=\"sessions\"></tbody></table></section>"
     "<section><h2>" + _IC_GAUGE + "Current quota</h2>"
     "<div id=\"status\"></div></section>"
     "<section><h2>" + _IC_TREND + "Usage % over time"
@@ -450,13 +465,59 @@ statusCard();
 // Countdowns and the projection are computed against the LIVE clock, so the card
 // stays truthful as this static page ages between the ~5min regenerations.
 setInterval(statusCard,20000);
+// Sessions panel. Rows are built client-side via textContent from D.sessions so an
+// untrusted project dir (arbitrary repo path) can never inject markup (D-08, T-07-01).
+var SESS_RANK={waiting:0,running:1,done:2};
+function sessDur(s){
+  // Under an hour show m+s so the counter visibly ticks each second (D-02); past an
+  // hour fall to the coarser fmtDur -- a stale session does not need second precision.
+  s=Math.max(0,Math.floor(s));
+  if(s>=3600)return fmtDur(s);
+  return Math.floor(s/60)+"m "+two(s%60)+"s";
+}
+function renderSessions(){
+  var box=document.getElementById("sessions");
+  if(!box)return;
+  clear(box);
+  var list=(D.sessions||[]).slice();  // guard for an old cached page without the key
+  list.sort(function(a,b){
+    var ra=SESS_RANK[a.status];if(ra===undefined)ra=99;
+    var rb=SESS_RANK[b.status];if(rb===undefined)rb=99;
+    return ra-rb;
+  });
+  if(!list.length){
+    var etr=document.createElement("tr"),etd=document.createElement("td");
+    etd.setAttribute("colspan","3");
+    etd.textContent="No active Claude Code sessions";
+    etr.appendChild(etd);box.appendChild(etr);
+    return;
+  }
+  var now=Date.now()/1000;
+  list.forEach(function(s){
+    var tr=document.createElement("tr");
+    if(s.status==="done")tr.className="sess-done";
+    var td1=document.createElement("td");td1.textContent=s.dir;tr.appendChild(td1);
+    var td2=document.createElement("td");
+    var dot=document.createElement("span");dot.className="sd sd-"+s.status;
+    td2.appendChild(dot);td2.appendChild(document.createTextNode(s.status));
+    tr.appendChild(td2);
+    var td3=document.createElement("td");td3.className="sdur";
+    td3.textContent=(s.entered===null||s.entered===undefined)?"-":sessDur(now-s.entered);
+    tr.appendChild(td3);
+    box.appendChild(tr);
+  });
+}
+renderSessions();
+setInterval(renderSessions,1000);
 """
 
 
-def render_dashboard(records, now):
+def render_dashboard(records, now, sessions=()):
     """Full self-contained dashboard HTML; the empty-state page when there is no data.
     Range bounds are ROLLING windows (now-24h, now-7d), not calendar ones, which would
-    hide the most recent activity right after a reset.
+    hide the most recent activity right after a reset. `sessions` is a snapshot list of
+    {dir,status,entered} dicts, shipped inert via the _embed_json payload and rendered
+    client-side (D-08); it defaults empty so existing callers keep working.
     """
     records = history_numeric(records)
     if not records:
@@ -469,6 +530,7 @@ def render_dashboard(records, now):
         "heatmap": heatmap_buckets(records),
         "bounds": {"h24": int(now - 86400), "d7": int(now - 7 * 86400)},
         "generated": int(now),
+        "sessions": list(sessions),
     }
     return (
         "<!doctype html><html><head><meta charset=\"utf-8\">"
