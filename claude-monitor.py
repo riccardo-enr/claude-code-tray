@@ -407,6 +407,30 @@ class Monitor:
         self.rebuild_menu()
         return False
 
+    def reap_stale(self, now):
+        """Poll-thread only: find sessions to self-heal off (G-07-2), never mutate
+        self.sessions directly. Shells out via pane_alive, so this must run off the Gtk
+        main thread; the actual pop is handed back via GLib.idle_add(self._pop_stale, ...)
+        so self.sessions stays single-mutator (Gtk thread only), same posture as
+        write_dashboard's read-only snapshot and mon.handle/mon.apply_usage's idle_add.
+        """
+        stale = [
+            sid for sid, s in list(self.sessions.items())
+            if core.session_stale(
+                pane_alive(s.get("pane", ""), s.get("tmux", "")),
+                s.get("entered"), now, core.REAP_MAX_AGE,
+            )
+        ]
+        if stale:
+            GLib.idle_add(self._pop_stale, stale)
+
+    def _pop_stale(self, sids):
+        """Gtk-thread mutator (only ever invoked via reap_stale's idle_add above)."""
+        for sid in sids:
+            self.sessions.pop(sid, None)  # tolerates a concurrent "end" event already gone
+        self.rebuild_menu()
+        return False
+
 
 def terminal_focused():
     """Best-effort: is the active X window our terminal? (X11 only, never raises)."""
@@ -439,6 +463,26 @@ def pane_onscreen(pane, tmux):
         return out == "11"
     except Exception:
         return False
+
+
+def pane_alive(pane, tmux):
+    """Tri-state: does this tmux pane still exist? (never raises)
+    True/False for a real answer, None for "no pane to check" or an ambiguous tmux
+    failure (missing binary, hung socket) -- unlike pane_onscreen's plain False for "no
+    pane", callers here (core.session_stale) must be able to tell "confirmed gone" apart
+    from "nothing to confirm with," so a flaky/missing tmux never reaps a session outright,
+    only degrades to the age-ceiling fallback.
+    """
+    if not pane:
+        return None
+    cmd = ["tmux"]
+    if tmux:
+        cmd += ["-S", tmux.split(",")[0]]
+    cmd += ["display-message", "-t", pane, "-p", ""]
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=1).returncode == 0
+    except Exception:
+        return None
 
 
 def looking_at(pane, tmux):
@@ -499,6 +543,7 @@ def poll_loop(mon):
         try:
             usage = core.fetch_usage()
             now = time.time()
+            mon.reap_stale(now)
             if usage is not None:
                 core.append_history(core.history_record(usage, now))
                 # Rides this tick: every value is already in `usage`, and emit_notif is async.
