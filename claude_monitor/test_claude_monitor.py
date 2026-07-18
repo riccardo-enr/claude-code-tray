@@ -39,6 +39,7 @@ from .core import (
     project,
     reset_marks,
     sess_should_notify,
+    session_stale,
     trend_burn,
     trend_peak_hour,
     trend_sparkline,
@@ -460,6 +461,29 @@ def demo():
     assert sess_should_notify("done", "done") is False
     assert sess_should_notify("waiting", "running") is False
     assert sess_should_notify("done", "end") is False
+
+    # --- session_stale reap decision (G-07-2 self-heal) ---
+    NOW = 2_000_000  # synthetic epoch, never time.time()
+    MAX_AGE = 3600
+    # pane confirmed gone (alive=False) reaps regardless of age.
+    assert session_stale(False, NOW, NOW, MAX_AGE) is True  # entered == now, still reaped
+    assert session_stale(False, NOW - 10, NOW, MAX_AGE) is True
+    assert session_stale(False, None, NOW, MAX_AGE) is True  # no entered stamp either
+    # pane alive (alive=True) does NOT block reaping once past the ceiling
+    # (the /exit or /clear same-pane case -- SessionEnd never fires for either).
+    assert session_stale(True, NOW - MAX_AGE - 1, NOW, MAX_AGE) is True
+    assert session_stale(True, NOW - 10, NOW, MAX_AGE) is False  # well within the ceiling
+    # unknown liveness (alive=None) follows the identical age-ceiling rule as alive=True.
+    assert session_stale(None, NOW - MAX_AGE - 1, NOW, MAX_AGE) is True
+    assert session_stale(None, NOW - 10, NOW, MAX_AGE) is False
+    # no entered stamp yet (mid-creation race guard): never reaped by age...
+    assert session_stale(True, None, NOW, MAX_AGE) is False
+    assert session_stale(None, None, NOW, MAX_AGE) is False
+    # ...but still reaped when alive=False (already covered above, restated for contrast).
+    assert session_stale(False, None, NOW, MAX_AGE) is True
+    # exact boundary (now - entered == max_age) does not reap (strict >).
+    assert session_stale(True, NOW - MAX_AGE, NOW, MAX_AGE) is False
+    assert session_stale(None, NOW - MAX_AGE, NOW, MAX_AGE) is False
 
     # --- project() ---
     # Synthetic epochs, never time.time(): deterministic, and they cannot go stale.
