@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 Phase: 07 (live-session-view) — PLANNING
 Plan: not yet planned
 Status: v1.4 Session Dashboard defined; ready for /gsd-plan-phase 07
-Last activity: 2026-07-17 — v1.4 milestone started (v1.3 shipped, tag v1.3)
+Last activity: 2026-07-18 — Completed quick task 260718-hgm: despike dashboard usage-% trend chart (SEED-006)
 
 ## Performance Metrics
 
@@ -106,6 +106,7 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 |---|-------------|------|--------|--------|-----------|
 | 260712-ndo | Poll claude-monitor with --api for official /usage numbers (drops absolute token counts) | 2026-07-12 | 04b45d7 | Verified | [260712-ndo-api-official-usage](./quick/260712-ndo-api-official-usage/) |
 | 260713-fry | Fix compute_trends corrupt-record crash — sanitize via history_numeric + guard poll_loop so the daemon thread cannot die | 2026-07-13 | 6d0ec43 | Verified | [260713-fry-fix-compute-trends-corrupt-record-crash](./quick/260713-fry-fix-compute-trends-corrupt-record-crash/) |
+| 260718-hgm | Despike dashboard usage-% trend chart — reuse heatmap RISE_MAX to drop upstream 100% pins before with_gaps (SEED-006) | 2026-07-18 | 4ebec5e | Verified | [260718-hgm-despike-dashboard-usage-trend-chart-seed](./quick/260718-hgm-despike-dashboard-usage-trend-chart-seed/) |
 
 ## Deferred Items
 
