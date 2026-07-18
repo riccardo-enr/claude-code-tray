@@ -216,11 +216,12 @@ Plans:
   4. With no active sessions, the panel shows a clean empty state instead of breaking or rendering blank.
   5. The dashboard remains fully self-contained (no external references), consistent with DASH-06.
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/3 plans executed (07-03 gap-closure pending)
 
 Plans:
 
 - [x] 07-02-PLAN.md
+- [ ] 07-03-PLAN.md — Gap closure CR-01: reaped-status memory (`core.sess_notify_baseline` + `Monitor._reaped_status`) so a genuinely-alive session reaped past REAP_MAX_AGE and resumed does not re-fire a notification (restores NOTIF-02), with a `--selfcheck` assert locking the resurrection behavior (WR-06); `session_stale` left untouched so both 07-02 self-heal paths hold
 
 **Wave 1**
 
