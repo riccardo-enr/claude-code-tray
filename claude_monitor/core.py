@@ -113,6 +113,19 @@ def sess_should_notify(old_status, new_status):
     return new_status in ("waiting", "done") and old_status != new_status
 
 
+def sess_notify_baseline(live_status, reaped_status):
+    """Resolve the `old` status Monitor.handle feeds sess_should_notify. Pure.
+    A reaped-then-resurrected session reads its live status as None (Monitor._pop_stale
+    popped the whole dict), so without this it looks identical to a brand-new session and a
+    same-status resurrection re-fires the notification (CR-01, regressing NOTIF-02). Falling
+    back to the short-lived reaped-status memory makes a same-status resurrection read as "no
+    transition"; a genuinely new session (no reaped memory, reaped_status is None) stays None
+    so its first waiting/done still notifies. Live status always wins when present -- an
+    explicit `is not None` test (not truthiness) keeps the contract exact.
+    """
+    return live_status if live_status is not None else reaped_status
+
+
 REAP_MAX_AGE = 3600  # 1 hour; self-heal ceiling for a session SessionEnd never popped (G-07-2)
 
 
