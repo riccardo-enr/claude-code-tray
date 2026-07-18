@@ -5,15 +5,15 @@ milestone_name: Session Dashboard
 current_phase: 07
 current_phase_name: live-session-view
 status: executing
-stopped_at: Completed 07-02-PLAN.md (gap closure G-07-2) -- human UAT pending
-last_updated: "2026-07-18T18:50:38.653Z"
+stopped_at: Completed 07-03-PLAN.md
+last_updated: "2026-07-18T18:58:42.740Z"
 last_activity: 2026-07-18
-last_activity_desc: Phase 07 execution resumed (wave continue)
+last_activity_desc: Phase 07 execution started
 progress:
   total_phases: 3
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
   percent: 100
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 ## Current Position
 
 Phase: 07 (live-session-view) — EXECUTING
-Plan: 1 of 1
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-18 — Phase 07 execution resumed (wave continue)
+Last activity: 2026-07-18 — Phase 07 execution started
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Last activity: 2026-07-18 — Phase 07 execution resumed (wave continue)
 | Phase 06 P01 | 8 min | 3 tasks | 1 files |
 | Phase 06 P02 | 6min | 2 tasks | 1 files |
 | Phase 07 P02 | 3 min | 3 tasks | 3 files |
+| Phase 07 P03 | 2min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Recent decisions affecting current work:
 - [Phase 06]: notif_allowed(kind, config) short-circuits on mute_all before the per-event lookup (D-04) -- mute wins, never OR-merges with the per-event flag
 - [Phase 06]: on_notif_toggle/on_threshold_toggle follow set_active-before-connect ordering on every new widget to avoid a spurious save+rebuild on menu construction
 - [Phase ?]: [Phase 07-02] session_stale reap: alive=True never short-circuits to never-reap -- only the unconditional age ceiling catches the same-pane /exit or /clear case SessionEnd never fires for
+- [Phase ?]: CR-01 fix: reaped-status memory + pure sess_notify_baseline baseline resolver; rejected the exclude-alive=True-from-age-reap trap to preserve 07-02 same-pane self-heal
 
 ### Pending Todos
 
@@ -130,8 +132,8 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-18T17:54:29.169Z
-Stopped at: Completed 07-02-PLAN.md (gap closure G-07-2) -- human UAT pending
+Last session: 2026-07-18T18:58:15.395Z
+Stopped at: Completed 07-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
