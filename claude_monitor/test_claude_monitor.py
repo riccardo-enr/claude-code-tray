@@ -427,6 +427,31 @@ def demo():
     assert "<link" not in page and "src=" not in page and "https://" not in page
     assert page.replace("http://www.w3.org/2000/svg", "").find("http://") == -1
 
+    # --- session panel (SESSVIEW-01..05) ---
+    _srec = [{"t": now_dash, "pct": 42.0, "burn": 10.0}]
+    # (a) empty state: JS empty-string present, no rows shipped in the payload (D-07).
+    sempty = render_dashboard(_srec, now_dash, sessions=[])
+    assert "No active Claude Code sessions" in sempty
+    assert '"sessions": []' in sempty
+    # (b) payload + markup inertness (D-08, T-07-01). One dir is angle-bracket markup;
+    # it must ship _embed_json-escaped, never as raw markup (no server-side interpolation).
+    hostile_dir = "<b>x</b>"  # planner-discipline-allow: <b>x</b>
+    ep = 1700000000
+    sess = [
+        {"dir": hostile_dir, "status": "running", "entered": ep},
+        {"dir": "alpha-proj", "status": "waiting", "entered": ep + 1},
+        {"dir": "beta-proj", "status": "done", "entered": ep + 2},
+    ]
+    spage = render_dashboard(_srec, now_dash, sessions=sess)
+    assert "alpha-proj" in spage and "beta-proj" in spage
+    assert "waiting" in spage and "running" in spage and "done" in spage
+    assert str(ep + 1) in spage  # a distinctive entered epoch reached the payload
+    assert hostile_dir not in spage  # escaped -> no raw markup, no server-side interp
+    assert spage.count("</" + "script>") == 1  # no script breakout
+    # (c) self-containment holds with the panel populated (SESSVIEW-05, DASH-06).
+    assert "<link" not in spage and "src=" not in spage and "https://" not in spage
+    assert spage.replace("http://www.w3.org/2000/svg", "").find("http://") == -1
+
     # --- session-notification de-dupe ---
     assert sess_should_notify(None, "waiting") is True
     assert sess_should_notify("running", "waiting") is True
