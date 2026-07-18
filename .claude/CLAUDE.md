@@ -58,6 +58,23 @@ Use these entry points:
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
 <!-- GSD:workflow-end -->
 
+## Running & Tooling (use `just`)
+
+This repo has a `justfile`. **Always use the `just` recipes to run, restart, or test
+the tray** -- do not hand-roll `python3 ...` / `pkill` / `setsid` commands:
+
+- `just restart` -- kill and relaunch the tray daemon. Run after **any** code change:
+  Python does not hot-reload, and the deployed `~/.claude/hooks/claude-monitor.py` is a
+  symlink to this repo, so edits are on disk but the running process holds the old code.
+- `just start` / `just stop` / `just status`
+- `just selfcheck` -- run the assert suite (`claude-monitor.py --selfcheck`), the
+  verification gate every change MUST keep green (exit 0).
+- `just lint` -- `ruff check .`
+- `just dashboard` -- open the generated dashboard in the browser.
+
+Run recipes from inside the desktop session (an interactive shell or overseer.nvim) so
+the GUI daemon inherits `DISPLAY` / `DBUS_SESSION_BUS_ADDRESS`.
+
 <!-- GSD:profile-start -->
 
 ## Developer Profile
