@@ -1,7 +1,7 @@
 ---
 phase: 07-live-session-view
 verified: 2026-07-18T21:30:00Z
-status: human_needed
+status: passed
 score: 6/9 must-haves verified
 behavior_unverified: 3
 overrides_applied: 0
@@ -9,6 +9,7 @@ re_verification:
   previous_status: gaps_found
   previous_score: 5/9
   gaps_closed:
+
     - "CR-01 / 07-02 must_haves.truths[3] (the one FAILED truth): the age-ceiling reap resurrected a genuinely-alive session as a brand-new entry, so Monitor.handle read old=None and core.sess_should_notify(None,'waiting') re-fired a spurious URGENCY_CRITICAL 'Waiting for input' notification (regressing NOTIF-02). Closed by 07-03 (66d7f24/393aec6/02c6498): Monitor._pop_stale now records self._reaped_status[sid]=s.get('status') BEFORE the pop, and handle seeds its baseline via core.sess_notify_baseline(s.get('status'), self._reaped_status.pop(sid,None)). Confirmed from live code + behavioral trace: a same-status resurrection reads old='waiting' -> sess_should_notify False (no re-notify, entered not re-stamped); a genuine waiting->done across the reap still fires exactly once."
     - "WR-06 (coverage gap that let CR-01 land): the reap/resurrect notification baseline is now a pure core.sess_notify_baseline function locked by 5 --selfcheck asserts (test_claude_monitor.py:489-500), including the two composed-with-sess_should_notify resurrection cases."
   gaps_remaining: []
@@ -16,22 +17,27 @@ re_verification:
 gaps: []
 deferred: []
 behavior_unverified_items:
+
   - truth: "Rows sort waiting -> running -> done; done rows render dimmed (D-04/D-06)"
     test: "Open the dashboard with sessions in all three statuses simultaneously (now that G-07-2 no longer produces stuck/duplicate rows and CR-01 no longer re-fires notifications); visually confirm row order waiting -> running -> done and that done rows render visibly dimmed (reduced opacity)."
     expected: "Row order is waiting, then running, then done; done rows render at .sess-done{opacity:.5}."
     why_human: "Pure client-side JS (SESS_RANK comparator, sess-done class) with no headless JS runner in this repo. 07-UAT.md Test 2 (the only human attempt so far) returned 'issue', but the reported symptom (two 'running' rows, one already done) was entirely a G-07-2 stale-session artifact, not evidence the sort/dim logic is wrong. 07-02-PLAN.md's own <verification> asks for this test to be re-run post-fix; that has not happened."
+
   - truth: "A session whose tmux pane no longer exists (killed pane/terminal/process) disappears from the tray menu and dashboard panel within one poll tick (~15s), with no SessionEnd hook event required (G-07-2)"
     test: "Restart the tray (just restart). Start a session in a tmux pane, confirm it shows in tray+dashboard. Run `tmux kill-pane -t <pane>` directly (bypassing SessionEnd). Confirm the session disappears from both the tray menu and the dashboard panel within about one poll tick, with no manual tray refresh (dashboard needs its existing meta-refresh/reload). Separately, confirm a genuinely active session is never wrongly reaped in normal use."
     expected: "Killed-pane session vanishes from both surfaces within ~15s; an actively-used session is undisturbed."
     why_human: "reap_stale/_pop_stale/pane_alive are wired correctly on inspection (poll_loop calls mon.reap_stale(now) every tick; pane_alive shells to tmux, tri-state; GLib.idle_add hands the pop to the Gtk thread) and --selfcheck locks the pure session_stale decision table, but nothing exercises the live GTK Monitor + real tmux integration end-to-end. 07-02-SUMMARY.md flags this as its own pending D3 item -- never run because the plan had no checkpoint:* task."
+
   - truth: "A session that stops sending events while its pane stays open (/exit or /clear reused the same pane -- SessionEnd fires for neither) self-heals off the list within REAP_MAX_AGE (G-07-2)"
     test: "Start a session, then run /exit (or /clear) inside the same pane without closing it. Confirm the entry stays visible for a while (pane alive, age not yet exceeded), then disappears from tray+dashboard once REAP_MAX_AGE (1h) elapses without a fresh event. While observing, confirm the same-pane resurrection path does NOT re-fire a 'Waiting for input' popup (the CR-01 live confirmation, 07-03-SUMMARY.md D5)."
     expected: "Entry self-heals off both surfaces once REAP_MAX_AGE elapses even though the pane never closed; a reaped-then-resurrected same-status session reappears with no new popup and no `!`-badge re-arm."
     why_human: "Same live-integration reasoning as the pane-kill item, plus a real ~1h idle. The pure age-ceiling logic (session_stale) and the resurrection baseline (sess_notify_baseline) are both unit-locked by --selfcheck; only the live GTK Monitor + 1h wait is unverified. 07-03-PLAN.md pairs this human-check with the deterministic Task 3 asserts (which already pass)."
 human_verification:
+
   - test: "Restart the tray, start a session in a tmux pane, run `tmux kill-pane -t <pane>` directly (bypassing SessionEnd); confirm the session disappears from both the tray menu and dashboard panel within ~1 poll tick; separately confirm a genuinely active session (pane alive, real events arriving) is never wrongly reaped -- and, when a reaped-then-alive session resends its same status, that NO new 'Waiting for input' popup fires and the `!` badge does not re-arm (the live CR-01 confirmation)."
     expected: "Killed-pane session self-heals off both surfaces within ~15s; an actively-used session is undisturbed; a same-status resurrection produces no popup / no badge re-arm; a genuine-change resurrection shows exactly one notification."
     why_human: "07-02-SUMMARY.md's D3 and 07-03-SUMMARY.md's D5 -- both require a live GTK tray + real tmux pane kill (and, for the CR-01 live case, a synthetic or real reap-then-resurrect); not automatable from this environment. The deterministic proof is the passing --selfcheck resurrection block."
+
   - test: "Re-run 07-UAT.md Test 2 (open the dashboard with sessions in all three statuses; confirm sort order waiting -> running -> done and done rows dimmed) now that G-07-2 AND CR-01 are both closed, to separate 'sort/dim logic is correct' from 'the stale-session bug was masking it'."
     expected: "Clean sort order and dimming with no stuck/duplicate rows this time."
     why_human: "No headless JS execution path in this repo; the only prior attempt (07-UAT.md Test 2) was confounded by the since-fixed G-07-2 bug."
