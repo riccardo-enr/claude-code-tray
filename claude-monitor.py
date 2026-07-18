@@ -344,7 +344,15 @@ class Monitor:
             with open(core.HISTORY_PATH, errors="replace") as f:
                 records = core.parse_history(f.read())
             records = [r for r in records if core.history_keep(r, now, core.HISTORY_DAYS)]
-            html = dashboard.render_dashboard(records, now)
+            # Snapshot into plain primitives so dashboard.py never touches live Monitor
+            # state (stays GTK-free). A concurrent Gtk-thread mutation degrades to the
+            # except-Exception skip below -- same posture as compute_trends, no lock (D-08).
+            sessions = [
+                {"dir": s.get("dir", ""), "status": s.get("status", ""),
+                 "entered": s.get("entered")}
+                for s in list(self.sessions.values())
+            ]
+            html = dashboard.render_dashboard(records, now, sessions=sessions)
             os.makedirs(dashboard.DASH_DIR, exist_ok=True)
             fd, tmp = tempfile.mkstemp(dir=dashboard.DASH_DIR)
             with os.fdopen(fd, "w") as f:
@@ -381,6 +389,11 @@ class Monitor:
             dir=d, status=event, pane=pane, tmux=tmux, cwd=cwd,
             acked=bool(msg.get("_onscreen")),
         )
+        # Stamp the time-in-state clock ONLY on a real transition, reusing the SAME `old`
+        # sess_should_notify reads below. An unconditional stamp would reset the dashboard
+        # counter on every keepalive tick in the same status (D-01).
+        if old != event:
+            s["entered"] = time.time()
         # `d` (the project dir) goes in the summary, which is not Pango-parsed, unlike body.
         if core.sess_should_notify(old, event):
             self.emit_notif(
