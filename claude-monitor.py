@@ -603,6 +603,30 @@ def with_gaps(series, max_gap=GAP_MAX):
     return out
 
 
+def despike(series, max_rise=RISE_MAX):
+    """Drop upstream 100%-pin outliers from a [[t, pct], ...] series before with_gaps.
+
+    Mirrors the `rise > RISE_MAX` rejection in heatmap_buckets so the line chart and the
+    heatmap agree on a believable one-sample jump (see the ponytail: note at RISE_MAX for
+    why upstream pins pct=100). Reject-and-drop, not median-smooth: kept points are real
+    samples only -- no synthesized midpoints -- so the line stays honest.
+
+    A sample is dropped only when its pct rises more than max_rise above the previous KEPT
+    sample; the kept reference is left unchanged on a drop, so consecutive pins both go.
+    Only positive jumps are bound -- drops (window resets to ~0) survive untouched. Must
+    run BEFORE with_gaps so pen-up breaks are computed on the cleaned series. Input is
+    already numeric (history_numeric / _is_num), so no None handling is needed.
+    """
+    out = []
+    ref = None  # pct of the previous kept sample
+    for t, v in series:
+        if ref is not None and v - ref > max_rise:
+            continue
+        out.append([t, v])
+        ref = v
+    return out
+
+
 def usage7_series(records):
     """[[t, weekly_pct], ...] for records carrying a numeric `pct7`, in order."""
     return [[int(r["t"]), r["pct7"]] for r in records if _is_num(r.get("pct7"))]
@@ -1052,8 +1076,8 @@ def render_dashboard(records, now):
     if not records:
         return _DASH_EMPTY
     payload = {
-        "usage": with_gaps([[int(r["t"]), r["pct"]] for r in records]),
-        "usage7": with_gaps(usage7_series(records)),
+        "usage": with_gaps(despike([[int(r["t"]), r["pct"]] for r in records])),
+        "usage7": with_gaps(despike(usage7_series(records))),
         "resets": reset_marks(records),
         "now": latest_state(records),
         "heatmap": heatmap_buckets(records),
@@ -1385,6 +1409,10 @@ def demo():
     ]
     assert with_gaps([[0, 1.0], [60, 2.0]], 300) == [[0, 1.0], [60, 2.0]]
     assert with_gaps([], 300) == []
+    # 100 pin between low samples dropped (measured against last KEPT sample), genuine
+    # sub-RISE_MAX ramp preserved whole.
+    assert despike([[0, 5.0], [15, 100.0], [30, 8.0]]) == [[0, 5.0], [30, 8.0]]
+    assert despike([[0, 5.0], [15, 15.0], [30, 25.0]]) == [[0, 5.0], [15, 15.0], [30, 25.0]]
     assert usage7_series([{"t": 5, "pct7": 40.0}, {"t": 6}, {"t": 7, "pct7": None}]) == [
         [5, 40.0]
     ]
