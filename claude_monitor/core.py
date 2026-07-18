@@ -113,6 +113,30 @@ def sess_should_notify(old_status, new_status):
     return new_status in ("waiting", "done") and old_status != new_status
 
 
+REAP_MAX_AGE = 3600  # 1 hour; self-heal ceiling for a session SessionEnd never popped (G-07-2)
+
+
+def session_stale(alive, entered, now, max_age):
+    """Should this session be reaped out of self.sessions? Pure.
+    `alive` is tri-state pane liveness (pane_alive()'s return shape in claude-monitor.py):
+    False means the pane is confirmably gone -> reap immediately, regardless of age. True
+    and None both fall through to the SAME unconditional age check -- alive=True must NOT
+    short-circuit to "never reap": a pane surviving /exit or /clear in the exact same tmux
+    pane is precisely the case pane-liveness alone cannot detect (SessionEnd fires for
+    neither, anthropics/claude-code#17885 / #6428), so only the age ceiling catches it.
+    `entered=None` (a session Monitor.handle() is still creating this tick) reads as `now`
+    so a same-tick race never gets reaped mid-creation -- unless alive is already False.
+    Reaping a session that is still genuinely alive is harmless by design: Monitor.handle()
+    re-setdefault()s a fresh dict on the session's next real event (its `old` status reads
+    as None again, same as a brand-new session), so it simply reappears with a reset
+    duration counter rather than losing any data -- this is what makes an
+    aggressive-looking 1-hour default safe.
+    """
+    if alive is False:
+        return True
+    return now - (entered if entered is not None else now) > max_age
+
+
 # Quota-window lengths (seconds). The dashboard JS carries the same literals; move both.
 WIN5 = 18000  # 5 hours
 WIN7 = 604800  # 7 days
