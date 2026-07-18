@@ -19,3 +19,6 @@ reportOperatorIssue = false          # `x in` / `not in` on a dict Pyright typed
 [tool.ruff.lint.per-file-ignores]
 # gi.repository imports MUST follow gi.require_version(); the lambda/one-liner are deliberate.
 "claude-monitor.py" = ["E402", "E731", "E701"]
+# demo() is the byte-identical selfcheck oracle moved here verbatim; its `ep = lambda`
+# helper (E731) is part of that fixed body and must not be rewritten.
+"test_claude_monitor.py" = ["E731"]
