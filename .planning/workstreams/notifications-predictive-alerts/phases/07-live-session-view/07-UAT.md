@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 07-live-session-view
 source: [07-VERIFICATION.md]
 started: 2026-07-18T18:05:00.000Z
@@ -54,5 +54,13 @@ skipped: 0
   reason: "User reported: Now I have two running session when I know one is done. Also the progress is still increasing when waiting dude."
   severity: major
   test: 2
-  artifacts: []
-  missing: []
+  root_cause: "self.sessions has no liveness/expiry mechanism. The only removal path is the 'end' socket event fired by Claude Code's SessionEnd hook, which is upstream-unreliable: it does not fire on /exit (anthropics/claude-code#17885) or /clear (anthropics/claude-code#6428), and cannot fire when the pane/process is killed externally. When 'end' never arrives, the session entry freezes at whatever status it last received (running/waiting/done) and write_dashboard() snapshots it verbatim forever, while the client-side ticker keeps counting duration up with no liveness signal. Broader than 07-REVIEW.md's WR-03 (which only considered stale 'done' rows) -- the frozen status can be any of the three depending on when the hook chain was interrupted."
+  artifacts:
+    - path: "claude-monitor.py"
+      issue: "Monitor.handle()/Monitor.write_dashboard(): no TTL, no last-seen expiry, no pid/pane liveness check on self.sessions entries"
+    - path: "claude_monitor/dashboard.py"
+      issue: "sessDur()/renderSessions(): unbounded now-entered ticker with no liveness signal"
+  missing:
+    - "A local staleness/liveness safeguard that doesn't depend on SessionEnd firing"
+    - "e.g. a max-age reap on self.sessions entries, and/or a tmux pane-liveness check (reusing the existing pane_onscreen-style query) to detect a session whose pane no longer exists and treat it as ended locally"
+  debug_session: .planning/debug/stale-session-status-stuck.md
