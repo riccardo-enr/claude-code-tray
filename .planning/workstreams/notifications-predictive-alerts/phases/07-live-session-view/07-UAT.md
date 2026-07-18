@@ -1,20 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 07-live-session-view
 source: [07-VERIFICATION.md]
 started: 2026-07-18T21:35:00.000Z
-updated: 2026-07-18T21:35:00.000Z
+updated: 2026-07-18T22:10:00.000Z
 ---
 
 ## Current Test
 
-number: 1
-name: Killed-pane self-heal + live CR-01 confirmation (no spurious re-notify)
-expected: |
-  Killed-pane session self-heals off both surfaces within ~15s; an actively-used
-  session is undisturbed; a same-status reap-then-resurrect produces no popup and
-  no `!`-badge re-arm; a genuine-change resurrection shows exactly one notification.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -30,7 +24,7 @@ expected: |
   popup fires and the `!` badge does not re-arm (the live CR-01 confirmation). A
   genuine-change resurrection (e.g. waiting -> done across a reap) should show
   exactly one notification.
-result: [pending]
+result: pass
 note: "07-02 D3 + 07-03 D5. Deterministic proof already passes via --selfcheck (session_stale + sess_notify_baseline blocks); this is the live GTK-tray + real-tmux end-to-end confirmation."
 
 ### 2. Sessions sort waiting -> running -> done, done rows dimmed (D-04/D-06) -- clean re-run
@@ -42,14 +36,14 @@ expected: |
   "sort/dim logic is correct" from "the stale-session bug was masking it" -- the
   only prior attempt (07-UAT.md Test 2, now superseded) returned "issue" purely
   because of the since-fixed G-07-2 stale rows.
-result: [pending]
+result: pass
 
 ## Summary
 
 total: 2
-passed: 0
+passed: 2
 issues: 0
-pending: 2
+pending: 0
 skipped: 0
 blocked: 0
 
