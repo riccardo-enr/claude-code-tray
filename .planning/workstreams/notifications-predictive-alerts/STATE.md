@@ -4,16 +4,16 @@ milestone: v1.4
 milestone_name: Session Dashboard
 current_phase: 07
 current_phase_name: live-session-view
-status: executed
-stopped_at: Phase 07 executed (3/3 tasks, gates green); live-tray UAT pending
-last_updated: "2026-07-18T12:10:00.000Z"
+status: verifying
+stopped_at: Completed 07-02-PLAN.md (gap closure G-07-2) -- human UAT pending
+last_updated: "2026-07-18T17:54:29.177Z"
 last_activity: 2026-07-18
-last_activity_desc: Executed Phase 07 — live session panel in the dashboard (entered-stamp, sessions payload, client-side textContent rows + 1s ticker)
+last_activity_desc: Phase 07 execution resumed (wave continue)
 progress:
   total_phases: 3
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 7
+  completed_plans: 7
   percent: 100
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-13)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 06 — notification-control-config
+**Current focus:** Phase 07 — live-session-view
 
 ## Current Position
 
-Phase: 07 (live-session-view) — PLANNING
-Plan: not yet planned
-Status: v1.4 Session Dashboard defined; ready for /gsd-plan-phase 07
-Last activity: 2026-07-18 — Moved core/dashboard/test into the claude_monitor/ package (entry stays at root)
+Phase: 07 (live-session-view) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
+Last activity: 2026-07-18 — Phase 07 execution resumed (wave continue)
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Last activity: 2026-07-18 — Moved core/dashboard/test into the claude_monitor/
 |------|----------|-------|-------|
 | Phase 06 P01 | 8 min | 3 tasks | 1 files |
 | Phase 06 P02 | 6min | 2 tasks | 1 files |
+| Phase 07 P02 | 3 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,7 @@ Recent decisions affecting current work:
 - [Phase 05]: Structural greps/AST checks over claude-monitor.py are defeated by prose naming the symbol they forbid (docstrings are in ast.dump) -- second occurrence this phase
 - [Phase 06]: notif_allowed(kind, config) short-circuits on mute_all before the per-event lookup (D-04) -- mute wins, never OR-merges with the per-event flag
 - [Phase 06]: on_notif_toggle/on_threshold_toggle follow set_active-before-connect ordering on every new widget to avoid a spurious save+rebuild on menu construction
+- [Phase ?]: [Phase 07-02] session_stale reap: alive=True never short-circuits to never-reap -- only the unconditional age ceiling catches the same-pane /exit or /clear case SessionEnd never fires for
 
 ### Pending Todos
 
@@ -128,9 +130,9 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-18T11:46:53.390Z
-Stopped at: Phase 07 context gathered
-Resume file: .planning/workstreams/notifications-predictive-alerts/phases/07-live-session-view/07-CONTEXT.md
+Last session: 2026-07-18T17:54:29.169Z
+Stopped at: Completed 07-02-PLAN.md (gap closure G-07-2) -- human UAT pending
+Resume file: None
 
 ## Operator Next Steps
 
