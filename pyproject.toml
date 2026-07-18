@@ -1,0 +1,21 @@
+[project]
+name = "claude-code-tray"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pyright]
+# claude-monitor.py is a single-file PyGObject (gi.repository) script. The gi
+# submodules (Gtk / GLib / Gio / AyatanaAppIndicator3) are generated at runtime
+# and ship no type stubs, so Pyright cannot resolve their symbols or narrow the
+# dynamically-typed values they hand back. The checks below fire only because of
+# that dynamism -- turn them off here rather than salt the file with type: ignore.
+reportAttributeAccessIssue = false   # "unknown import symbol" on gi.repository Gtk/GLib/Gio/AppIndicator
+reportOptionalSubscript = false      # runtime-guarded dict access Pyright cannot prove non-None
+reportOptionalOperand = false        # e.g. best_rate * 60 (see note in claude-monitor.py:470)
+reportOperatorIssue = false          # `x in` / `not in` on a dict Pyright typed as Optional
+
+[tool.ruff.lint.per-file-ignores]
+# gi.repository imports MUST follow gi.require_version(); the lambda/one-liner are deliberate.
+"claude-monitor.py" = ["E402", "E731", "E701"]
