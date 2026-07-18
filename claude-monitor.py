@@ -27,8 +27,8 @@ gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import AyatanaAppIndicator3 as AppIndicator
 from gi.repository import GLib, Gio, Gtk
 
-import core
-import dashboard
+from claude_monitor import core
+from claude_monitor import dashboard
 
 SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.sock")
 # Theme icon name; override with CLAUDE_TRAY_ICON. "claude-desktop" ships with the app.
@@ -573,7 +573,7 @@ if __name__ == "__main__":
     import sys
 
     if "--selfcheck" in sys.argv:
-        import test_claude_monitor
+        from claude_monitor import test_claude_monitor
 
         test_claude_monitor.demo()
     else:

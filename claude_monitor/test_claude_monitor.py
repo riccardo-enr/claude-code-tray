@@ -9,7 +9,7 @@ import datetime
 import json
 import time
 
-from core import (
+from .core import (
     DEFAULT_CONFIG,
     GAP_MAX,
     SPARK_GAP,
@@ -45,7 +45,7 @@ from core import (
     usage7_series,
     with_gaps,
 )
-from dashboard import render_dashboard
+from .dashboard import render_dashboard
 
 def demo():
     """Assert-based self-check for the pure usage logic (run via --selfcheck)."""

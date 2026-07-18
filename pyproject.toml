@@ -6,6 +6,11 @@ requires-python = ">=3.11"
 dependencies = []
 
 [tool.pyright]
+# The repo root is an import root: the entry script claude-monitor.py imports the
+# first-party `claude_monitor` package that sits beside it. At runtime Python resolves
+# this via sys.path[0] (the symlink resolves to the repo dir); Pyright needs it spelled
+# out or it reports `claude_monitor` as an unresolved import.
+extraPaths = ["."]
 # claude-monitor.py is a single-file PyGObject (gi.repository) script. The gi
 # submodules (Gtk / GLib / Gio / AyatanaAppIndicator3) are generated at runtime
 # and ship no type stubs, so Pyright cannot resolve their symbols or narrow the
@@ -21,4 +26,4 @@ reportOperatorIssue = false          # `x in` / `not in` on a dict Pyright typed
 "claude-monitor.py" = ["E402", "E731", "E701"]
 # demo() is the byte-identical selfcheck oracle moved here verbatim; its `ep = lambda`
 # helper (E731) is part of that fixed body and must not be rewritten.
-"test_claude_monitor.py" = ["E731"]
+"claude_monitor/test_claude_monitor.py" = ["E731"]

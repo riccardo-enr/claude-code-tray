@@ -8,7 +8,7 @@ claude-monitor.py atomic-writes to DASH_PATH. Exercised by --selfcheck.
 import base64
 import os
 
-from core import (
+from .core import (
     _embed_json,
     despike,
     heatmap_buckets,
