@@ -26,7 +26,7 @@ per-phase artifacts remain under `.planning/phases/`.
 - ✅ **v1.1 Usage History & Trends** — Phases 2-3 (shipped 2026-07-12)
 - ✅ **v1.2 Usage Web Dashboard** — Phase 4 (shipped 2026-07-13) — [archive](./milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (shipped 2026-07-17)
-- 🚧 **v1.4 Session Dashboard** — Phase 7 (planning)
+- 🚧 **v1.4 Session Dashboard** — Phase 7 (executed, live UAT pending)
 
 ## Phases
 
@@ -75,13 +75,13 @@ them or when a quota cap is projected to run out. Merges SEED-002 + SEED-004.
 - [x] **Phase 5: Notification Path & Event Producers** - One shared emit path, with session waiting/done events and predictive 5h/7d quota alerts riding it
 - [x] **Phase 6: Notification Control & Config** - Per-event tray toggles, global mute, and a configurable badge threshold, persisted and corruption-tolerant
 
-### 🚧 v1.4 Session Dashboard (Phase 7) — PLANNING
+### 🚧 v1.4 Session Dashboard (Phase 7) — EXECUTED (live UAT pending)
 
 **Milestone Goal:** See all live Claude Code sessions and their status at a glance in
 the existing web dashboard, not just in the tray menu. Live-only, extends the v1.2
 self-contained dashboard; no new IPC, socket, or persistence.
 
-- [ ] **Phase 7: Live Session View in the Dashboard** - Embed the tray's current in-memory session snapshot into the generated dashboard HTML, rendered as a live-refreshing session panel
+- [x] **Phase 7: Live Session View in the Dashboard** - Embed the tray's current in-memory session snapshot into the generated dashboard HTML, rendered as a live-refreshing session panel
 
 ## Phase Details
 
@@ -221,7 +221,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Session panel: `entered`-on-change stamp in handle(), sessions snapshot threaded into render_dashboard, `"sessions"` payload key, inline table + dot CSS + 1s client-side live-ticker (textContent rows, dir kept inert), and locking --selfcheck asserts
+- [x] 07-01-PLAN.md — Session panel: `entered`-on-change stamp in handle(), sessions snapshot threaded into render_dashboard, `"sessions"` payload key, inline table + dot CSS + 1s client-side live-ticker (textContent rows, dir kept inert), and locking --selfcheck asserts
 
 ## Progress
 
@@ -235,4 +235,4 @@ Plans:
 | 4. Usage Web Dashboard | v1.2 | 1/1 | Complete | 2026-07-13 |
 | 5. Notification Path & Event Producers | v1.3 | 3/3 | Complete | 2026-07-14 |
 | 6. Notification Control & Config | v1.3 | 2/2 | Complete | 2026-07-17 |
-| 7. Live Session View in the Dashboard | v1.4 | 0/1 | Planning | - |
+| 7. Live Session View in the Dashboard | v1.4 | 1/1 | Executed (UAT pending) | 2026-07-18 |
