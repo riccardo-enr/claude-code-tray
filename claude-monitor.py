@@ -65,6 +65,10 @@ class Monitor:
 
         self.notif_slots = {}  # ("sess", sid) / ("cap", "5h") -> daemon notification id
         self.notif_acts = {}  # daemon notification id -> click-action tuple (focus | dash)
+        # ponytail: sid -> last status of a reaped session, popped on its next event.
+        # Grows one orphan per reaped-and-never-resurrected session over process life --
+        # same accepted leak profile as notif_slots/notif_acts (IN-02), no expiry needed.
+        self._reaped_status = {}
         self.alert_armed = {}  # cap -> reset epoch it last alerted in; lost on restart
         self.notif = None
         try:
@@ -383,7 +387,11 @@ class Monitor:
         pane = msg.get("pane") or ""
         tmux = msg.get("tmux") or ""
         s = self.sessions.setdefault(sid, {})
-        old = s.get("status")  # MUST be read before the update below overwrites it
+        # MUST be read before the update below overwrites it. A resurrected session's live
+        # status reads None (its dict was popped in _pop_stale), so seed the baseline from the
+        # one-shot reaped-status memory: a same-status resurrection then reads as no transition
+        # instead of a brand-new session re-firing the notification (CR-01).
+        old = core.sess_notify_baseline(s.get("status"), self._reaped_status.pop(sid, None))
         # _onscreen pre-acknowledges the "!" when serve() found you already looking.
         s.update(
             dir=d, status=event, pane=pane, tmux=tmux, cwd=cwd,
@@ -427,6 +435,9 @@ class Monitor:
     def _pop_stale(self, sids):
         """Gtk-thread mutator (only ever invoked via reap_stale's idle_add above)."""
         for sid in sids:
+            s = self.sessions.get(sid)  # may be gone via a concurrent "end" event
+            if s is not None:
+                self._reaped_status[sid] = s.get("status")  # remember before the pop discards it
             self.sessions.pop(sid, None)  # tolerates a concurrent "end" event already gone
         self.rebuild_menu()
         return False
