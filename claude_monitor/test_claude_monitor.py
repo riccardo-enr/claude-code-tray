@@ -38,6 +38,7 @@ from .core import (
     parse_usage,
     project,
     reset_marks,
+    sess_notify_baseline,
     sess_should_notify,
     session_stale,
     trend_burn,
@@ -484,6 +485,19 @@ def demo():
     # exact boundary (now - entered == max_age) does not reap (strict >).
     assert session_stale(True, NOW - MAX_AGE, NOW, MAX_AGE) is False
     assert session_stale(None, NOW - MAX_AGE, NOW, MAX_AGE) is False
+
+    # --- sess_notify_baseline resurrection (CR-01 no re-notify) ---
+    # normal existing session: live status present, no reaped memory -> unchanged.
+    assert sess_notify_baseline("running", None) == "running"
+    # brand-new session: nothing live, no reaped memory -> None, first waiting still notifies.
+    assert sess_notify_baseline(None, None) is None
+    assert sess_should_notify(sess_notify_baseline(None, None), "waiting") is True
+    # CR-01 same-status resurrection: reaped "waiting" memory -> baseline "waiting", no re-notify.
+    assert sess_should_notify(sess_notify_baseline(None, "waiting"), "waiting") is False
+    # genuine-change resurrection: reaped "waiting" -> "done" is a real transition, notifies once.
+    assert sess_should_notify(sess_notify_baseline(None, "waiting"), "done") is True
+    # live-status-wins: a live dict's status is never overridden by stale reaped memory.
+    assert sess_notify_baseline("done", "waiting") == "done"
 
     # --- project() ---
     # Synthetic epochs, never time.time(): deterministic, and they cannot go stale.
