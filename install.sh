@@ -9,8 +9,8 @@ HOOKS="$HOME/.claude/hooks"
 AUTOSTART="$HOME/.config/autostart"
 
 mkdir -p "$HOOKS" "$AUTOSTART"
-install -m 0755 "$SRC/claude-monitor.py" "$HOOKS/claude-monitor.py"
-install -m 0755 "$SRC/claude-send.py"    "$HOOKS/claude-send.py"
+ln -sf "$SRC/claude-monitor.py" "$HOOKS/claude-monitor.py"
+ln -sf "$SRC/claude-send.py"    "$HOOKS/claude-send.py"
 
 cat > "$AUTOSTART/claude-monitor.desktop" <<EOF
 [Desktop Entry]
