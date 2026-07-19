@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Session Dashboard
 current_phase: 07
-current_phase_name: live-session-view
-status: executing
+status: completed
 stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-07-18T18:58:42.740Z"
+last_updated: "2026-07-18T20:07:24.024Z"
 last_activity: 2026-07-18
-last_activity_desc: Phase 07 execution started
+last_activity_desc: Phase 07 complete
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 8
   completed_plans: 8
   percent: 100
+current_phase_name: live-session-view
 ---
 
 # Project State
@@ -28,16 +28,16 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 
 ## Current Position
 
-Phase: 07 (live-session-view) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
-Last activity: 2026-07-18 — Phase 07 execution started
+Phase: 07
+Plan: Not started
+Status: All phases complete
+Last activity: 2026-07-18 — Phase 07 complete
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 7
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -49,6 +49,7 @@ Last activity: 2026-07-18 — Phase 07 execution started
 | 02 | 1 | 2 min | 2 min |
 | 03 | 1 | 1 session | - |
 | 04 | 1 | 12 min | 12 min |
+| 07 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -113,6 +114,7 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | 260718-hgm | Despike dashboard usage-% trend chart — reuse heatmap RISE_MAX to drop upstream 100% pins before with_gaps (SEED-006) | 2026-07-18 | 4ebec5e | Verified | [260718-hgm-despike-dashboard-usage-trend-chart-seed](./quick/260718-hgm-despike-dashboard-usage-trend-chart-seed/) |
 | 260718-hz5 | Restructure claude-monitor.py (2081 lines) into 4 flat modules: core.py + dashboard.py + test_claude_monitor.py + slim 580-line entry. Pure move, --selfcheck green, 65/65 defs preserved, gi isolated | 2026-07-18 | 02aef11 | Verified | [260718-hz5-restructure-claude-monitor-py-into-4-mod](./quick/260718-hz5-restructure-claude-monitor-py-into-4-mod/) |
 | 260718-pkg | (fast) Move core/dashboard/test into `claude_monitor/` package; entry script stays at root; relative internal imports; pyright extraPaths=["."] so first-party import resolves. --selfcheck green | 2026-07-18 | d2ac504 | Verified | - |
+| 260719-pzd | Symlink both hook scripts in install.sh (ln -sf, not install -m 0755); fixed stale ~/.claude/hooks/claude-send.py plain-file copy on this machine, root-causing the class of drift | 2026-07-19 | d9a13d3 | Verified | [260719-pzd-symlink-claude-hooks-claude-send-py-to-t](./quick/260719-pzd-symlink-claude-hooks-claude-send-py-to-t/) |
 
 ## Deferred Items
 
