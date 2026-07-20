@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: TUI Dashboard
 current_phase: 8
-status: planning
-stopped_at: Phase 8 context gathered
-last_updated: "2026-07-20T10:21:21.204Z"
+status: planned
+stopped_at: Phase 8 planned (2 plans, 2 waves)
+last_updated: "2026-07-20T12:21:21.204Z"
 last_activity: 2026-07-20
-last_activity_desc: Roadmap created for v1.5 (Phases 8-9), 100% requirement coverage (TUI-01..05, SOCK-01..03)
+last_activity_desc: Phase 8 planning complete -- 2 plans (sessions_lock+build_session_snapshot, thread-per-connection query verb), decision + requirement coverage gates passed
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 
 ## Current Position
 
-Phase: 8 — Daemon Socket Query Verb (not started)
-Plan: —
-Status: Roadmap created (Phases 8-9); ready for /gsd-plan-phase 8
-Last activity: 2026-07-20 — Roadmap created for v1.5 (Phases 8-9), 100% requirement coverage (TUI-01..05, SOCK-01..03)
+Phase: 8 — Daemon Socket Query Verb (planned, ready to execute)
+Plan: 08-01 (wave 1), 08-02 (wave 2, depends on 08-01)
+Status: Ready to execute — 2 plans, requirement + decision coverage gates passed
+Last activity: 2026-07-20 — Phase 8 planning complete (SOCK-01..03), ready for /gsd-execute-phase 8
 
 ## Performance Metrics
 

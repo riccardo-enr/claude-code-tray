@@ -119,7 +119,12 @@ round-trip. Closes SEED-007.
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 08-01-PLAN.md — sessions_lock + core.build_session_snapshot (thread-safety foundation, SOCK-03 + SOCK-01 shape groundwork)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 08-02-PLAN.md — thread-per-connection serve() + query dispatch + socket hardening (SOCK-01, SOCK-02, SOCK-03 live)
 
 ### Phase 9: Terminal Dashboard (claude-tui.py)
