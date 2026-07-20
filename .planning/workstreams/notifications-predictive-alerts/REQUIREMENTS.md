@@ -104,13 +104,13 @@ keeps it current. No new IPC, socket, or persistence.
 | CFG-03 | Phase 6 | Delivered |
 | CFG-04 | Phase 6 | Delivered |
 | CFG-05 | Phase 6 | Delivered |
-| SESSVIEW-01 | Phase 7 | Planned |
-| SESSVIEW-02 | Phase 7 | Planned |
-| SESSVIEW-03 | Phase 7 | Planned |
-| SESSVIEW-04 | Phase 7 | Planned |
-| SESSVIEW-05 | Phase 7 | Planned |
+| SESSVIEW-01 | Phase 7 | Delivered |
+| SESSVIEW-02 | Phase 7 | Delivered |
+| SESSVIEW-03 | Phase 7 | Delivered |
+| SESSVIEW-04 | Phase 7 | Delivered |
+| SESSVIEW-05 | Phase 7 | Delivered |
 
-**Coverage:** 14/14 v1.3 requirements delivered; 5/5 v1.4 requirements mapped to Phase 7. No orphans, no duplicates.
+**Coverage:** 14/14 v1.3 requirements delivered; 5/5 v1.4 requirements delivered (Phase 7). No orphans, no duplicates.
 
 ### Note on the QUOTA-03 reuse (ALERT-02/03)
 
