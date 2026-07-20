@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Session Dashboard
-status: Awaiting next milestone
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-07-20T09:21:06.737Z"
+milestone: v1.5
+milestone_name: TUI Dashboard
+status: planning
+last_updated: "2026-07-20T09:38:14.296Z"
 last_activity: 2026-07-20
-last_activity_desc: Milestone v1.4 completed and archived
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
-current_phase: 07
-current_phase_name: live-session-view
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 
 ## Current Position
 
-Phase: Milestone v1.4 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-20 — Milestone v1.4 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-20 — Milestone v1.5 started
 
 ## Performance Metrics
 

@@ -23,6 +23,31 @@ a tmux pane dies with no hook event required.
 At a glance from the top bar, know **how much Claude Code quota is left and when
 it resets** — without launching a separate terminal monitor.
 
+## Current Milestone: v1.5 TUI Dashboard
+
+**Goal:** Surface usage/quota/trends and live sessions in a terminal UI, for people
+who live in the terminal and want the tray's data without a browser round-trip.
+
+**Target features:**
+- A `claude-tui.py` entry point (textual) rendering usage now, reset countdown,
+  trends/sparkline, and a live sessions panel — a third consumer of `claude_monitor.core`
+  alongside `claude-monitor.py` and `dashboard.py`
+- Live sessions via a new read-only query verb on the daemon's existing unix socket
+  (`serve()` is receive-only today; this adds a request/response snapshot of
+  `self.sessions` + last usage)
+- `textual` added as a runtime dependency — the first exception to the project's
+  stdlib+PyGObject-only rule, scoped to this one entry point
+
+**Key context:**
+- Closes SEED-007. The `claude_monitor/` package restructure (v1.3/v1.4) already
+  isolated all display computation into a GTK-free `core.py`, making this mostly a
+  new renderer over existing pure functions.
+- Load-bearing decisions settled at milestone scoping (not deferred to discuss-phase):
+  shared-socket data source (not standalone JSONL-only) to get live sessions in v1,
+  and `textual` over `curses` for rendering.
+- Thread-safety around `self.sessions` (mutated on the Gtk main thread, now also read
+  by a socket responder) is the new query verb's problem to solve correctly.
+
 ## Context
 
 - **Platform:** Ubuntu GNOME on X11; Python 3 + PyGObject (Gtk3, Ayatana
@@ -102,7 +127,9 @@ No workstream is currently open. `notifications-predictive-alerts` shipped v1.4
 
 ### Active
 
-None yet — planning next milestone via `/gsd-new-milestone`.
+**v1.5 (TUI Dashboard)** — REQ-IDs in `.planning/REQUIREMENTS.md`: terminal
+rendering of usage/quota/trends and live sessions (TUI-*), the daemon's new
+socket query verb (SOCK-*).
 
 Still deferred: raw data export (HIST-F1 / DASH-F2), configurable
 ranges (TREND-F1 / DASH-F3), quiet hours (NOTIF-F1), per-event sound/urgency
@@ -147,6 +174,8 @@ as QUOTA-01 in v1.2.)*
 | `urgency` hint drives notification lifetime (D-02), not `expire_timeout` | gnome-shell destructures `expire_timeout` as `timeout_` and never reads it; banner life is a hardcoded 4000ms. Only `urgency=2/CRITICAL` skips the auto-dismiss timer | ✓ Good — Phase 5 |
 | `Monitor._reaped_status` + pure `core.sess_notify_baseline` seed the notification de-dupe baseline across a reap/resurrect | CR-01: a genuinely-alive session reaped past `REAP_MAX_AGE` and resuming the same status re-fired a spurious "Waiting for input" popup, regressing NOTIF-02. Fixed with a one-shot Gtk-thread-only memory, not by excluding `alive=True` from the age reap (would have broken the same-pane `/exit` self-heal) | ✓ Good — Phase 7-03, closed CR-01/WR-06 |
 | v1.3 was never run through `/gsd-complete-milestone` on its own; closed out bundled with v1.4 | Phase 5 had no VERIFICATION.md (missing, not failed) despite shipping live 2026-07-17 with a passing REVIEW.md and UAT.md. Re-verifying weeks-old shipped code was judged lower value than accepting a recorded closeout override | Acknowledged override — see `workstreams/.../STATE.md` Deferred Items |
+| v1.5 takes on `textual` as a runtime dependency, breaking the stdlib+PyGObject-only rule that held v1.0-v1.4 | User's explicit call at milestone scoping — `curses` was the lazy/consistent option but the user chose textual's nicer widgets/layout for the one entry point that needs them | Decided at v1.5 scoping |
+| v1.5's TUI gets live sessions via a new query verb on the daemon's socket, not a standalone JSONL-only reader | Standalone was the lazier MVP (no daemon changes) but cannot see `self.sessions` — it lives only in the running `Monitor` process's memory, never on disk. Shared-socket was chosen to keep live sessions in v1 scope | Decided at v1.5 scoping |
 
 ## Evolution
 
@@ -166,6 +195,6 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-20 — after v1.4 (Session Dashboard) milestone completion,
-bundled with v1.3's (Notifications & Predictive Alerts) formal close-out. No
-workstream is currently open; next milestone starts via `/gsd-new-milestone`.*
+*Last updated: 2026-07-20 — milestone v1.5 (TUI Dashboard) started, closing
+SEED-007. Scoping decided: shared-socket data source (live sessions in v1) and
+`textual` for rendering (first exception to the stdlib-only rule).*
