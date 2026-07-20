@@ -131,6 +131,8 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | Notifications | Per-event sound / urgency — NOTIF-F2 | Deferred | 2026-07-13 |
 | Alerting | Hard-threshold push (>90%) — ALERT-F1 | Deferred (the ALERT-01 icon badge stays the reactive signal) | 2026-07-13 |
 | UAT | Phase 01 flagged by pre-close audit; 01-UAT.md is `[passed]` with 0 pending scenarios — audit-format false positive, no real gap | Acknowledged | 2026-07-13 |
+| UAT | Phase 05 flagged by pre-close audit at v1.4 close; 05-UAT.md status reads `unknown` but 0 pending scenarios — same audit-format false positive as Phase 01, no real gap, unrelated to v1.4/Phase 7 | Acknowledged | 2026-07-20 |
+| Verification | Phase 05 (Notification Path & Event Producers, v1.3) has no VERIFICATION.md — v1.3 was never run through /gsd-complete-milestone, so gsd-tools bundles Phases 5-7 into one open milestone bucket. Feature has been live since 2026-07-17 with a passing 05-REVIEW.md and 05-UAT.md; not re-verified retroactively at v1.4 close | Acknowledged (verification override) | 2026-07-20 |
 
 ## Session Continuity
 
