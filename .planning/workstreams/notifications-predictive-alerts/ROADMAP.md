@@ -116,7 +116,11 @@ round-trip. Closes SEED-007.
   3. A malformed or slow query connection cannot block or corrupt a concurrent session-event write — the hook-event path keeps flowing.
   4. The session snapshot returned never reflects a torn/partial in-flight mutation of `self.sessions` — a read racing a Gtk-thread update returns either the before- or after-state, never a mixed one.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — sessions_lock + core.build_session_snapshot (thread-safety foundation, SOCK-03 + SOCK-01 shape groundwork)
+- [ ] 08-02-PLAN.md — thread-per-connection serve() + query dispatch + socket hardening (SOCK-01, SOCK-02, SOCK-03 live)
 
 ### Phase 9: Terminal Dashboard (claude-tui.py)
 
