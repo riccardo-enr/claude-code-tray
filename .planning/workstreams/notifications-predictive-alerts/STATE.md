@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Session Dashboard
-current_phase: 07
-status: completed
+status: Awaiting next milestone
 stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-07-18T20:07:24.024Z"
-last_activity: 2026-07-18
-last_activity_desc: Phase 07 complete
+last_updated: "2026-07-20T09:21:06.737Z"
+last_activity: 2026-07-20
+last_activity_desc: Milestone v1.4 completed and archived
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 8
   completed_plans: 8
   percent: 100
+current_phase: 07
 current_phase_name: live-session-view
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 
 ## Current Position
 
-Phase: 07
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-07-18 — Phase 07 complete
+Phase: Milestone v1.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-20 — Milestone v1.4 completed and archived
 
 ## Performance Metrics
 
@@ -142,5 +142,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Phase 5 is complete (3/3 plans, UAT PASS 5/5, `05-03-SUMMARY.md` backfilled 2026-07-16) — next up is `/gsd-plan-phase 6`
-- Phase 6 (Notification Control & Config) context is already gathered and marked ready for planning — see `06-CONTEXT.md`
+- Start the next milestone with /gsd-new-milestone
