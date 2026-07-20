@@ -41,11 +41,11 @@ rule, scoped to this entry point.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUI-01 | TBD | Planned |
-| TUI-02 | TBD | Planned |
-| TUI-03 | TBD | Planned |
-| TUI-04 | TBD | Planned |
-| TUI-05 | TBD | Planned |
-| SOCK-01 | TBD | Planned |
-| SOCK-02 | TBD | Planned |
-| SOCK-03 | TBD | Planned |
+| TUI-01 | Phase 9 | Planned |
+| TUI-02 | Phase 9 | Planned |
+| TUI-03 | Phase 9 | Planned |
+| TUI-04 | Phase 9 | Planned |
+| TUI-05 | Phase 9 | Planned |
+| SOCK-01 | Phase 8 | Planned |
+| SOCK-02 | Phase 8 | Planned |
+| SOCK-03 | Phase 8 | Planned |

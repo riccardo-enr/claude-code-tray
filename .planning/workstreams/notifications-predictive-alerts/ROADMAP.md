@@ -9,8 +9,14 @@ quota monitor with a push voice and a live session view: point-in-time usage,
 then persisted history and in-menu trends, then a browsable HTML dashboard,
 then desktop notifications, then a live sessions panel in that dashboard.
 
+v1.5 gives that same data a terminal home: a new `claude-tui.py` entry point
+renders usage/quota/trends and live sessions as a `textual` TUI, fed by a new
+read-only query verb on the daemon's existing unix socket, for people who live
+in the terminal and don't want a browser round-trip.
+
 Constraints that held across all four shipped milestones: stdlib + PyGObject
-only, X11-only, one background poll, no new dependencies.
+only, X11-only, one background poll, no new dependencies. v1.5 takes the first
+exception — `textual` as a runtime dependency, scoped to the one new entry point.
 
 Full phase detail for shipped milestones lives in `.planning/workstreams/notifications-predictive-alerts/milestones/`;
 archived phase artifacts live under `.planning/workstreams/notifications-predictive-alerts/milestones/v1.4-phases/`.
@@ -22,6 +28,7 @@ archived phase artifacts live under `.planning/workstreams/notifications-predict
 - ✅ **v1.2 Usage Web Dashboard** — Phase 4 (shipped 2026-07-13) — [archive](./milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (shipped 2026-07-17) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.4 Session Dashboard** — Phase 7 (shipped 2026-07-20) — [archive](./milestones/v1.4-ROADMAP.md)
+- 📋 **v1.5 TUI Dashboard** — Phases 8-9 (planned)
 
 ## Phases
 
@@ -86,14 +93,57 @@ closure CR-01 restored the NOTIF-02 de-dupe guarantee across a reap/resurrect.
 
 </details>
 
+### 📋 v1.5 TUI Dashboard (Phases 8-9) — PLANNED
+
+**Milestone Goal:** Surface usage/quota/trends and live sessions in a terminal UI,
+so people who live in the terminal get the tray's data without a browser
+round-trip. Closes SEED-007.
+
+- [ ] **Phase 8: Daemon Socket Query Verb** - Read-only JSON snapshot of live sessions + latest usage/history over the existing unix socket, without disrupting the fire-and-forget hook-event path
+- [ ] **Phase 9: Terminal Dashboard (claude-tui.py)** - A `textual`-rendered TUI showing usage/quota/trends and live sessions, auto-refreshing, degrading cleanly when the daemon is unreachable
+
+## Phase Details
+
+### Phase 8: Daemon Socket Query Verb
+
+**Goal**: The daemon's existing unix socket can answer a read-only query for the live session table plus the latest usage/history state, without disrupting or blocking the existing fire-and-forget hook-event path.
+**Depends on**: Phase 7 (`self.sessions` and the read-only snapshot precedent already established by `write_dashboard`)
+**Requirements**: SOCK-01, SOCK-02, SOCK-03
+**Success Criteria** (what must be TRUE):
+
+  1. Connecting to the daemon's socket with a query message returns a JSON snapshot containing every tracked session (dir/status/pane/tmux) plus the last polled usage/history state.
+  2. Sending hook events (running/waiting/done/end) continues to work unchanged and un-slowed while query connections are made, including a stalled or malformed one.
+  3. A malformed or slow query connection cannot block or corrupt a concurrent session-event write — the hook-event path keeps flowing.
+  4. The session snapshot returned never reflects a torn/partial in-flight mutation of `self.sessions` — a read racing a Gtk-thread update returns either the before- or after-state, never a mixed one.
+
+**Plans**: TBD
+
+### Phase 9: Terminal Dashboard (claude-tui.py)
+
+**Goal**: A person living in a terminal can see the tray's full usage/quota/trends/live-sessions picture without opening a browser — a new `claude-tui.py` entry point querying Phase 8's socket verb, the third consumer of `claude_monitor.core` alongside `claude-monitor.py` and `dashboard.py`.
+**Depends on**: Phase 8 (the socket query verb is this phase's only data source)
+**Requirements**: TUI-01, TUI-02, TUI-03, TUI-04, TUI-05
+**Success Criteria** (what must be TRUE):
+
+  1. Running `claude-tui.py` shows current usage — percent, tokens, reset countdown, burn rate — for both the 5-hour and 7-day caps.
+  2. The same screen shows trends (sparkline, daily/weekly burn, peak-usage hour) computed by `claude_monitor.core`'s existing trend functions, not reimplemented.
+  3. A live sessions panel lists every tracked session (project dir, status, time-in-state), sorted waiting -> running -> done, matching the v1.4 dashboard panel's semantics.
+  4. The screen refreshes automatically on an interval with no manual re-run or keypress needed to see new data.
+  5. When the daemon isn't running or the socket is unreachable, the TUI shows a clear message instead of crashing or printing a traceback.
+
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
-| Phase                                    | Milestone | Plans Complete | Status   | Completed  |
-| ----------------------------------------- | --------- | --------------- | -------- | ---------- |
-| 1. Usage & Quota Monitoring in the Tray  | v1.0      | 1/1             | Complete | 2026-07-11 |
-| 2. Usage History Persistence             | v1.1      | 1/1             | Complete | 2026-07-12 |
-| 3. Usage Trends in the Tray              | v1.1      | 1/1             | Complete | 2026-07-12 |
-| 4. Usage Web Dashboard                   | v1.2      | 1/1             | Complete | 2026-07-13 |
-| 5. Notification Path & Event Producers   | v1.3      | 3/3             | Complete | 2026-07-14 |
-| 6. Notification Control & Config         | v1.3      | 2/2             | Complete | 2026-07-17 |
-| 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete | 2026-07-18 |
+| Phase                                    | Milestone | Plans Complete | Status      | Completed  |
+| ----------------------------------------- | --------- | --------------- | ----------- | ---------- |
+| 1. Usage & Quota Monitoring in the Tray  | v1.0      | 1/1             | Complete    | 2026-07-11 |
+| 2. Usage History Persistence             | v1.1      | 1/1             | Complete    | 2026-07-12 |
+| 3. Usage Trends in the Tray              | v1.1      | 1/1             | Complete    | 2026-07-12 |
+| 4. Usage Web Dashboard                   | v1.2      | 1/1             | Complete    | 2026-07-13 |
+| 5. Notification Path & Event Producers   | v1.3      | 3/3             | Complete    | 2026-07-14 |
+| 6. Notification Control & Config         | v1.3      | 2/2             | Complete    | 2026-07-17 |
+| 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete    | 2026-07-18 |
+| 8. Daemon Socket Query Verb              | v1.5      | 0/TBD           | Not started | -          |
+| 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 0/TBD           | Not started | -          |

@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-07-20T09:38:14.296Z"
 last_activity: 2026-07-20
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-13)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 07 — live-session-view
+**Current focus:** Phase 08 — daemon-socket-query-verb
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 8 — Daemon Socket Query Verb (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-20 — Milestone v1.5 started
+Status: Roadmap created (Phases 8-9); ready for /gsd-plan-phase 8
+Last activity: 2026-07-20 — Roadmap created for v1.5 (Phases 8-9), 100% requirement coverage (TUI-01..05, SOCK-01..03)
 
 ## Performance Metrics
 
@@ -80,6 +80,7 @@ Recent decisions affecting current work:
 - [Phase 06]: on_notif_toggle/on_threshold_toggle follow set_active-before-connect ordering on every new widget to avoid a spurious save+rebuild on menu construction
 - [Phase ?]: [Phase 07-02] session_stale reap: alive=True never short-circuits to never-reap -- only the unconditional age ceiling catches the same-pane /exit or /clear case SessionEnd never fires for
 - [Phase ?]: CR-01 fix: reaped-status memory + pure sess_notify_baseline baseline resolver; rejected the exclude-alive=True-from-age-reap trap to preserve 07-02 same-pane self-heal
+- **v1.5 is 2 phases** (8: daemon socket query verb; 9: the TUI renderer). Coarse granularity and the 1-2-phases-per-milestone precedent both favor one phase, but Phase 9 has no data source until Phase 8's query verb exists and is independently verifiable (connect + query the socket, no TUI needed) — a real unblocks-the-next-phase boundary, not an arbitrary horizontal-layer split.
 
 ### Pending Todos
 
@@ -100,6 +101,9 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 - **`serve()` is unguarded** (`claude-monitor.py:1699`) — a raise in its loop kills the socket thread and every session event, permanently. `poll_loop` gained a blanket `except` + traceback in `260713-fry`; `serve()` did not. The guard goes **inside the `while`, around the per-connection body** — not around the `accept()` loop, which would swallow the shutdown path. Success Criterion 5 is exactly this.
 - **`project()` (QUOTA-03) is JavaScript-only** at `claude-monitor.py:931`, inside the dashboard HTML. Phase 5 ports the ~15-line formula to Python for the poll thread and asserts it in `--selfcheck`. The JS copy **stays** — it recomputes against a live browser clock. The duplication is deliberate.
 - Standing constraints: no new polling, no second data source, no new runtime dependencies, X11 only, ASCII-only in code.
+- **[v1.5 planning]** `serve()`'s existing per-connection `except Exception` guard (see above) is the precedent Phase 8 inherits for SOCK-02: a malformed/stalled query connection must be contained the same way a malformed hook event already is. Phase 8 should not need a second guarding mechanism.
+- **[v1.5 planning]** `self.sessions` is single-mutator today (Gtk thread only, per `reap_stale`'s docstring at `claude-monitor.py:435-440`). `write_dashboard` already reads it off-thread as a read-only snapshot into plain dicts, accepting a possible mid-iteration exception via its broad `except Exception` (D-08 posture). SOCK-03 asks for something stronger ("no torn/partial reads") — Phase 8 needs to decide at plan time whether `write_dashboard`'s accepted-risk posture satisfies that bar or whether the query responder needs `GLib.idle_add` marshaling back to the Gtk thread instead.
+- **[v1.5 planning]** `textual` is a new runtime dependency (first exception to stdlib+PyGObject-only) — install/packaging (`pyproject.toml` / `install.sh`) is Phase 9's problem, not Phase 8's.
 
 ### Quick Tasks Completed
 
@@ -129,6 +133,8 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | UAT | Phase 01 flagged by pre-close audit; 01-UAT.md is `[passed]` with 0 pending scenarios — audit-format false positive, no real gap | Acknowledged | 2026-07-13 |
 | UAT | Phase 05 flagged by pre-close audit at v1.4 close; 05-UAT.md status reads `unknown` but 0 pending scenarios — same audit-format false positive as Phase 01, no real gap, unrelated to v1.4/Phase 7 | Acknowledged | 2026-07-20 |
 | Verification | Phase 05 (Notification Path & Event Producers, v1.3) has no VERIFICATION.md — v1.3 was never run through /gsd-complete-milestone, so gsd-tools bundles Phases 5-7 into one open milestone bucket. Feature has been live since 2026-07-17 with a passing 05-REVIEW.md and 05-UAT.md; not re-verified retroactively at v1.4 close | Acknowledged (verification override) | 2026-07-20 |
+| v1.5 | Click-to-focus a pane from the TUI (reusing `pane`/`tmux` fields) — deferred; the tray remains the click-to-focus surface for v1.5 | Deferred | 2026-07-20 |
+| v1.5 | Standalone (no-daemon) mode reading `usage-history.jsonl` directly — deferred; shared-socket was chosen over it to get live sessions in v1.5 scope, but a fallback mode could still be added later | Deferred | 2026-07-20 |
 
 ## Session Continuity
 
@@ -138,4 +144,5 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 8 with `/gsd-plan-phase 8` (Daemon Socket Query Verb — SOCK-01..03)
+- Then Phase 9 with `/gsd-plan-phase 9` (Terminal Dashboard — TUI-01..05), which depends on Phase 8
