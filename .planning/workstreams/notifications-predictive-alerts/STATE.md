@@ -4,17 +4,17 @@ milestone: v1.5
 milestone_name: TUI Dashboard
 current_phase: 8
 current_phase_name: Daemon Socket Query Verb
-status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-07-20T11:32:57.823Z"
+status: verifying
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-07-20T11:39:50.017Z"
 last_activity: 2026-07-20
 last_activity_desc: Phase 8 execution started
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 
 Phase: 8 (Daemon Socket Query Verb) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-20 — Phase 8 execution started
 
 ## Performance Metrics
@@ -67,6 +67,7 @@ Last activity: 2026-07-20 — Phase 8 execution started
 | Phase 07 P02 | 3 min | 3 tasks | 3 files |
 | Phase 07 P03 | 2min | 3 tasks | 3 files |
 | Phase 08 P01 | 12min | 2 tasks | 3 files |
+| Phase 08 P02 | 5min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,7 @@ Recent decisions affecting current work:
 - [Phase ?]: CR-01 fix: reaped-status memory + pure sess_notify_baseline baseline resolver; rejected the exclude-alive=True-from-age-reap trap to preserve 07-02 same-pane self-heal
 - **v1.5 is 2 phases** (8: daemon socket query verb; 9: the TUI renderer). Coarse granularity and the 1-2-phases-per-milestone precedent both favor one phase, but Phase 9 has no data source until Phase 8's query verb exists and is independently verifiable (connect + query the socket, no TUI needed) — a real unblocks-the-next-phase boundary, not an arbitrary horizontal-layer split.
 - [Phase ?]: [Phase 08-01]: build_session_snapshot shared shape (dir/status/entered/frozen/pane/tmux) established for write_dashboard and Plan 08-02's query verb; sessions_lock wraps each self.sessions call site as one atomic read-modify-write, with reap_stale's lock kept narrow around the tmux subprocess shell-out and rebuild_menu deliberately left unlocked (Gtk-thread-only)
+- [Phase ?]: [Phase 08-02]: serve() refactored to thread-per-connection (_handle_conn) so a stalled/malformed connection only blocks its own thread; query snapshot build runs entirely inside mon.sessions_lock, matching 08-01's lock discipline (SOCK-01/02/03)
 
 ### Pending Todos
 
@@ -144,8 +146,8 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-20T11:32:32.926Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-07-20T11:39:50.009Z
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
