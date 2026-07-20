@@ -570,10 +570,39 @@ def looking_at(pane, tmux):
     return terminal_focused() and pane_onscreen(pane, tmux)
 
 
+def _handle_conn(mon, conn):
+    """Per-connection thread target (D-02/D-03): one thread per accepted connection,
+    so a stalled or malformed connection only ever blocks itself, never the accept
+    loop or any other connection.
+    ponytail: broad `except Exception` around the whole body, so one bad connection
+    costs one thread, not the only path feeding session events.
+    """
+    try:
+        buf = conn.recv(65536).decode("utf-8", "replace")
+        for line in buf.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                msg = json.loads(line)
+            except Exception:
+                continue
+            # Decided here, off the Gtk main thread: looking_at() shells out.
+            if msg.get("event") in ("done", "waiting"):
+                msg["_onscreen"] = looking_at(
+                    msg.get("pane", ""), msg.get("tmux", "")
+                )
+            GLib.idle_add(mon.handle, msg)
+    except Exception:
+        traceback.print_exc()  # loud and repeated; the thread survives regardless
+    finally:
+        conn.close()  # whole body's finally: a response must send before close (D-05)
+
+
 def serve(mon):
-    """Socket thread: hook events -> Monitor.handle on the Gtk main thread.
-    ponytail: broad `except Exception` INSIDE the loop, so one bad connection costs one
-    connection, not the only thread feeding session events. accept() stays outside it.
+    """Socket thread: accept loop spawning one daemon thread per connection
+    (D-02/D-03) via _handle_conn -- hook events reach Monitor.handle on the Gtk
+    main thread same as before; queries are answered inline in the per-conn thread.
     """
     if os.path.exists(SOCK):
         os.unlink(SOCK)
@@ -582,28 +611,7 @@ def serve(mon):
     srv.listen(8)
     while True:
         conn, _ = srv.accept()
-        try:
-            try:
-                buf = conn.recv(65536).decode("utf-8", "replace")
-            finally:
-                conn.close()  # nested: a recv failure must not leak an fd
-            for line in buf.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    msg = json.loads(line)
-                except Exception:
-                    continue
-                # Decided here, off the Gtk main thread: looking_at() shells out.
-                if msg.get("event") in ("done", "waiting"):
-                    msg["_onscreen"] = looking_at(
-                        msg.get("pane", ""), msg.get("tmux", "")
-                    )
-                GLib.idle_add(mon.handle, msg)
-        except Exception:
-            traceback.print_exc()  # loud and repeated; the thread survives regardless
-            continue
+        threading.Thread(target=_handle_conn, args=(mon, conn), daemon=True).start()
 
 
 def poll_loop(mon):
