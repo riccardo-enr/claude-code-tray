@@ -3,16 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: TUI Dashboard
 current_phase: 8
-status: planned
-stopped_at: Phase 8 planned (2 plans, 2 waves)
-last_updated: "2026-07-20T12:21:21.204Z"
+current_phase_name: Daemon Socket Query Verb
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-07-20T11:32:57.823Z"
 last_activity: 2026-07-20
-last_activity_desc: Phase 8 planning complete -- 2 plans (sessions_lock+build_session_snapshot, thread-per-connection query verb), decision + requirement coverage gates passed
+last_activity_desc: Phase 8 execution started
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -23,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-13)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 08 — daemon-socket-query-verb
+**Current focus:** Phase 8 — Daemon Socket Query Verb
 
 ## Current Position
 
-Phase: 8 — Daemon Socket Query Verb (planned, ready to execute)
-Plan: 08-01 (wave 1), 08-02 (wave 2, depends on 08-01)
-Status: Ready to execute — 2 plans, requirement + decision coverage gates passed
-Last activity: 2026-07-20 — Phase 8 planning complete (SOCK-01..03), ready for /gsd-execute-phase 8
+Phase: 8 (Daemon Socket Query Verb) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-07-20 — Phase 8 execution started
 
 ## Performance Metrics
 
@@ -65,6 +66,7 @@ Last activity: 2026-07-20 — Phase 8 planning complete (SOCK-01..03), ready for
 | Phase 06 P02 | 6min | 2 tasks | 1 files |
 | Phase 07 P02 | 3 min | 3 tasks | 3 files |
 | Phase 07 P03 | 2min | 3 tasks | 3 files |
+| Phase 08 P01 | 12min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -84,6 +86,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 07-02] session_stale reap: alive=True never short-circuits to never-reap -- only the unconditional age ceiling catches the same-pane /exit or /clear case SessionEnd never fires for
 - [Phase ?]: CR-01 fix: reaped-status memory + pure sess_notify_baseline baseline resolver; rejected the exclude-alive=True-from-age-reap trap to preserve 07-02 same-pane self-heal
 - **v1.5 is 2 phases** (8: daemon socket query verb; 9: the TUI renderer). Coarse granularity and the 1-2-phases-per-milestone precedent both favor one phase, but Phase 9 has no data source until Phase 8's query verb exists and is independently verifiable (connect + query the socket, no TUI needed) — a real unblocks-the-next-phase boundary, not an arbitrary horizontal-layer split.
+- [Phase ?]: [Phase 08-01]: build_session_snapshot shared shape (dir/status/entered/frozen/pane/tmux) established for write_dashboard and Plan 08-02's query verb; sessions_lock wraps each self.sessions call site as one atomic read-modify-write, with reap_stale's lock kept narrow around the tmux subprocess shell-out and rebuild_menu deliberately left unlocked (Gtk-thread-only)
 
 ### Pending Todos
 
@@ -141,9 +144,9 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-20T10:21:21.196Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/workstreams/notifications-predictive-alerts/phases/08-daemon-socket-query-verb/08-CONTEXT.md
+Last session: 2026-07-20T11:32:32.926Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

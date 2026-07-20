@@ -22,9 +22,9 @@ rule, scoped to this entry point.
 
 ### Socket query verb (SOCK)
 
-- [ ] **SOCK-01**: The daemon's existing unix socket gains a read-only query verb that returns a JSON snapshot of `self.sessions` plus the last polled usage/history state.
+- [x] **SOCK-01**: The daemon's existing unix socket gains a read-only query verb that returns a JSON snapshot of `self.sessions` plus the last polled usage/history state.
 - [ ] **SOCK-02**: The query path shares the socket without disrupting the existing fire-and-forget hook-event path — a stalled or malformed query connection cannot block or corrupt a session-event write.
-- [ ] **SOCK-03**: The query responder reads `self.sessions` safely against the Gtk-main-thread mutator — no torn/partial reads of an in-flight session update.
+- [x] **SOCK-03**: The query responder reads `self.sessions` safely against the Gtk-main-thread mutator — no torn/partial reads of an in-flight session update.
 
 ## Future Requirements (deferred)
 
