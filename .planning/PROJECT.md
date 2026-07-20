@@ -11,7 +11,12 @@ samples, an in-menu sparkline, daily/weekly burn, and peak-usage hours. v1.2
 added a **browsable HTML usage dashboard** opened from the tray — the same
 history as real charts (usage-% trend over rolling ranges, hour x day heatmap,
 dark mode) — and made the **weekly (7-day) quota cap** visible alongside the
-5-hour one, with projections of where each cap lands at reset.
+5-hour one, with projections of where each cap lands at reset. v1.3 gave the
+tray a **push voice**: one shared desktop-notification path for session
+waiting/done events and predictive 5h/7d quota alerts, with per-event toggles
+and a global mute. v1.4 put a **live sessions panel** in that same dashboard —
+every tracked session with status/dir/duration, self-healing off the list when
+a tmux pane dies with no hook event required.
 
 ## Core Value
 
@@ -37,76 +42,26 @@ it resets** — without launching a separate terminal monitor.
 
 ## Current State
 
-**Shipped:** v1.2 (Usage Web Dashboard), 2026-07-13. Three milestones, four
-phases, all verified. `claude-monitor.py` is ~1.8k lines of stdlib + PyGObject.
+**Shipped:** v1.4 (Session Dashboard), 2026-07-20 — bundled with v1.3's formal
+close-out (Notifications & Predictive Alerts, features live since 2026-07-17).
+Five milestones, seven phases, all implemented and reviewed. `claude-monitor.py`
+was restructured into a `claude_monitor/` package (`core.py` + `dashboard.py` +
+entry script) during v1.3/v1.4.
 
-The tray now covers the full quota picture: both rolling caps (5-hour and 7-day),
-where each is projected to land at reset, 30 days of persisted history, in-menu
-trends, and a self-contained browser dashboard over the same store.
+The tray now covers the full quota picture (both rolling caps, projected reset,
+30 days of persisted history, in-menu trends, a self-contained browser dashboard),
+pushes the user back via desktop notifications (session waiting/done, predictive
+5h/7d quota alerts, per-event toggles, global mute), and shows every live session
+— status, project dir, time-in-state — directly in that same dashboard, self-healing
+off the list when a tmux pane dies with no hook event required.
 
-**Next milestone:** v1.3 (Notifications & Predictive Alerts) — see below. It merges
-the two live seeds, SEED-002 (predictive quota alerts) and SEED-004 (session-finished
-notification), which converge on the same shared notification path.
+**Next milestone:** none yet — planning next via `/gsd-new-milestone`.
 
 ## Current Milestone
 
-One workstream is open (`.planning/workstreams/`). v1.3 shipped 2026-07-17 (tag `v1.3`).
-
-| Workstream | Milestone | Status |
-|------------|-----------|--------|
-| `notifications-predictive-alerts` | v1.4 Session Dashboard | Phase 07 — planning |
-
-### v1.4 Session Dashboard (workstream `notifications-predictive-alerts`)
-
-**Goal:** See all live Claude Code sessions and their status at a glance in the existing
-web dashboard, not just the tray menu.
-
-**Target features:**
-
-- A **live session panel** in the v1.2 self-contained dashboard: every tray-tracked
-  session with its status (running / waiting / done), project directory, and time-in-state
-- **Live refresh** off the dashboard's existing meta-refresh — the tray embeds its current
-  in-memory `self.sessions` snapshot into the generated HTML each poll tick
-- A clean **empty state** when no sessions are active
-
-**Key context:**
-
-- Live-only by choice — no session **persistence/history** this milestone. Reads the tray's
-  in-memory state, mirrored into the generated page; no new IPC, socket, or on-disk store.
-- Extends the v1.2 dashboard (`file://` static page), so DASH-06 (self-contained, no
-  external refs) still holds.
-- Out of scope: click-to-focus a pane from the page (the static page can't; that stays the
-  tray's job), and per-session token accounting.
-
-### v1.3 Notifications & Predictive Alerts (workstream `notifications-predictive-alerts`) — SHIPPED 2026-07-17
-
-**Goal:** Give the tray a push voice — one notification subsystem that pulls the user
-back to Claude Code when a session needs them or when quota is about to run out, so
-they can context-switch away from the top bar entirely.
-
-**Target features:**
-
-- Shared notification path (`Gio.Notification` via PyGObject) with per-event de-dupe —
-  an event fires once per state transition, never once per poll — and click-to-focus
-  reusing the existing tmux-pane + Ghostty-window action
-- Session **waiting-for-input** notification, fed by the existing hook -> unix socket
-  status pipeline
-- Session **finished (done)** notification, same pipeline
-- **Predictive quota alert:** warn when either cap (5-hour or 7-day) is *projected* to
-  hit 100% before its window resets — reusing v1.2's QUOTA-03 percentage projection
-- Tray menu toggles for which events fire, persisted to a small JSON config under
-  `~/.claude/`
-- Simple global mute toggle (no quiet-hours scheduling)
-
-**Key context:**
-
-- SEED-002's original EWMA / `tokens_remaining` forecast plan is **obsolete**: the poll
-  now runs `--api` (quick task `260712-ndo`), where token counts come back `null`. All
-  projection stays percentage-denominated — the forecaster already exists as QUOTA-03.
-- Hard-threshold pushes (>90%) are **not** in scope — the existing >80% icon badge
-  (ALERT-01) stays the reactive signal; this milestone adds the *predictive* one.
-- Closes SEED-002 and SEED-004; the config surface also absorbs the deferred
-  "configurable alert threshold" item.
+No workstream is currently open. `notifications-predictive-alerts` shipped v1.4
+2026-07-20 (tag `v1.4`) and is archived under
+`workstreams/notifications-predictive-alerts/milestones/`.
 
 ## Requirements
 
@@ -136,17 +91,24 @@ they can context-switch away from the top bar entirely.
 - checkmark Reset epochs persisted; window resets marked on the trend (QUOTA-02) — v1.2
 - checkmark Projected usage at reset for both caps (QUOTA-03) — v1.2
 - checkmark Live in-browser auto-refresh of the dashboard (DASH-F1) — v1.2 (`ea00509`)
+- checkmark Shared notification path with de-dupe + click-to-focus (NOTIF-01..04) — v1.3
+- checkmark Session waiting/done desktop notifications (SESS-01/02) — v1.3
+- checkmark Predictive 5h/7d quota alert off the QUOTA-03 projection (ALERT-02/03/04) — v1.3
+- checkmark Per-event tray toggles, global mute, configurable badge threshold, persisted + corruption-tolerant (CFG-01..05) — v1.3
+- checkmark Live sessions panel in the dashboard, status/dir/time-in-state (SESSVIEW-01/02) — v1.4
+- checkmark Live in-memory reflect on existing meta-refresh, no new IPC/socket/persistence (SESSVIEW-03) — v1.4
+- checkmark Clean empty state with no active sessions (SESSVIEW-04) — v1.4
+- checkmark Dashboard stays self-contained with the sessions panel added (SESSVIEW-05) — v1.4
 
 ### Active
 
-**v1.3 (Notifications & Predictive Alerts)** — REQ-IDs in
-`workstreams/notifications-predictive-alerts/REQUIREMENTS.md`: shared notification path
-with de-dupe and click-to-focus (NOTIF-*), session waiting/done events (SESS-*),
-predictive quota alert off the QUOTA-03 projection (ALERT-*), menu-toggle config with
-global mute (CFG-*).
+None yet — planning next milestone via `/gsd-new-milestone`.
 
 Still deferred: raw data export (HIST-F1 / DASH-F2), configurable
-ranges (TREND-F1 / DASH-F3).
+ranges (TREND-F1 / DASH-F3), quiet hours (NOTIF-F1), per-event sound/urgency
+(NOTIF-F2), hard-threshold push (ALERT-F1). See
+`workstreams/notifications-predictive-alerts/STATE.md` "Deferred Items" for the
+full table with dates and reasoning.
 
 ### Out of Scope
 
@@ -181,6 +143,10 @@ as QUOTA-01 in v1.2.)*
 | Cut DASH-04 (burn-rate chart) during UAT rather than ship it | It plotted near-flat ~30M tok/hr raw throughput and duplicated the heatmap; the dashboard is deliberately usage-%-denominated | ✓ Good — scope decision made against the running artifact |
 | v1.3 predictive alerts reuse the existing QUOTA-03 percentage projection instead of building SEED-002's EWMA / `tokens_remaining` forecaster | SEED-002 was written before the `--api` switch (`260712-ndo`) made token counts `null`. A token-denominated forecaster cannot be built on the data we now poll, and the percentage projection that *can* already ships | Decided at v1.3 scoping — SEED-002's "Better Than Upstream" section is superseded |
 | One notification subsystem, two producers (session events + quota alerts), rather than a one-off "session done" ping | SEED-004 called this out explicitly: the value is the shared path (de-dupe, mute, click-to-focus), not the single ping. Two one-offs would duplicate all of it | Decided at v1.3 scoping |
+| Notification binding: `org.freedesktop.Notifications.Notify` via `Gio.DBusProxy`, not `Gio.Notification` | The helper has no `Gio.Application`; gnome-shell's `GtkNotificationDaemonAppSource` looks up `appId + '.desktop'` and silently drops the notification when absent — a single-file script with no install step can't satisfy that. Verified against gnome-shell 46.0 source + live D-Bus probes | ✓ Good — Phase 5 |
+| `urgency` hint drives notification lifetime (D-02), not `expire_timeout` | gnome-shell destructures `expire_timeout` as `timeout_` and never reads it; banner life is a hardcoded 4000ms. Only `urgency=2/CRITICAL` skips the auto-dismiss timer | ✓ Good — Phase 5 |
+| `Monitor._reaped_status` + pure `core.sess_notify_baseline` seed the notification de-dupe baseline across a reap/resurrect | CR-01: a genuinely-alive session reaped past `REAP_MAX_AGE` and resuming the same status re-fired a spurious "Waiting for input" popup, regressing NOTIF-02. Fixed with a one-shot Gtk-thread-only memory, not by excluding `alive=True` from the age reap (would have broken the same-pane `/exit` self-heal) | ✓ Good — Phase 7-03, closed CR-01/WR-06 |
+| v1.3 was never run through `/gsd-complete-milestone` on its own; closed out bundled with v1.4 | Phase 5 had no VERIFICATION.md (missing, not failed) despite shipping live 2026-07-17 with a passing REVIEW.md and UAT.md. Re-verifying weeks-old shipped code was judged lower value than accepting a recorded closeout override | Acknowledged override — see `workstreams/.../STATE.md` Deferred Items |
 
 ## Evolution
 
@@ -200,8 +166,6 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-14 — milestone v1.4 (VS Code Usage Surface) dropped before
-execution and its `vscode` workstream deleted: the user no longer works in VS Code.
-SEED-005 removed with it; see Out of Scope for the record. `notifications-predictive-alerts`
-(v1.3, Phase 06 still open) is again the only workstream, so `claude-monitor.py` has a
-single writer and the cross-workstream edit-disjointness constraint is retired.*
+*Last updated: 2026-07-20 — after v1.4 (Session Dashboard) milestone completion,
+bundled with v1.3's (Notifications & Predictive Alerts) formal close-out. No
+workstream is currently open; next milestone starts via `/gsd-new-milestone`.*
