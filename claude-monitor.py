@@ -587,6 +587,19 @@ def _handle_conn(mon, conn):
                 msg = json.loads(line)
             except Exception:
                 continue
+            if "query" in msg:
+                if msg.get("query") == "snapshot":
+                    with mon.sessions_lock:
+                        sessions = core.build_session_snapshot(list(mon.sessions.values()))
+                    # mon.usage/mon.trends: single-reference rebinds, same no-lock
+                    # posture compute_trends already uses -- no second lock needed.
+                    snapshot = {
+                        "sessions": sessions,
+                        "usage": mon.usage,
+                        "trends": mon.trends,
+                    }
+                    conn.sendall((json.dumps(snapshot) + "\n").encode("utf-8"))
+                continue
             # Decided here, off the Gtk main thread: looking_at() shells out.
             if msg.get("event") in ("done", "waiting"):
                 msg["_onscreen"] = looking_at(
@@ -608,6 +621,9 @@ def serve(mon):
         os.unlink(SOCK)
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     srv.bind(SOCK)
+    os.chmod(SOCK, 0o600)  # the query verb now returns read data (dir names, usage%),
+    # not just accepts writes -- restrict to the owning user regardless of the
+    # parent dir's mode (e.g. the /tmp fallback when XDG_RUNTIME_DIR is unset)
     srv.listen(8)
     while True:
         conn, _ = srv.accept()
