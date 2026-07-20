@@ -99,7 +99,7 @@ closure CR-01 restored the NOTIF-02 de-dupe guarantee across a reap/resurrect.
 so people who live in the terminal get the tray's data without a browser
 round-trip. Closes SEED-007.
 
-- [ ] **Phase 8: Daemon Socket Query Verb** - Read-only JSON snapshot of live sessions + latest usage/history over the existing unix socket, without disrupting the fire-and-forget hook-event path
+- [x] **Phase 8: Daemon Socket Query Verb** - Read-only JSON snapshot of live sessions + latest usage/history over the existing unix socket, without disrupting the fire-and-forget hook-event path (completed 2026-07-20)
 - [ ] **Phase 9: Terminal Dashboard (claude-tui.py)** - A `textual`-rendered TUI showing usage/quota/trends and live sessions, auto-refreshing, degrading cleanly when the daemon is unreachable
 
 ## Phase Details
@@ -154,5 +154,5 @@ Plans:
 | 5. Notification Path & Event Producers   | v1.3      | 3/3             | Complete    | 2026-07-14 |
 | 6. Notification Control & Config         | v1.3      | 2/2             | Complete    | 2026-07-17 |
 | 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete    | 2026-07-18 |
-| 8. Daemon Socket Query Verb              | v1.5      | 2/2 | In Progress|  |
+| 8. Daemon Socket Query Verb              | v1.5      | 2/2 | Complete    | 2026-07-20 |
 | 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 0/TBD           | Not started | -          |
