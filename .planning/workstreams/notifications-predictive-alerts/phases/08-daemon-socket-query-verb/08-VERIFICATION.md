@@ -1,17 +1,20 @@
 ---
 phase: 08-daemon-socket-query-verb
 verified: 2026-07-20T11:56:37Z
-status: human_needed
+status: passed
 score: 10/10 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Disposition WR-01 from 08-REVIEW.md: watch_focus() (claude-monitor.py:705-728) reads self.sessions via an unlocked `list(mon.sessions.values())` and writes `s[\"acked\"] = True` without `mon.sessions_lock`, even though this phase's own new comment on Monitor.sessions_lock (claude-monitor.py:64) now asserts the lock guards 'self.sessions: Gtk-thread mutator + query-thread readers' -- watch_focus is a third, unguarded mutator thread the invariant doesn't actually cover. Decide: fix now (small, mechanical -- reviewer supplied the diff), open a tracked follow-up, or explicitly accept as pre-existing/out-of-scope."
     expected: "A decision recorded (fix / follow-up issue / accepted-risk override) before Phase 9's TUI becomes a second concurrent reader of the same daemon."
     why_human: "Not a failure of any must-have truth or ROADMAP success criterion as literally scoped (all reference the Gtk-thread mutator specifically, which watch_focus is not) -- this is a judgment call about whether the phase's own broader invariant claim should be closed now or tracked."
+
   - test: "Disposition WR-02 from 08-REVIEW.md: the thread-per-connection refactor (serve()/_handle_conn, claude-monitor.py:573-630) drops the old accept-loop's implicit backpressure with no conn.settimeout(...) -- a connection that never completes a line now leaks one OS thread indefinitely instead of just stalling the single old handler."
     expected: "A decision recorded: this is already the plan's own accepted risk (T-08-03, disposition 'accept', in 08-02-PLAN.md's threat model) -- confirm that acceptance still holds now that the interface answers reads, not just fire-and-forget writes, or add the reviewer-suggested conn.settimeout(5)."
     why_human: "T-08-03 was pre-accepted in the plan's own threat model before code review re-surfaced it with more detail (unbounded thread leak, not just unbounded thread spawn) -- worth a human confirming the original acceptance still applies."
+
   - test: "Disposition IN-01/IN-02 from 08-REVIEW.md: (a) no automated test exercises the socket wire protocol itself (_handle_conn/serve/query dispatch) -- only the pure build_session_snapshot helper is covered by --selfcheck; (b) build_session_snapshot's six-key shape omits `term`, which handle() now stores per-session and Monitor.focus()/on_click() use to distinguish a Zed session from a tmux session."
     expected: "A decision: add a socket-level integration check (can live outside --selfcheck), and/or add `term` to the snapshot shape now vs. when Phase 9 (or a later click-to-focus feature, currently deferred per REQUIREMENTS.md) actually needs it."
     why_human: "Both are INFO-level, non-blocking per the code review itself, but undispositioned -- surfacing them once here so they don't silently rot."
