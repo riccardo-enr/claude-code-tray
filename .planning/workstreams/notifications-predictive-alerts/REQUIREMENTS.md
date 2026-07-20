@@ -56,10 +56,10 @@ keeps it current. No new IPC, socket, or persistence.
 ### Session view (SESSVIEW)
 
 - [x] **SESSVIEW-01**: The web dashboard shows all sessions the tray currently tracks, each with its status (running / waiting / done).
-- [ ] **SESSVIEW-02**: Each session shows its project directory and how long it has been in its current state (especially waiting).
+- [x] **SESSVIEW-02**: Each session shows its project directory and how long it has been in its current state (especially waiting).
 - [x] **SESSVIEW-03**: The session view reflects the tray's current in-memory session state, refreshed on the dashboard's existing meta-refresh cadence — no new IPC, socket, or persistence is introduced.
-- [ ] **SESSVIEW-04**: With no active sessions, the view shows a clean empty state rather than breaking or rendering blank.
-- [ ] **SESSVIEW-05**: The session view stays self-contained (no external references), consistent with DASH-06.
+- [x] **SESSVIEW-04**: With no active sessions, the view shows a clean empty state rather than breaking or rendering blank.
+- [x] **SESSVIEW-05**: The session view stays self-contained (no external references), consistent with DASH-06.
 
 ## Future Requirements (deferred)
 
