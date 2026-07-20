@@ -150,6 +150,27 @@ def session_stale(alive, entered, now, max_age):
     return now - (entered if entered is not None else now) > max_age
 
 
+def build_session_snapshot(sessions):
+    """Snapshot a list of session dicts into plain, JSON-serializable primitives. Pure.
+    `sessions` is a plain list already copied out of Monitor.sessions.values() by the
+    caller (which must hold sessions_lock while copying, per D-01) -- this function does
+    no locking, no I/O, and never mutates its input or the dicts it reads. Six keys per
+    session: dir/status/entered/frozen (write_dashboard's original shape) plus pane/tmux
+    (D-06's "superset" extension, shared with Plan 08-02's query responder).
+    """
+    return [
+        {
+            "dir": s.get("dir", ""),
+            "status": s.get("status", ""),
+            "entered": s.get("entered"),
+            "frozen": None if s.get("status") == "running" else s.get("run_dur"),
+            "pane": s.get("pane", ""),
+            "tmux": s.get("tmux", ""),
+        }
+        for s in sessions
+    ]
+
+
 # Quota-window lengths (seconds). The dashboard JS carries the same literals; move both.
 WIN5 = 18000  # 5 hours
 WIN7 = 604800  # 7 days

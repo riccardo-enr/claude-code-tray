@@ -20,6 +20,7 @@ from .core import (
     alert_due,
     alert_should_fire,
     build_label,
+    build_session_snapshot,
     build_trend_rows,
     despike,
     fmt_countdown,
@@ -453,6 +454,26 @@ def demo():
     # (c) self-containment holds with the panel populated (SESSVIEW-05, DASH-06).
     assert "<link" not in spage and "src=" not in spage and "https://" not in spage
     assert spage.replace("http://www.w3.org/2000/svg", "").find("http://") == -1
+
+    # --- build_session_snapshot (SOCK-01 shape groundwork, SOCK-03 idempotency) ---
+    _snap_in = [
+        {"dir": "proj-a", "status": "running", "entered": 100.0, "pane": "%1", "tmux": "/tmp/x"},
+        {"dir": "proj-b", "status": "done", "entered": 90.0, "run_dur": 12.5},
+    ]
+    _snap_out = build_session_snapshot(_snap_in)
+    assert _snap_out == [
+        {"dir": "proj-a", "status": "running", "entered": 100.0, "frozen": None, "pane": "%1", "tmux": "/tmp/x"},
+        {"dir": "proj-b", "status": "done", "entered": 90.0, "frozen": 12.5, "pane": "", "tmux": ""},
+    ]
+    assert build_session_snapshot([]) == []
+    # purity: calling twice yields independent lists, input untouched.
+    assert build_session_snapshot(_snap_in) == _snap_out
+    assert build_session_snapshot(_snap_in) is not build_session_snapshot(_snap_in)
+    assert _snap_in == [
+        {"dir": "proj-a", "status": "running", "entered": 100.0, "pane": "%1", "tmux": "/tmp/x"},
+        {"dir": "proj-b", "status": "done", "entered": 90.0, "run_dur": 12.5},
+    ]
+    json.dumps(_snap_out)  # must not raise
 
     # --- session-notification de-dupe ---
     assert sess_should_notify(None, "waiting") is True
