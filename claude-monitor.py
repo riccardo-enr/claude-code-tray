@@ -577,6 +577,7 @@ def _handle_conn(mon, conn):
     ponytail: broad `except Exception` around the whole body, so one bad connection
     costs one thread, not the only path feeding session events.
     """
+    conn.settimeout(5)  # T-08-03: bound a stalled/malformed sender to one leaked thread-second, not forever
     try:
         buf = conn.recv(65536).decode("utf-8", "replace")
         for line in buf.splitlines():
@@ -710,17 +711,19 @@ def watch_focus(mon):
     while True:
         time.sleep(2)
         try:
-            pending = [
-                s
-                for s in list(mon.sessions.values())
-                if s.get("status") in ("waiting", "done") and not s.get("acked")
-            ]
+            with mon.sessions_lock:
+                pending = [
+                    s
+                    for s in mon.sessions.values()
+                    if s.get("status") in ("waiting", "done") and not s.get("acked")
+                ]
             if not pending or not terminal_focused():
                 continue
             changed = False
             for s in pending:
                 if pane_onscreen(s.get("pane", ""), s.get("tmux", "")):
-                    s["acked"] = True
+                    with mon.sessions_lock:
+                        s["acked"] = True
                     changed = True
             if changed:
                 GLib.idle_add(mon.rebuild_menu)

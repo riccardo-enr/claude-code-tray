@@ -6,7 +6,11 @@ contract is the GSD verification gate.
 """
 
 import datetime
+import importlib.util
 import json
+import pathlib
+import socket
+import threading
 import time
 
 from .core import (
@@ -591,4 +595,46 @@ def demo():
     assert build_label({"used_percentage": 80}, 0, 80) == "80%"
     assert build_label({"used_percentage": 81}, 0, 80) == "81%!"
     assert build_label({"used_percentage": 75}, 0, 70) == "75%!"
+
+    # --- socket wire protocol (IN-01): _handle_conn end-to-end over a real socket ---
+    # claude-monitor.py has no importable name (hyphen), so load it by path -- it
+    # already requires the gi/GTK stack to run at all, same as this daemon in prod.
+    _daemon_path = pathlib.Path(__file__).resolve().parent.parent / "claude-monitor.py"
+    _spec = importlib.util.spec_from_file_location("_claude_monitor_daemon", _daemon_path)
+    _daemon = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_daemon)
+
+    class _FakeMonitor:
+        def __init__(self):
+            self.sessions = {
+                "sid-1": {"dir": "proj-a", "status": "running", "entered": 1.0, "pane": "%1", "tmux": "/tmp/x"},
+            }
+            self.sessions_lock = threading.Lock()
+            self.usage = {"used_percentage": 42}
+            self.trends = ["line1"]
+
+    _mon = _FakeMonitor()
+    _server_sock, _client_sock = socket.socketpair()
+    _client_sock.settimeout(5)
+    _thread = threading.Thread(target=_daemon._handle_conn, args=(_mon, _server_sock), daemon=True)
+    _thread.start()
+    _client_sock.sendall(b'{"query": "snapshot"}\n')
+    _resp = b""
+    while True:
+        _chunk = _client_sock.recv(65536)
+        if not _chunk:
+            break
+        _resp += _chunk
+    _thread.join(timeout=5)
+    _client_sock.close()
+    _snapshot = json.loads(_resp.decode("utf-8"))
+    assert set(_snapshot.keys()) == {"sessions", "usage", "trends"}
+    assert _snapshot["usage"] == _mon.usage
+    assert _snapshot["trends"] == _mon.trends
+    assert _snapshot["sessions"] == build_session_snapshot(list(_mon.sessions.values()))
+    # IN-02, deferred: the wire shape carries no `term` key yet (matches
+    # build_session_snapshot's current 6-key output above) -- add it when a query-side
+    # consumer (e.g. Phase 9's TUI) actually needs to tell a Zed session from a tmux one.
+    assert "term" not in _snapshot["sessions"][0]
+
     print("ok")
