@@ -25,16 +25,17 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import AyatanaAppIndicator3 as AppIndicator
-from gi.repository import GLib, Gio, Gtk
+from gi.repository import Gio, GLib, Gtk
 
-from claude_monitor import core
-from claude_monitor import dashboard
+from claude_monitor import core, dashboard
 
 SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.sock")
 # Theme icon name; override with CLAUDE_TRAY_ICON. "claude-desktop" ships with the app.
 ICON = os.environ.get("CLAUDE_TRAY_ICON", "claude-desktop")
 # WM_CLASS of your terminal, used to raise its window on click (X11 / wmctrl).
 GHOSTTY_CLASS = os.environ.get("CLAUDE_TRAY_WM_CLASS", "com.mitchellh.ghostty")
+# WM_CLASS fallback for Zed sessions (TERM_PROGRAM=zed); title match is tried first.
+ZED_CLASS = os.environ.get("CLAUDE_TRAY_ZED_WM_CLASS", "dev.zed.Zed")
 
 # Seconds between polls (the CLI itself takes ~5-10s). Override: CLAUDE_TRAY_POLL_INTERVAL.
 try:
@@ -56,8 +57,11 @@ TREND_INTERVAL = 5 * 60  # trend recompute throttle in poll_loop (seconds)
 
 class Monitor:
     def __init__(self):
-        self.config = core.load_config()  # CFG-01..05: mute/per-event toggles + badge threshold
+        self.config = (
+            core.load_config()
+        )  # CFG-01..05: mute/per-event toggles + badge threshold
         self.sessions = {}  # session_id -> {dir,status,pane,tmux,cwd}
+        self.sessions_lock = threading.Lock()  # guards self.sessions: Gtk-thread mutator + query-thread readers (D-01)
         self.usage = None  # latest parse_usage() dict, or None if unavailable
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
         self.trends = None  # cached trend row strings, or None (collecting state)
@@ -86,7 +90,9 @@ class Monitor:
             )
             self.notif.connect("g-signal", self.on_notif_signal)
         except Exception:
-            self.notif = None  # no bus -> no notifications; everything else keeps working
+            self.notif = (
+                None  # no bus -> no notifications; everything else keeps working
+            )
 
         self.ind = AppIndicator.Indicator.new(
             "claude-monitor", ICON, AppIndicator.IndicatorCategory.APPLICATION_STATUS
@@ -96,7 +102,17 @@ class Monitor:
         self.ind.set_menu(self.menu)
         self.rebuild_menu()
 
-    def focus(self, pane, tmux):
+    def focus(self, pane, tmux, title="", term=""):
+        # Zed's integrated terminal has no tmux pane; raise the Zed window whose title
+        # carries the project basename ("<project> - <file>"), falling back to WM_CLASS.
+        if term == "zed":
+            if title:
+                subprocess.run(["wmctrl", "-a", title], stderr=subprocess.DEVNULL)
+            else:
+                subprocess.run(
+                    ["wmctrl", "-x", "-a", ZED_CLASS], stderr=subprocess.DEVNULL
+                )
+            return
         if pane:
             env = dict(os.environ)
             if tmux:
@@ -134,7 +150,10 @@ class Monitor:
                 ICON,  # app_icon
                 title,  # summary: NOT Pango-parsed, so session-derived strings go HERE
                 body,  # body: IS Pango-parsed
-                ["default", "Focus"],  # "default" makes a body click emit ActionInvoked; the
+                [
+                    "default",
+                    "Focus",
+                ],  # "default" makes a body click emit ActionInvoked; the
                 #  label is never drawn, but omitting it makes that click fall through.
                 {"urgency": GLib.Variant("y", urgency)},  # the only hint we pass
                 -1,  # expire_timeout: gnome-shell never reads it. Inert.
@@ -152,7 +171,9 @@ class Monitor:
             self.notif_acts[nid] = action
 
         try:
-            self.notif.call("Notify", args, Gio.DBusCallFlags.NONE, -1, None, done, None)
+            self.notif.call(
+                "Notify", args, Gio.DBusCallFlags.NONE, -1, None, done, None
+            )
         except Exception:
             return  # degrade to "no popup", never a raise
 
@@ -167,7 +188,7 @@ class Monitor:
                 if act is None:
                     return  # not one of ours -> ignore (broadcast signal)
                 if act[0] == "focus":
-                    self.focus(act[1], act[2])
+                    self.focus(*act[1:])
                 elif act[0] == "dash":
                     self.open_dashboard()
             if signame in ("ActionInvoked", "NotificationClosed"):
@@ -182,7 +203,7 @@ class Monitor:
     def on_click(self, s):
         s["acked"] = True
         self.rebuild_menu()
-        self.focus(s["pane"], s["tmux"])
+        self.focus(s["pane"], s["tmux"], s.get("dir", ""), s.get("term", ""))
 
     def on_notif_toggle(self, item, key):
         """Shared CheckMenuItem "toggled" handler for the mute-all row and the four
@@ -197,7 +218,8 @@ class Monitor:
         # RadioMenuItem "toggled" fires for BOTH the item losing active state and the
         # item gaining it -- ignore the losing fire or usage_threshold gets written
         # twice per click, once to the old value.
-        if not item.get_active(): return
+        if not item.get_active():
+            return
         self.config["usage_threshold"] = val
         core.save_config(self.config)
         self.rebuild_menu()
@@ -211,7 +233,9 @@ class Monitor:
 
         mute = Gtk.CheckMenuItem.new_with_label("Mute all")
         mute.set_active(self.config["mute_all"])  # BEFORE connect: avoids a spurious
-        mute.connect("toggled", self.on_notif_toggle, "mute_all")  # save+rebuild on every build
+        mute.connect(
+            "toggled", self.on_notif_toggle, "mute_all"
+        )  # save+rebuild on every build
         sub.append(mute)
         sub.append(Gtk.SeparatorMenuItem.new())
 
@@ -223,7 +247,9 @@ class Monitor:
         )
         for label, key in event_rows:
             row = Gtk.CheckMenuItem.new_with_label(label)
-            row.set_active(self.config[key])  # BEFORE connect, same reason as mute above
+            row.set_active(
+                self.config[key]
+            )  # BEFORE connect, same reason as mute above
             row.connect("toggled", self.on_notif_toggle, key)
             sub.append(row)
 
@@ -231,7 +257,9 @@ class Monitor:
         threshold_item = Gtk.MenuItem.new_with_label("Badge threshold")
         threshold_menu = Gtk.Menu()
         group = None
-        for val in core.THRESHOLD_CHOICES:  # fixed ascending order (D-05); never sorted/reversed
+        for val in (
+            core.THRESHOLD_CHOICES
+        ):  # fixed ascending order (D-05); never sorted/reversed
             radio = Gtk.RadioMenuItem.new_with_label_from_widget(group, "%d%%" % val)
             radio.set_active(self.config["usage_threshold"] == val)  # BEFORE connect
             radio.connect("toggled", self.on_threshold_toggle, val)
@@ -281,7 +309,9 @@ class Monitor:
             for s in self.sessions.values()
             if s["status"] in ("waiting", "done") and not s.get("acked")
         )
-        self.ind.set_label(core.build_label(self.usage, attention, self.config["usage_threshold"]), "")
+        self.ind.set_label(
+            core.build_label(self.usage, attention, self.config["usage_threshold"]), ""
+        )
 
     def usage_rows(self):
         """Menu-row strings from self.usage: 'unavailable', else used/countdown/burn."""
@@ -347,15 +377,14 @@ class Monitor:
         try:
             with open(core.HISTORY_PATH, errors="replace") as f:
                 records = core.parse_history(f.read())
-            records = [r for r in records if core.history_keep(r, now, core.HISTORY_DAYS)]
-            # Snapshot into plain primitives so dashboard.py never touches live Monitor
-            # state (stays GTK-free). A concurrent Gtk-thread mutation degrades to the
-            # except-Exception skip below -- same posture as compute_trends, no lock (D-08).
-            sessions = [
-                {"dir": s.get("dir", ""), "status": s.get("status", ""),
-                 "entered": s.get("entered")}
-                for s in list(self.sessions.values())
+            records = [
+                r for r in records if core.history_keep(r, now, core.HISTORY_DAYS)
             ]
+            # Snapshot into plain primitives (shared core helper below) so dashboard.py
+            # never touches live Monitor state; sessions_lock (D-01) now guards the read
+            # against a concurrent Gtk-thread mutation.
+            with self.sessions_lock:
+                sessions = core.build_session_snapshot(list(self.sessions.values()))
             html = dashboard.render_dashboard(records, now, sessions=sessions)
             os.makedirs(dashboard.DASH_DIR, exist_ok=True)
             fd, tmp = tempfile.mkstemp(dir=dashboard.DASH_DIR)
@@ -378,7 +407,8 @@ class Monitor:
         sid = msg.get("session_id") or msg.get("pane") or "?"
         event = msg.get("event", "done")
         if event == "end":
-            self.sessions.pop(sid, None)
+            with self.sessions_lock:
+                self.sessions.pop(sid, None)
             self.rebuild_menu()
             return False
 
@@ -386,22 +416,40 @@ class Monitor:
         d = os.path.basename(cwd.rstrip("/")) or cwd
         pane = msg.get("pane") or ""
         tmux = msg.get("tmux") or ""
-        s = self.sessions.setdefault(sid, {})
-        # MUST be read before the update below overwrites it. A resurrected session's live
-        # status reads None (its dict was popped in _pop_stale), so seed the baseline from the
-        # one-shot reaped-status memory: a same-status resurrection then reads as no transition
-        # instead of a brand-new session re-firing the notification (CR-01).
-        old = core.sess_notify_baseline(s.get("status"), self._reaped_status.pop(sid, None))
-        # _onscreen pre-acknowledges the "!" when serve() found you already looking.
-        s.update(
-            dir=d, status=event, pane=pane, tmux=tmux, cwd=cwd,
-            acked=bool(msg.get("_onscreen")),
-        )
-        # Stamp the time-in-state clock ONLY on a real transition, reusing the SAME `old`
-        # sess_should_notify reads below. An unconditional stamp would reset the dashboard
-        # counter on every keepalive tick in the same status (D-01).
-        if old != event:
-            s["entered"] = time.time()
+        term = msg.get("term") or ""
+        # Whole read-modify-write is ONE atomic unit under sessions_lock (D-01) so a
+        # concurrent query-thread snapshot (Plan 08-02) never observes a half-updated dict.
+        with self.sessions_lock:
+            s = self.sessions.setdefault(sid, {})
+            # MUST be read before the update below overwrites it. A resurrected session's
+            # live status reads None (its dict was popped in _pop_stale), so seed the
+            # baseline from the one-shot reaped-status memory: a same-status resurrection
+            # then reads as no transition instead of a brand-new session re-firing the
+            # notification (CR-01).
+            old = core.sess_notify_baseline(
+                s.get("status"), self._reaped_status.pop(sid, None)
+            )
+            # _onscreen pre-acknowledges the "!" when serve() found you already looking.
+            s.update(
+                dir=d,
+                status=event,
+                pane=pane,
+                tmux=tmux,
+                cwd=cwd,
+                term=term,
+                acked=bool(msg.get("_onscreen")),
+            )
+            # Stamp the time-in-state clock ONLY on a real transition, reusing the SAME
+            # `old` sess_should_notify reads below. An unconditional stamp would reset the
+            # dashboard counter on every keepalive tick in the same status (D-01).
+            if old != event:
+                now_t = time.time()
+                # Freeze the just-ended run's length so the dashboard Duration stops
+                # ticking once a session leaves "running" (waiting/done show the frozen
+                # run time).
+                if old == "running" and s.get("entered") is not None:
+                    s["run_dur"] = now_t - s["entered"]
+                s["entered"] = now_t
         # `d` (the project dir) goes in the summary, which is not Pango-parsed, unlike body.
         if core.sess_should_notify(old, event):
             self.emit_notif(
@@ -409,7 +457,7 @@ class Monitor:
                 event,
                 d,
                 "Waiting for input" if event == "waiting" else "Session finished",
-                ("focus", pane, tmux),  # same outcome as clicking the tray row
+                ("focus", pane, tmux, d, term),  # same outcome as clicking the tray row
                 URGENCY_CRITICAL if event == "waiting" else URGENCY_NORMAL,
             )
         self.rebuild_menu()
@@ -422,11 +470,18 @@ class Monitor:
         so self.sessions stays single-mutator (Gtk thread only), same posture as
         write_dashboard's read-only snapshot and mon.handle/mon.apply_usage's idle_add.
         """
+        # Lock scope is deliberately narrow -- just the dict-copy. pane_alive shells out
+        # to tmux and must never run while holding sessions_lock (T-08-02).
+        with self.sessions_lock:
+            items = list(self.sessions.items())
         stale = [
-            sid for sid, s in list(self.sessions.items())
+            sid
+            for sid, s in items
             if core.session_stale(
                 pane_alive(s.get("pane", ""), s.get("tmux", "")),
-                s.get("entered"), now, core.REAP_MAX_AGE,
+                s.get("entered"),
+                now,
+                core.REAP_MAX_AGE,
             )
         ]
         if stale:
@@ -434,11 +489,16 @@ class Monitor:
 
     def _pop_stale(self, sids):
         """Gtk-thread mutator (only ever invoked via reap_stale's idle_add above)."""
-        for sid in sids:
-            s = self.sessions.get(sid)  # may be gone via a concurrent "end" event
-            if s is not None:
-                self._reaped_status[sid] = s.get("status")  # remember before the pop discards it
-            self.sessions.pop(sid, None)  # tolerates a concurrent "end" event already gone
+        with self.sessions_lock:
+            for sid in sids:
+                s = self.sessions.get(sid)  # may be gone via a concurrent "end" event
+                if s is not None:
+                    self._reaped_status[sid] = s.get(
+                        "status"
+                    )  # remember before the pop discards it
+                self.sessions.pop(
+                    sid, None
+                )  # tolerates a concurrent "end" event already gone
         self.rebuild_menu()
         return False
 
@@ -448,13 +508,16 @@ def terminal_focused():
     try:
         root = subprocess.run(
             ["xprop", "-root", "_NET_ACTIVE_WINDOW"],
-            capture_output=True, text=True, timeout=1).stdout
+            capture_output=True,
+            text=True,
+            timeout=1,
+        ).stdout
         wid = root.split()[-1]
         if not wid.startswith("0x"):
             return False
         cls = subprocess.run(
-            ["xprop", "-id", wid, "WM_CLASS"],
-            capture_output=True, text=True, timeout=1).stdout
+            ["xprop", "-id", wid, "WM_CLASS"], capture_output=True, text=True, timeout=1
+        ).stdout
         return GHOSTTY_CLASS in cls
     except Exception:
         return False
@@ -470,7 +533,8 @@ def pane_onscreen(pane, tmux):
     cmd += ["display-message", "-t", pane, "-p", "#{pane_active}#{window_active}"]
     try:
         out = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=1).stdout.strip()
+            cmd, capture_output=True, text=True, timeout=1
+        ).stdout.strip()
         return out == "11"
     except Exception:
         return False
@@ -491,7 +555,10 @@ def pane_alive(pane, tmux):
         cmd += ["-S", tmux.split(",")[0]]
     cmd += ["display-message", "-t", pane, "-p", ""]
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=1).returncode == 0
+        return (
+            subprocess.run(cmd, capture_output=True, text=True, timeout=1).returncode
+            == 0
+        )
     except Exception:
         return None
 
@@ -559,16 +626,31 @@ def poll_loop(mon):
                 core.append_history(core.history_record(usage, now))
                 # Rides this tick: every value is already in `usage`, and emit_notif is async.
                 for cap, pct, reset, win, title in (
-                    ("5h", usage["used_percentage"], usage["resets_at_epoch"], core.WIN5, "5-hour quota"),
+                    (
+                        "5h",
+                        usage["used_percentage"],
+                        usage["resets_at_epoch"],
+                        core.WIN5,
+                        "5-hour quota",
+                    ),
                     # .get(): the 7d block is absent on an older CLI, which the predicates
                     # below already turn into silence.
-                    ("7d", usage.get("seven_day_pct"), usage.get("seven_day_reset"), core.WIN7, "7-day quota"),
+                    (
+                        "7d",
+                        usage.get("seven_day_pct"),
+                        usage.get("seven_day_reset"),
+                        core.WIN7,
+                        "7-day quota",
+                    ),
                 ):
                     p = core.project(pct, reset, win, now)
                     if core.alert_should_fire(mon.alert_armed.get(cap), reset, p, now):
                         # Unguarded reads are safe: the predicate required "exhaust" in p.
                         mon.emit_notif(
-                            ("cap", cap),  # one slot per cap -> a later alert replaces it
+                            (
+                                "cap",
+                                cap,
+                            ),  # one slot per cap -> a later alert replaces it
                             cap,
                             title,
                             # Both values are numbers we computed: no payload-derived string
