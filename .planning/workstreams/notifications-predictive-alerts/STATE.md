@@ -5,10 +5,10 @@ milestone_name: TUI Dashboard
 current_phase: 9
 current_phase_name: claude-tui.py
 status: planning
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-07-20T13:00:32.301Z"
-last_activity: 2026-07-20
-last_activity_desc: Phase 08 complete, transitioned to Phase 9
+stopped_at: Phase 9 context gathered
+last_updated: "2026-07-21T00:00:00.000Z"
+last_activity: 2026-07-21
+last_activity_desc: Phase 9 context gathered (09-CONTEXT.md)
 progress:
   total_phases: 2
   completed_phases: 1
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-13)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 8 — Daemon Socket Query Verb
+**Current focus:** Phase 9 — Terminal Dashboard (claude-tui.py)
 
 ## Current Position
 
 Phase: 9 — Terminal Dashboard (claude-tui.py)
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-07-20 — Phase 08 complete, transitioned to Phase 9
+Status: Context gathered — ready to plan
+Last activity: 2026-07-21 — Phase 9 context gathered
 
 ## Performance Metrics
 
@@ -148,10 +148,9 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 ## Session Continuity
 
 Last session: 2026-07-20T11:39:50.009Z
-Stopped at: Completed 08-02-PLAN.md
-Resume file: None
+Stopped at: Phase 9 context gathered
+Resume file: phases/09-terminal-dashboard-claude-tui-py/09-CONTEXT.md
 
 ## Operator Next Steps
 
-- Plan Phase 8 with `/gsd-plan-phase 8` (Daemon Socket Query Verb — SOCK-01..03)
-- Then Phase 9 with `/gsd-plan-phase 9` (Terminal Dashboard — TUI-01..05), which depends on Phase 8
+- Plan Phase 9 with `/gsd-plan-phase 9` (Terminal Dashboard — TUI-01..05); 09-CONTEXT.md is written
