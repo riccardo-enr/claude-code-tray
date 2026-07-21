@@ -16,8 +16,12 @@ import time
 from .core import (
     DEFAULT_CONFIG,
     GAP_MAX,
+    SESS_RANK,
     SPARK_GAP,
     SPARK_GLYPHS,
+    TUI_FETCH_INTERVAL,
+    TUI_SOCK_TIMEOUT,
+    TUI_TICK_INTERVAL,
     WIN5,
     WIN7,
     _embed_json,
@@ -29,6 +33,7 @@ from .core import (
     despike,
     fmt_countdown,
     fmt_countdown_wk,
+    fmt_elapsed,
     fmt_tokens,
     heatmap_buckets,
     history_keep,
@@ -42,13 +47,19 @@ from .core import (
     parse_history,
     parse_usage,
     project,
+    read_line,
     reset_marks,
+    sess_elapsed,
     sess_notify_baseline,
+    sess_rank,
+    sess_rows,
     sess_should_notify,
     session_stale,
     trend_burn,
     trend_peak_hour,
     trend_sparkline,
+    trend_text,
+    tui_usage_rows,
     usage7_series,
     with_gaps,
 )
@@ -636,5 +647,153 @@ def demo():
     # build_session_snapshot's current 6-key output above) -- add it when a query-side
     # consumer (e.g. Phase 9's TUI) actually needs to tell a Zed session from a tmux one.
     assert "term" not in _snapshot["sessions"][0]
+
+    # --- tui socket client (TUI-05) ---
+    # read_line takes an ALREADY-CONNECTED socket, so a bare socketpair drives it; the
+    # full query_snapshot is not exercisable here because it does its own connect(path).
+    _wire_a, _wire_b = socket.socketpair()
+    _wire_b.sendall(b'{"query": "snapshot"}\n')
+    assert read_line(_wire_a) == '{"query": "snapshot"}\n'
+    _wire_a.close()
+    _wire_b.close()
+    # split delivery: the newline arrives only in the second chunk, so read_line must loop.
+    _split_a, _split_b = socket.socketpair()
+
+    def _split_writer():
+        _split_b.sendall(b'{"part": ')
+        time.sleep(0.05)
+        _split_b.sendall(b"1}\n")
+
+    _split_t = threading.Thread(target=_split_writer, daemon=True)
+    _split_t.start()
+    assert read_line(_split_a) == '{"part": 1}\n'
+    _split_t.join(timeout=5)
+    _split_a.close()
+    _split_b.close()
+    # EOF without a newline returns what arrived rather than blocking forever (T-09-02).
+    _eof_a, _eof_b = socket.socketpair()
+    _eof_b.sendall(b"no newline here")
+    _eof_b.close()
+    assert read_line(_eof_a) == "no newline here"
+    _eof_a.close()
+    _empty_a, _empty_b = socket.socketpair()
+    _empty_b.close()
+    assert read_line(_empty_a) == ""
+    _empty_a.close()
+    # a non-utf-8 byte degrades to the replacement character, never UnicodeDecodeError
+    # (T-09-05) -- a project dir is arbitrary bytes on this wire.
+    _bad_a, _bad_b = socket.socketpair()
+    _bad_b.sendall(b"caf\xe9\n")
+    assert read_line(_bad_a) == "caf\ufffd\n"  # escaped, not the glyph: this file is ASCII
+    _bad_a.close()
+    _bad_b.close()
+    # The standing guard against Pitfall 2's thread pile-up: a client timeout at or above
+    # the fetch interval starts a new fetch while the previous recv is still blocked.
+    assert TUI_SOCK_TIMEOUT < TUI_FETCH_INTERVAL
+    assert TUI_TICK_INTERVAL < TUI_FETCH_INTERVAL  # D-09: re-render faster than we refetch
+
+    # --- tui usage rows (TUI-01) ---
+    _unow = 1700000000
+    _usage = {
+        "tokens_used": 417000,
+        "token_limit": 880000,
+        "used_percentage": 47.4,
+        "resets_at_epoch": _unow + 7380,
+        "burn_rate_per_min": 6333.0,
+        "seven_day_pct": 41.2,
+        "seven_day_reset": _unow + 352800,
+    }
+    assert tui_usage_rows(None, _unow) == ["usage unavailable"]
+    assert tui_usage_rows(_usage, _unow) == [
+        "5h  47%  417k / 880k  resets in 2h 3m  burn: 380k tok/hr",
+        "7d  41%  week resets in 4d 2h",
+    ]
+    # --api shape: both token counts null -> the used/limit segment drops, nothing else.
+    assert tui_usage_rows({**_usage, "tokens_used": None, "token_limit": None}, _unow) == [
+        "5h  47%  resets in 2h 3m  burn: 380k tok/hr",
+        "7d  41%  week resets in 4d 2h",
+    ]
+    # weekly pct present but its reset absent -> a second row with no countdown.
+    assert tui_usage_rows({**_usage, "seven_day_reset": None}, _unow) == [
+        "5h  47%  417k / 880k  resets in 2h 3m  burn: 380k tok/hr",
+        "7d  41%",
+    ]
+    # older CLI: no weekly block at all -> exactly one row.
+    assert len(tui_usage_rows({**_usage, "seven_day_pct": None}, _unow)) == 1
+    # boundaries: a reset epoch already past renders the formatters' "now" strings.
+    _past = tui_usage_rows(
+        {**_usage, "resets_at_epoch": _unow - 10, "seven_day_reset": _unow - 10}, _unow
+    )
+    assert "resets now" in _past[0] and "week resets now" in _past[1]
+    # 0% and 100% are ordinary rows -- no special case, same row count as mid-range.
+    assert len(tui_usage_rows({**_usage, "used_percentage": 0}, _unow)) == 2
+    assert len(tui_usage_rows({**_usage, "used_percentage": 100}, _unow)) == 2
+    assert tui_usage_rows({**_usage, "used_percentage": 0}, _unow)[0].startswith("5h  0%")
+    assert tui_usage_rows({**_usage, "used_percentage": 100}, _unow)[0].startswith("5h  100%")
+
+    # --- tui trend text (TUI-02) ---
+    assert trend_text(None) == "trends: collecting history..."
+    assert trend_text([]) == "trends: collecting history..."
+    assert trend_text(["spark", "today"]) == "spark\ntoday"
+    assert trend_text(["spark", "today", "peak"]) == "spark\ntoday\npeak"
+    # D-05 verbatim property: build_trend_rows is the ONLY producer, so every row it
+    # emits for a record set survives into the TUI text unchanged -- the TUI and the tray
+    # menu cannot disagree because there is nothing to disagree with.
+    _trec = [{"t": _unow - 7200 + i * 600, "pct": 40.0 + i, "burn": 100.0 + i} for i in range(13)]
+    _trows = build_trend_rows(_trec, _unow)
+    assert _trows is not None and len(_trows) in (2, 3)
+    _ttext = trend_text(_trows)
+    for _trow in _trows:
+        assert _trow in _ttext
+    assert _ttext.split("\n") == _trows
+
+    # --- tui session rows (TUI-03/TUI-04) ---
+    assert SESS_RANK == {"waiting": 0, "running": 1, "done": 2}
+    assert [sess_rank(s) for s in ("waiting", "running", "done")] == [0, 1, 2]
+    assert sess_rank("") == 99 and sess_rank("nope") == 99 and sess_rank(None) == 99
+    assert fmt_elapsed(-5) == "0m 00s" and fmt_elapsed(0) == "0m 00s"
+    assert fmt_elapsed(134) == "2m 14s"
+    assert fmt_elapsed(3599) == "59m 59s"
+    assert fmt_elapsed(3600) == "1h 0m" and fmt_elapsed(3601) == "1h 0m"
+    assert fmt_elapsed(4920) == "1h 22m"
+    assert fmt_elapsed(86399) == "23h 59m"
+    assert fmt_elapsed(86400) == "1d 00h" and fmt_elapsed(86401) == "1d 00h"
+    assert fmt_elapsed(266400) == "3d 02h"
+    # D-09 split: only running ticks off `entered`; everything else shows `frozen`.
+    assert sess_elapsed({"status": "running", "entered": _unow - 30}, _unow) == 30
+    assert sess_elapsed({"status": "running", "entered": _unow + 30}, _unow) == 0  # skew clamps
+    assert sess_elapsed({"status": "done", "entered": _unow - 30, "frozen": 12.5}, _unow) == 12.5
+    assert sess_elapsed({}, _unow) is None
+    assert sess_rows([], _unow) == [("", "No active Claude Code sessions", "")]
+    # A project dir is an arbitrary repo path; sess_rows is a pure string builder and must
+    # return it byte-for-byte, neither escaping nor interpreting it. The markup escaping
+    # belongs at the widget (Plan 09-02); asserting it here would encode the wrong contract.
+    _hostile = "[bold]myrepo[/]"  # planner-discipline-allow: [bold]myrepo[/]
+    _srows_in = [
+        {"dir": "done-proj", "status": "done", "entered": _unow - 500, "frozen": 4920},
+        {"dir": _hostile, "status": "running", "entered": _unow - 134, "frozen": None},
+        {"dir": "wait-proj", "status": "waiting", "entered": _unow - 20, "frozen": 74},
+        {"dir": "odd-proj", "status": "zombie", "entered": None, "frozen": None},
+    ]
+    assert sess_rows(_srows_in, _unow) == [
+        ("waiting", "wait-proj", "1m 14s"),
+        ("running", _hostile, "2m 14s"),
+        ("done", "done-proj", "1h 22m"),
+        ("zombie", "odd-proj", "-"),  # unknown status sorts last (rank 99), duration is a dash
+    ]
+    # stability: equal-rank rows keep their input order and never merge or swap.
+    _stable = [
+        {"dir": "first", "status": "running", "entered": None, "frozen": 10},
+        {"dir": "second", "status": "running", "entered": None, "frozen": 20},
+        {"dir": "odd-a", "status": "zombie"},
+        {"dir": "odd-b", "status": "ghost"},
+    ]
+    assert [r[1] for r in sess_rows(_stable, _unow)] == ["first", "second", "odd-a", "odd-b"]
+    # purity: input list and its dicts untouched, and two calls return independent lists.
+    _srows_before = [dict(s) for s in _srows_in]
+    _srows_out = sess_rows(_srows_in, _unow)
+    assert [dict(s) for s in _srows_in] == _srows_before
+    assert sess_rows(_srows_in, _unow) == _srows_out
+    assert sess_rows(_srows_in, _unow) is not sess_rows(_srows_in, _unow)
 
     print("ok")
