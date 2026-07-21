@@ -4,17 +4,17 @@ milestone: v1.5
 milestone_name: TUI Dashboard
 current_phase: 9
 current_phase_name: claude-tui.py
-status: ready to execute
-stopped_at: Phase 9 planned
+status: in progress
+stopped_at: Completed 09-01-PLAN.md
 last_updated: "2026-07-21T00:00:00.000Z"
 last_activity: 2026-07-21
-last_activity_desc: Phase 9 planned (2 plans, 2 waves)
+last_activity_desc: 09-01 executed (pure TUI substrate in core.py, 4 assert blocks)
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 ## Current Position
 
 Phase: 9 — Terminal Dashboard (claude-tui.py)
-Plan: 0/2 complete (Wave 1: 09-01, Wave 2: 09-02)
-Status: Planned — ready to execute
-Last activity: 2026-07-21 — Phase 9 planned (09-RESEARCH.md, 09-PATTERNS.md, 2 plans)
+Plan: 1/2 complete (Wave 1: 09-01 done, Wave 2: 09-02 next)
+Status: In progress — 09-02 ready to execute
+Last activity: 2026-07-21 — 09-01 executed (pure TUI substrate in core.py + 4 assert blocks)
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Last activity: 2026-07-21 — Phase 9 planned (09-RESEARCH.md, 09-PATTERNS.md, 2
 | Phase 07 P03 | 2min | 3 tasks | 3 files |
 | Phase 08 P01 | 12min | 2 tasks | 3 files |
 | Phase 08 P02 | 5min | 2 tasks | 1 files |
+| Phase 09 P01 | 18min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,8 @@ Recent decisions affecting current work:
 - [Phase ?]: CR-01 fix: reaped-status memory + pure sess_notify_baseline baseline resolver; rejected the exclude-alive=True-from-age-reap trap to preserve 07-02 same-pane self-heal
 - **v1.5 is 2 phases** (8: daemon socket query verb; 9: the TUI renderer). Coarse granularity and the 1-2-phases-per-milestone precedent both favor one phase, but Phase 9 has no data source until Phase 8's query verb exists and is independently verifiable (connect + query the socket, no TUI needed) — a real unblocks-the-next-phase boundary, not an arbitrary horizontal-layer split.
 - [Phase ?]: [Phase 08-01]: build_session_snapshot shared shape (dir/status/entered/frozen/pane/tmux) established for write_dashboard and Plan 08-02's query verb; sessions_lock wraps each self.sessions call site as one atomic read-modify-write, with reap_stale's lock kept narrow around the tmux subprocess shell-out and rebuild_menu deliberately left unlocked (Gtk-thread-only)
+- [Phase ?]: [Phase 09-01]: the whole TUI substrate (socket client, usage rows, trend text, session rows, timing constants) lives in core.py above the textual boundary, so `--selfcheck` on /usr/bin/python3 proves it; claude-tui.py is left as App-class-and-CSS only
+- [Phase ?]: [Phase 09-01]: query_snapshot RAISES on every failure mode (no sentinel) -- degraded-mode swallowing belongs at 09-02's worker boundary; TUI_SOCK_TIMEOUT (1.5s) < TUI_FETCH_INTERVAL (2.0s) is asserted in --selfcheck as the standing guard against fetch-thread pile-up
 - [Phase ?]: [Phase 08-02]: serve() refactored to thread-per-connection (_handle_conn) so a stalled/malformed connection only blocks its own thread; query snapshot build runs entirely inside mon.sessions_lock, matching 08-01's lock discipline (SOCK-01/02/03)
 
 ### Pending Todos

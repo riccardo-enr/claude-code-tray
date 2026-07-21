@@ -145,7 +145,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md -- pure TUI substrate in `claude_monitor/core.py` (socket client, usage rows, trend text, session rows, timing constants) plus its `--selfcheck` asserts, all above the textual boundary
+- [x] 09-01-PLAN.md -- pure TUI substrate in `claude_monitor/core.py` (socket client, usage rows, trend text, session rows, timing constants) plus its `--selfcheck` asserts, all above the textual boundary
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -165,4 +165,4 @@ Plans:
 | 6. Notification Control & Config         | v1.3      | 2/2             | Complete    | 2026-07-17 |
 | 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete    | 2026-07-18 |
 | 8. Daemon Socket Query Verb              | v1.5      | 2/2 | Complete    | 2026-07-20 |
-| 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 0/TBD           | Not started | -          |
+| 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 1/2             | In progress | -          |
