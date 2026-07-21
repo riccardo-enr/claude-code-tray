@@ -10,6 +10,7 @@ import datetime
 import json
 import math
 import os
+import socket
 import subprocess
 import tempfile
 import time
@@ -660,3 +661,168 @@ def latest_state(records):
         v = r.get(k)
         out[k] = v if _is_num(v) else None
     return out
+
+
+"""The terminal-dashboard (claude-tui.py) substrate.
+
+Everything the TUI needs that is not a textual widget lives here rather than in the
+entry script, because `just selfcheck` runs on an interpreter that cannot have textual
+installed (PEP 668 externally-managed system python). Logic above that boundary is
+provable by --selfcheck; logic inside the App class is not provable at all. Nothing
+below may import textual, rich, or any other third-party package.
+"""
+
+# The daemon's socket. Restates the path expression at claude-monitor.py:32 and
+# claude-send.py:17, both out of scope this phase -- change all three.
+SOCK_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.sock")
+# D-08: socket poll cadence, deliberately independent of the daemon's usage-poll clock
+# because sessions change on hook events, not on that clock.
+TUI_FETCH_INTERVAL = 2.0
+# D-09: local re-render, so a running session's counter ticks between snapshots.
+TUI_TICK_INTERVAL = 1.0
+TUI_SOCK_TIMEOUT = 1.5  # < TUI_FETCH_INTERVAL so at most one fetch is ever in flight
+SESS_RANK = {"waiting": 0, "running": 1, "done": 2}  # D-03: the only ordering authority
+
+
+def read_line(sock):
+    """Read one newline-terminated response line off an ALREADY-CONNECTED socket.
+
+    Neither connects nor closes -- that is what lets --selfcheck drive it over a plain
+    socket.socketpair(). Stops on the newline OR on EOF, so a peer that closes mid-line
+    returns what arrived (possibly "") instead of blocking forever (T-09-02). Decodes
+    utf-8 with errors="replace", matching _handle_conn's own decode posture, so a
+    non-utf-8 byte inside a project dir degrades to a replacement character instead of
+    raising UnicodeDecodeError inside a timer callback (T-09-05).
+    """
+    buf = b""
+    while not buf.endswith(b"\n"):
+        chunk = sock.recv(65536)
+        if not chunk:
+            break  # EOF: the daemon closed, buf is whatever arrived
+        buf += chunk
+    return buf.decode("utf-8", "replace")
+
+
+def query_snapshot(path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
+    """Ask the daemon for one snapshot: one request line out, one response line back.
+
+    RAISES on every failure mode -- FileNotFoundError (no daemon has ever run),
+    ConnectionRefusedError (stale socket file), socket.timeout (hung daemon),
+    json.JSONDecodeError (truncated or non-JSON line). Nothing is swallowed here on
+    purpose: a sentinel return would make "no daemon" indistinguishable from "a daemon
+    with no usage yet", and only the caller's degraded-mode state machine knows what a
+    failure should look like on screen. The swallowing belongs at that boundary.
+
+    settimeout runs BEFORE connect, so a hung connect is bounded by the same 1.5s as a
+    hung read. The finally-close is not optional: claude-send.py:34-41 omits it and
+    leaks the fd when sendall raises.
+    """
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(path)
+        s.sendall(b'{"query": "snapshot"}\n')
+        return json.loads(read_line(s))
+    finally:
+        s.close()
+
+
+def tui_usage_rows(usage, now):
+    """One compact row per visible cap (D-01), 5h first then 7d. Pure.
+
+    Mirrors Monitor.usage_rows' three-way None branching (claude-monitor.py:316-339) in
+    the TUI's two-row shape instead of the tray's five-row vertical list. `now` is a
+    parameter, never time.time() read inside -- the repo's test discipline is synthetic
+    epochs. Every numeric goes through an EXISTING core formatter or round(); a new
+    number formatter here is exactly the tray/TUI divergence D-05 exists to prevent.
+    """
+    if usage is None:
+        # change both: claude-monitor.py:320 carries the same string.
+        return ["usage unavailable"]
+    row = ["5h", "%d%%" % round(usage["used_percentage"])]
+    # --api carries no token counts -> percent only; the P90 path has them -> "72k / 88k".
+    if usage.get("tokens_used") is not None and usage.get("token_limit") is not None:
+        row.append(
+            "%s / %s" % (fmt_tokens(usage["tokens_used"]), fmt_tokens(usage["token_limit"]))
+        )
+    row.append(fmt_countdown(usage["resets_at_epoch"] - now))
+    row.append("burn: %s tok/hr" % fmt_tokens(round(usage["burn_rate_per_min"] * 60)))
+    rows = ["  ".join(row)]
+    pct7 = usage.get("seven_day_pct")
+    if pct7 is not None:  # an older CLI omits the whole weekly block -> one row only
+        wrow = ["7d", "%d%%" % round(pct7)]
+        if usage.get("seven_day_reset") is not None:
+            wrow.append(fmt_countdown_wk(usage["seven_day_reset"] - now))
+        rows.append("  ".join(wrow))
+    return rows
+
+
+def trend_text(trends):
+    """The trends panel as one string: build_trend_rows' rows joined by newlines. Pure.
+
+    A falsy `trends` -- both the None of build_trend_rows' collecting state (D-07) and an
+    empty list -- renders the tray menu's collecting row verbatim (change both:
+    claude-monitor.py:344). Otherwise the rows are joined and NOT recomputed: they are
+    already the exact strings build_trend_rows produced for the tray, so under D-05 the
+    two surfaces cannot disagree. Iterates, never indexes -- build_trend_rows appends the
+    peak row conditionally, so the list is length 2 or 3.
+    """
+    if not trends:
+        return "trends: collecting history..."
+    return "\n".join(trends)
+
+
+def sess_rank(status):
+    """Sort rank for a session status; an unrecognized status sorts last. Pure."""
+    return SESS_RANK.get(status, 99)
+
+
+def fmt_elapsed(secs):
+    """Time-in-state: 134 -> '2m 14s', 4920 -> '1h 22m', 266400 -> '3d 02h'. Pure.
+    Negative (clock skew) clamps to '0m 00s'. Below an hour the seconds field is always
+    shown and zero-padded so the counter visibly ticks each second (D-09); above an hour
+    a stale session does not need second precision.
+    """
+    secs = max(0, int(secs))
+    if secs >= 86400:
+        return "%dd %02dh" % (secs // 86400, (secs % 86400) // 3600)
+    if secs >= 3600:
+        return "%dh %dm" % (secs // 3600, (secs % 3600) // 60)
+    return "%dm %02ds" % (secs // 60, secs % 60)
+
+
+def sess_elapsed(session, now):
+    """Seconds to display for one session, or None when there is nothing to show. Pure.
+    Only a RUNNING session ticks live off `entered` + the caller's clock; waiting/done
+    show the snapshot's frozen run duration, so the counter stops climbing once the
+    session stops working (D-09). `frozen` is legitimately None -- that means the caller
+    renders a dash. Reads every key with .get, so a short session dict never raises. A
+    negative live elapsed (clock skew) clamps to 0.
+    """
+    if session.get("status") == "running" and session.get("entered") is not None:
+        return max(0.0, now - session["entered"])
+    return session.get("frozen")
+
+
+def sess_rows(sessions, now):
+    """(status, dir, duration) cells for the sessions table, sorted per D-03. Pure.
+
+    An empty input returns exactly ONE row carrying the v1.4 empty-state string in the
+    dir cell -- never [] and never a raise -- so the widget above stays a branch-free
+    loop over three columns (change both: dashboard.py:491). sorted() is stable, which
+    is what delivers the guarantee that two sessions sharing a status come back in input
+    order. Never mutates the input list or any dict in it.
+    """
+    if not sessions:
+        return [("", "No active Claude Code sessions", "")]
+    rows = []
+    for s in sorted(sessions, key=lambda s: sess_rank(s.get("status", ""))):
+        secs = sess_elapsed(s, now)
+        rows.append(
+            (
+                s.get("status", ""),
+                s.get("dir", ""),
+                "-" if secs is None else fmt_elapsed(secs),
+            )
+        )
+    return rows
