@@ -14,11 +14,11 @@ rule, scoped to this entry point.
 
 ### TUI (terminal rendering)
 
-- [ ] **TUI-01**: `claude-tui.py` shows current usage (%, tokens, reset countdown, burn rate) for both the 5-hour and 7-day caps.
-- [ ] **TUI-02**: Shows trends — sparkline, daily/weekly burn, peak-usage hour — reusing `claude_monitor.core`'s existing trend functions, not reimplementing them.
-- [ ] **TUI-03**: Shows a live sessions panel — project dir, status, time-in-state — sorted waiting -> running -> done, matching the v1.4 dashboard panel's semantics.
-- [ ] **TUI-04**: Refreshes automatically on an interval; no manual re-run or keypress needed to see new data.
-- [ ] **TUI-05**: Degrades cleanly when the daemon isn't running or the socket is unreachable — a clear message, never a crash or an unhandled traceback to the terminal.
+- [x] **TUI-01**: `claude-tui.py` shows current usage (%, tokens, reset countdown, burn rate) for both the 5-hour and 7-day caps.
+- [x] **TUI-02**: Shows trends — sparkline, daily/weekly burn, peak-usage hour — reusing `claude_monitor.core`'s existing trend functions, not reimplementing them.
+- [x] **TUI-03**: Shows a live sessions panel — project dir, status, time-in-state — sorted waiting -> running -> done, matching the v1.4 dashboard panel's semantics.
+- [x] **TUI-04**: Refreshes automatically on an interval; no manual re-run or keypress needed to see new data.
+- [x] **TUI-05**: Degrades cleanly when the daemon isn't running or the socket is unreachable — a clear message, never a crash or an unhandled traceback to the terminal.
 
 ### Socket query verb (SOCK)
 
@@ -41,11 +41,11 @@ rule, scoped to this entry point.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUI-01 | Phase 9 | In progress (09-01 substrate) |
-| TUI-02 | Phase 9 | In progress (09-01 substrate) |
-| TUI-03 | Phase 9 | In progress (09-01 substrate) |
-| TUI-04 | Phase 9 | In progress (09-01 substrate) |
-| TUI-05 | Phase 9 | In progress (09-01 substrate) |
+| TUI-01 | Phase 9 | Complete (09-01 substrate + 09-02 renderer) |
+| TUI-02 | Phase 9 | Complete (09-01 substrate + 09-02 renderer) |
+| TUI-03 | Phase 9 | Complete (09-01 substrate + 09-02 renderer) |
+| TUI-04 | Phase 9 | Complete (09-01 substrate + 09-02 renderer) |
+| TUI-05 | Phase 9 | Complete (09-01 substrate + 09-02 renderer) |
 | SOCK-01 | Phase 8 | Complete |
 | SOCK-02 | Phase 8 | Complete |
 | SOCK-03 | Phase 8 | Complete |

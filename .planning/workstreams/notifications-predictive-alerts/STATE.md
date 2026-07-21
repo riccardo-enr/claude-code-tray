@@ -5,16 +5,16 @@ milestone_name: TUI Dashboard
 current_phase: 9
 current_phase_name: claude-tui.py
 status: in progress
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-07-21T00:00:00.000Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-07-21T07:05:00.000Z"
 last_activity: 2026-07-21
-last_activity_desc: 09-01 executed (pure TUI substrate in core.py, 4 assert blocks)
+last_activity_desc: 09-02 executed (claude-tui.py textual App + textual packaging)
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 ## Current Position
 
 Phase: 9 — Terminal Dashboard (claude-tui.py)
-Plan: 1/2 complete (Wave 1: 09-01 done, Wave 2: 09-02 next)
-Status: In progress — 09-02 ready to execute
-Last activity: 2026-07-21 — 09-01 executed (pure TUI substrate in core.py + 4 assert blocks)
+Plan: 2/2 complete (Wave 1: 09-01 done, Wave 2: 09-02 done)
+Status: Code-complete — Phase 9 awaiting UAT (`/gsd-verify-work`)
+Last activity: 2026-07-21 — 09-02 executed (claude-tui.py textual App, CSS, two-timer loop + textual packaging)
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Last activity: 2026-07-21 — 09-01 executed (pure TUI substrate in core.py + 4 
 | Phase 08 P01 | 12min | 2 tasks | 3 files |
 | Phase 08 P02 | 5min | 2 tasks | 1 files |
 | Phase 09 P01 | 18min | 2 tasks | 2 files |
+| Phase 09 P02 | 22min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 08-01]: build_session_snapshot shared shape (dir/status/entered/frozen/pane/tmux) established for write_dashboard and Plan 08-02's query verb; sessions_lock wraps each self.sessions call site as one atomic read-modify-write, with reap_stale's lock kept narrow around the tmux subprocess shell-out and rebuild_menu deliberately left unlocked (Gtk-thread-only)
 - [Phase ?]: [Phase 09-01]: the whole TUI substrate (socket client, usage rows, trend text, session rows, timing constants) lives in core.py above the textual boundary, so `--selfcheck` on /usr/bin/python3 proves it; claude-tui.py is left as App-class-and-CSS only
 - [Phase ?]: [Phase 09-01]: query_snapshot RAISES on every failure mode (no sentinel) -- degraded-mode swallowing belongs at 09-02's worker boundary; TUI_SOCK_TIMEOUT (1.5s) < TUI_FETCH_INTERVAL (2.0s) is asserted in --selfcheck as the standing guard against fetch-thread pile-up
+- [Phase ?]: [Phase 09-02]: D-10's dimming uses CSS `opacity`, NOT `text-opacity` -- textual 8.2.8 declares `opacity = FractionalProperty(children=True)` but `text_opacity = FractionalProperty()`, so text-opacity dims only the container's own content and leaves child panels bright
+- [Phase ?]: [Phase 09-02]: textual ships as an OPTIONAL `tui` extra (default `uv sync` stays at zero third-party packages); runtime resolution is claude-tui.py's own PEP 723 block, so a plain ./claude-tui.py works from any cwd and the daemon's PEP 668 interpreter never gains textual
+- [Phase ?]: [Phase 09-02]: both textual exit doors must be closed on every callback -- @work(exit_on_error=False) AND a blanket `except Exception` in the body; App._handle_exception "always results in the app exiting" and Timer._tick routes straight to it
 - [Phase ?]: [Phase 08-02]: serve() refactored to thread-per-connection (_handle_conn) so a stalled/malformed connection only blocks its own thread; query snapshot build runs entirely inside mon.sessions_lock, matching 08-01's lock discipline (SOCK-01/02/03)
 
 ### Pending Todos
@@ -150,14 +154,16 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-21T06:35:00.000Z
-Stopped at: Phase 9 planned
-Resume file: phases/09-terminal-dashboard-claude-tui-py/09-01-PLAN.md
+Last session: 2026-07-21T07:05:00.000Z
+Stopped at: Completed 09-02-PLAN.md — Phase 9 code-complete
+Resume file: None
 
 ## Operator Next Steps
 
-- Execute Phase 9 with `/gsd-execute-phase 9` — 2 plans, 2 waves. Wave 1 (09-01) adds the
-  textual-free substrate to `claude_monitor/core.py` + `--selfcheck` asserts; Wave 2 (09-02)
-  adds `claude-tui.py` and packaging (`pyproject.toml`, `install.sh`, `justfile`).
+- Phase 9 is code-complete (both plans executed). Run `./install.sh` once to pick up the new
+  `~/.local/bin/claude-tui` symlink, then `just tui`.
+- Verify with `/gsd-verify-work` — 09-02-PLAN.md carries 10 human-check steps. The ones with no
+  automated substitute are step 5 (sparkline width, assumption A2), step 9 (tmux, assumption A1),
+  the tray-menu cross-checks in steps 3-4, and step 10 (`claude-tui` on PATH).
 - Plan-checker was skipped (`workflow.plan_check: false`) — the plans were not independently
   verified before execution.

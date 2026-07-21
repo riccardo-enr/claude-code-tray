@@ -140,7 +140,7 @@ Plans:
   4. The screen refreshes automatically on an interval with no manual re-run or keypress needed to see new data.
   5. When the daemon isn't running or the socket is unreachable, the TUI shows a clear message instead of crashing or printing a traceback.
 
-**Plans**: 2 plans
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
@@ -149,7 +149,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-02-PLAN.md -- `claude-tui.py` textual App, CSS and two-timer refresh loop, plus packaging (`pyproject.toml` `tui` extra, `install.sh` symlink, `just tui`)
+- [x] 09-02-PLAN.md -- `claude-tui.py` textual App, CSS and two-timer refresh loop, plus packaging (`pyproject.toml` `tui` extra, `install.sh` symlink, `just tui`)
 
 **UI hint**: yes
 
@@ -165,4 +165,4 @@ Plans:
 | 6. Notification Control & Config         | v1.3      | 2/2             | Complete    | 2026-07-17 |
 | 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete    | 2026-07-18 |
 | 8. Daemon Socket Query Verb              | v1.5      | 2/2 | Complete    | 2026-07-20 |
-| 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 1/2             | In progress | -          |
+| 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 2/2             | Awaiting UAT | -          |
