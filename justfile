@@ -44,3 +44,7 @@ lint:
 # Open the generated dashboard in the browser.
 dashboard:
     xdg-open "{{dash}}"
+
+# Open the terminal dashboard (needs a real TTY -- textual drives the terminal directly).
+tui:
+    ./claude-tui.py

@@ -12,6 +12,14 @@ mkdir -p "$HOOKS" "$AUTOSTART"
 ln -sf "$SRC/claude-monitor.py" "$HOOKS/claude-monitor.py"
 ln -sf "$SRC/claude-send.py"    "$HOOKS/claude-send.py"
 
+# The terminal dashboard is typed by a human, so ~/.claude/hooks is the wrong home for
+# it. Symlink (never copy) so the deployed entry can never drift from the repo, and
+# guard on the directory existing -- an `if` block, not an `&&` chain, because
+# `set -euo pipefail` would abort the script on a false test.
+if [ -d "$HOME/.local/bin" ]; then
+  ln -sf "$SRC/claude-tui.py" "$HOME/.local/bin/claude-tui"
+fi
+
 cat > "$AUTOSTART/claude-monitor.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -27,6 +35,9 @@ echo "Installed:"
 echo "  $HOOKS/claude-monitor.py"
 echo "  $HOOKS/claude-send.py"
 echo "  $AUTOSTART/claude-monitor.desktop"
+if [ -L "$HOME/.local/bin/claude-tui" ]; then
+  echo "  $HOME/.local/bin/claude-tui"
+fi
 echo
 echo "Now merge these into the \"hooks\" object in ~/.claude/settings.json:"
 echo

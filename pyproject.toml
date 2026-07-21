@@ -5,6 +5,21 @@ description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+# textual is the milestone's ONE exception to the stdlib+PyGObject-only rule that the
+# empty top-level dependency list above states, and it is scoped to claude-tui.py alone
+# -- no other file in the repo may import it.
+# This entry is not the runtime resolution: claude-tui.py carries its own PEP 723 inline
+# script block, which is what makes a plain ./claude-tui.py work with no venv activated.
+# The key exists so basedpyright can resolve the import and so `uv sync --extra tui`
+# produces a dev environment. Keeping it OPTIONAL keeps the default `uv sync` at zero
+# third-party packages.
+# It must stay out of the daemon's interpreter: /usr/bin/python3 is PEP 668
+# externally-managed and runs `just selfcheck`, `just start` and `just restart`.
+# The range is duplicated in claude-tui.py's PEP 723 block -- change both. uv.lock
+# supplies the exact reproducible pin; the range only bounds the API generation.
+tui = ["textual>=8,<9"]
+
 [tool.pyright]
 # basedpyright (the LSP Zed runs) defaults to "recommended" mode, which floods a
 # gi.repository/PyGObject script with reportUnknown*/reportMissing* warnings (~800+).
