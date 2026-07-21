@@ -4,15 +4,15 @@ milestone: v1.5
 milestone_name: TUI Dashboard
 current_phase: 9
 current_phase_name: claude-tui.py
-status: planning
-stopped_at: Phase 9 context gathered
+status: ready to execute
+stopped_at: Phase 9 planned
 last_updated: "2026-07-21T00:00:00.000Z"
 last_activity: 2026-07-21
-last_activity_desc: Phase 9 context gathered (09-CONTEXT.md)
+last_activity_desc: Phase 9 planned (2 plans, 2 waves)
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 2
+  total_plans: 4
   completed_plans: 2
   percent: 50
 ---
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-13)
 ## Current Position
 
 Phase: 9 — Terminal Dashboard (claude-tui.py)
-Plan: Not started
-Status: Context gathered — ready to plan
-Last activity: 2026-07-21 — Phase 9 context gathered
+Plan: 0/2 complete (Wave 1: 09-01, Wave 2: 09-02)
+Status: Planned — ready to execute
+Last activity: 2026-07-21 — Phase 9 planned (09-RESEARCH.md, 09-PATTERNS.md, 2 plans)
 
 ## Performance Metrics
 
@@ -147,10 +147,14 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-20T11:39:50.009Z
-Stopped at: Phase 9 context gathered
-Resume file: phases/09-terminal-dashboard-claude-tui-py/09-CONTEXT.md
+Last session: 2026-07-21T06:35:00.000Z
+Stopped at: Phase 9 planned
+Resume file: phases/09-terminal-dashboard-claude-tui-py/09-01-PLAN.md
 
 ## Operator Next Steps
 
-- Plan Phase 9 with `/gsd-plan-phase 9` (Terminal Dashboard — TUI-01..05); 09-CONTEXT.md is written
+- Execute Phase 9 with `/gsd-execute-phase 9` — 2 plans, 2 waves. Wave 1 (09-01) adds the
+  textual-free substrate to `claude_monitor/core.py` + `--selfcheck` asserts; Wave 2 (09-02)
+  adds `claude-tui.py` and packaging (`pyproject.toml`, `install.sh`, `justfile`).
+- Plan-checker was skipped (`workflow.plan_check: false`) — the plans were not independently
+  verified before execution.
