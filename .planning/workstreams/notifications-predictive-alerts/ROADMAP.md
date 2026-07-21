@@ -140,7 +140,17 @@ Plans:
   4. The screen refreshes automatically on an interval with no manual re-run or keypress needed to see new data.
   5. When the daemon isn't running or the socket is unreachable, the TUI shows a clear message instead of crashing or printing a traceback.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 09-01-PLAN.md -- pure TUI substrate in `claude_monitor/core.py` (socket client, usage rows, trend text, session rows, timing constants) plus its `--selfcheck` asserts, all above the textual boundary
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 09-02-PLAN.md -- `claude-tui.py` textual App, CSS and two-timer refresh loop, plus packaging (`pyproject.toml` `tui` extra, `install.sh` symlink, `just tui`)
+
 **UI hint**: yes
 
 ## Progress
