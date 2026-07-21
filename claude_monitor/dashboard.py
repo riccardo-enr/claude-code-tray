@@ -502,7 +502,14 @@ function renderSessions(){
     td2.appendChild(dot);td2.appendChild(document.createTextNode(s.status));
     tr.appendChild(td2);
     var td3=document.createElement("td");td3.className="sdur";
-    td3.textContent=(s.entered===null||s.entered===undefined)?"-":sessDur(now-s.entered);
+    // Only a running session ticks live; waiting/done show the frozen run duration so
+    // the counter stops climbing once the session stops working (D-02 freeze).
+    if(s.status==="running"&&s.entered!==null&&s.entered!==undefined)
+      td3.textContent=sessDur(now-s.entered);
+    else if(s.frozen!==null&&s.frozen!==undefined)
+      td3.textContent=sessDur(s.frozen);
+    else
+      td3.textContent="-";
     tr.appendChild(td3);
     box.appendChild(tr);
   });
@@ -516,7 +523,7 @@ def render_dashboard(records, now, sessions=()):
     """Full self-contained dashboard HTML; the empty-state page when there is no data.
     Range bounds are ROLLING windows (now-24h, now-7d), not calendar ones, which would
     hide the most recent activity right after a reset. `sessions` is a snapshot list of
-    {dir,status,entered} dicts, shipped inert via the _embed_json payload and rendered
+    {dir,status,entered,frozen} dicts, shipped inert via the _embed_json payload and rendered
     client-side (D-08); it defaults empty so existing callers keep working.
     """
     records = history_numeric(records)
