@@ -6,6 +6,14 @@ requires-python = ">=3.11"
 dependencies = []
 
 [tool.pyright]
+# basedpyright (the LSP Zed runs) defaults to "recommended" mode, which floods a
+# gi.repository/PyGObject script with reportUnknown*/reportMissing* warnings (~800+).
+# Pin to "standard" -- pyright's own default -- so only real type errors surface.
+typeCheckingMode = "standard"
+# gi.repository submodules are generated at runtime and ship no stubs, so the import
+# itself is unresolvable to any static checker. Silence it here (basedpyright surfaces
+# it as reportMissingImports) rather than per-line.
+reportMissingImports = false
 # The repo root is an import root: the entry script claude-monitor.py imports the
 # first-party `claude_monitor` package that sits beside it. At runtime Python resolves
 # this via sys.path[0] (the symlink resolves to the repo dir); Pyright needs it spelled

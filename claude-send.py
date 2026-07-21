@@ -28,6 +28,7 @@ msg = {
     "message": data.get("message", ""),
     "pane": os.environ.get("TMUX_PANE", ""),
     "tmux": os.environ.get("TMUX", ""),
+    "term": os.environ.get("TERM_PROGRAM", ""),  # "zed" -> raise the Zed window, not tmux
 }
 
 try:
