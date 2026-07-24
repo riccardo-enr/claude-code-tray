@@ -10,6 +10,9 @@ ways. Nothing importable by /usr/bin/python3 may import it: that interpreter is 
 externally-managed, it is the one `just selfcheck`, `just start` and `just restart` run
 on, and it must never gain textual. Runtime resolution happens in uv's own environment
 via the PEP 723 block above, so the daemon's interpreter never sees the dependency.
+`uv run --script` resolves that block against the committed claude-tui.py.lock (regenerate
+with `uv lock --script claude-tui.py`), which pins the full transitive set with hashes --
+the T-09-SC supply-chain mitigation, in force for the interpreter that actually runs here.
 
 The consequence is a rule rather than a preference: anything worth asserting belongs in
 claude_monitor.core, where --selfcheck can prove it. What is left here is layout, CSS,
