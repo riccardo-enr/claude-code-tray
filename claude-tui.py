@@ -40,6 +40,12 @@ from claude_monitor import core
 # core.gauge_fill(pct, GAUGE_WIDTH), the glyphs/colors are applied below.
 GAUGE_WIDTH = 20
 
+# Rows in the decoded trends column graph (TUI-08). 8 == the 8 SPARK_GLYPHS levels, so a
+# decoded level L fills rows 0..L from the bottom (L+1 cells): level 7 fills the full
+# column, level 0 shows the single lowest block (like SPARK_GLYPHS[0]), and a None gap
+# stays blank -- a low-but-present hour never looks identical to an empty one. Render-only.
+TREND_ROWS = 8
+
 
 class ClaudeTui(App):
     """The whole application: three stacked panels, two timers, one socket worker.
@@ -235,6 +241,31 @@ class ClaudeTui(App):
             out.append_text(self._cap_row_text(row, pcts[i]))
         return out
 
+    def _trends_renderable(self, trends) -> Text:
+        """The #trends panel as a rich Text (the Static is markup=False). Falsy trends is
+        the collecting/degraded state (D-07): render core.trend_text's message verbatim and
+        never call spark_levels. Otherwise decode trends[0] (the 24-char sparkline) with
+        core.spark_levels and draw a TREND_ROWS-tall block column graph -- column i filled
+        from the bottom up to its decoded level, each filled cell colored by that column's
+        height along the same green->red ramp as the usage gauge (core.band(level/7*100)),
+        None columns left blank to preserve the time-aligned gaps. The remaining text rows
+        trends[1:] (today/wk, peak hour) render below unchanged -- core's exact strings (D-05).
+        This applies only glyphs and colors; it formats no number (D-05)."""
+        if not trends:
+            return Text(core.trend_text(trends))
+        levels = core.spark_levels(trends[0])
+        out = Text()
+        for r in range(TREND_ROWS - 1, -1, -1):  # top row down to the bottom
+            for lv in levels:
+                if lv is not None and lv >= r:
+                    # ponytail: whole column one band color (its own height), btop height-graph.
+                    out.append("█", style=core.band(lv / 7 * 100))  # full block
+                else:
+                    out.append(" ")
+            out.append("\n")
+        out.append("\n".join(trends[1:]))  # today/wk + peak rows, core strings unchanged
+        return out
+
     def render_all(self) -> None:
         """Push every panel from the bound snapshot. Formats nothing itself."""
         snap = self.snapshot
@@ -244,7 +275,9 @@ class ClaudeTui(App):
         self.query_one("#usage", Static).update(
             self._usage_renderable(snap.get("usage"), now)  # TUI-01 / TUI-06 / TUI-07
         )
-        self.query_one("#trends", Static).update(core.trend_text(snap.get("trends")))
+        self.query_one("#trends", Static).update(  # TUI-08 decoded colored column graph
+            self._trends_renderable(snap.get("trends"))
+        )
         table = self.query_one("#sessions", DataTable)
         scroll_y = table.scroll_y  # DataTable.clear() zeroes scroll_x/scroll_y (8.2.8)
         table.clear()  # keeps the column definitions
