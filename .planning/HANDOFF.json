@@ -1,0 +1,82 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-25T00:19:04+02:00",
+  "phase": "v1.6-closeout",
+  "phase_name": "TUI Polish milestone finalization",
+  "phase_dir": ".planning/workstreams/notifications-predictive-alerts",
+  "plan": null,
+  "task": 3,
+  "total_tasks": 5,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Audit existing v1.6 archive and release evidence",
+      "status": "done"
+    },
+    {
+      "id": 2,
+      "name": "Gather final statistics and accomplishments",
+      "status": "done"
+    },
+    {
+      "id": 3,
+      "name": "Update v1.6 release documents",
+      "status": "in_progress",
+      "progress": "Target edits are defined, but no release-document hunk applied; bulk apply_patch/git-apply attempts failed atomically."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 3,
+      "name": "Apply and verify v1.6 archive/project/state/retrospective updates one file at a time",
+      "status": "in_progress"
+    },
+    {
+      "id": 4,
+      "name": "Commit the v1.6 closeout amendment",
+      "status": "not_started"
+    },
+    {
+      "id": 5,
+      "name": "Create and verify annotated v1.6 tag, then complete/move the plan",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "The installed GSD runtime fails because /home/riccardo/.codex/package.json is missing.",
+      "type": "technical",
+      "workaround": "Continue the already-designed closeout manually; do not invoke gsd-tools."
+    },
+    {
+      "description": "apply_patch intermittently fails with bwrap: loopback: Failed RTM_NEWADDR; a bulk git apply also failed on context and changed nothing.",
+      "type": "technical",
+      "workaround": "Patch one file at a time, inspect exact local context first, then verify git diff immediately."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {
+      "decision": "Finalize v1.6 by amending its existing archive rather than rerunning archival.",
+      "rationale": "v1.6 roadmap, requirements, phase directories, PROJECT, STATE, and retrospective are already archived/shipped; only the final quick fix and missing tag need reconciliation.",
+      "phase": "v1.6"
+    },
+    {
+      "decision": "Use the existing documented milestone-audit override.",
+      "rationale": "User explicitly approved proceeding; v1.6 has 5/5 requirements, 3/3 plan summaries, UAT 4/4, and security 0 open.",
+      "phase": "v1.6"
+    },
+    {
+      "decision": "v2.0 will be a Rust TUI rewrite.",
+      "rationale": "User confirmed it as the next milestone; the Python Textual TUI remains the behavioral and visual parity reference.",
+      "phase": "v2.0"
+    }
+  ],
+  "uncommitted_files": [
+    "docs/plan/v1.6-milestone-finalization.md"
+  ],
+  "next_action": "Read .planning/.continue-here.md, acknowledge its constraints, verify git status, then patch the v1.6 release documents one file at a time and inspect each diff.",
+  "context_notes": "main is ahead of origin/main by code commit 73d6017 and docs commit 7ba2c2b. v1.6 tag does not exist. Final release range: 2fef6e9 through 73d6017; 15 code commits; 28 files across source/planning; +2143/-169; 2872 application Python LOC; 6 planned phase tasks plus 4 tracked quick-task tasks. Preserve unrelated untracked SEED-005, workstream config.json, and .zed/."
+}
