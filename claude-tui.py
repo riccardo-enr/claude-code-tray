@@ -272,32 +272,56 @@ class ClaudeTui(App):
             table.add_row(left, self._projection_text(pct, reset, win, now))
         return table
 
-    def _trends_renderable(self, trends) -> Text:
-        """The #trends panel as a rich Text (the Static is markup=False). Falsy trends is
-        the collecting/degraded state (D-07): render core.trend_text's message verbatim and
-        never call spark_levels. Otherwise decode trends[0] (the 24-char sparkline) with
-        core.spark_levels and draw a TREND_ROWS-tall block column graph -- column i filled
-        from the bottom up to its decoded level, each filled cell colored by that column's
-        height along the same green->red ramp as the usage gauge (core.band(level/7*100)),
-        None columns left blank to preserve the time-aligned gaps. The remaining text rows
-        trends[1:] (today/wk, peak hour) render below unchanged -- core's exact strings (D-05).
-        This applies only glyphs and colors; it formats no number (D-05)."""
+    def _heatmap_renderable(self, grid) -> Text | None:
+        """Render the active hours of core's Mon..Sun heatmap, or no column."""
+        span = core.heatmap_active_span(grid)
+        if span is None:
+            return None
+        out = Text("    Mon Tue Wed Thu Fri Sat Sun\n", style="dim")
+        for hour in range(span[0], span[1] + 1):
+            out.append("%02d  " % hour, style="dim")
+            for dow in range(7):
+                row = grid[dow] if dow < len(grid) and isinstance(grid[dow], list) else []
+                value = row[hour] if hour < len(row) else None
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    out.append("██", style=core.band(value))
+                else:
+                    out.append("··", style="dim")
+                if dow < 6:
+                    out.append("  ")
+            if hour < span[1]:
+                out.append("\n")
+        return out
+
+    def _trends_renderable(self, trends, heatmap=None):
+        """Render the decoded trend graph and optional heatmap side by side.
+
+        Falsy trends is the collecting/degraded state (D-07): render
+        core.trend_text's message verbatim and never render a heatmap. Otherwise
+        decode trends[0] with core.spark_levels and draw a TREND_ROWS-tall graph,
+        with the remaining core-formatted rows preserved verbatim below it.
+        """
         if not trends:
             return Text(core.trend_text(trends))
         levels = core.spark_levels(trends[0])
-        out = Text()
-        for r in range(TREND_ROWS - 1, -1, -1):  # top row down to the bottom
+        left = Text()
+        for r in range(TREND_ROWS - 1, -1, -1):
             for lv in levels:
                 if lv is not None and lv >= r:
-                    # ponytail: whole column one band color (its own height), btop height-graph.
-                    out.append("█", style=core.band(lv / 7 * 100))  # full block
+                    left.append("█", style=core.band(lv / 7 * 100))
                 else:
-                    out.append(" ")
-            out.append("\n")
-        out.append(
-            "\n".join(trends[1:])
-        )  # today/wk + peak rows, core strings unchanged
-        return out
+                    left.append(" ")
+            left.append("\n")
+        left.append("\n".join(trends[1:]))
+        right = self._heatmap_renderable(heatmap)
+        if right is None:
+            return left
+
+        table = Table.grid(expand=True, padding=(0, 2))
+        table.add_column(ratio=1)
+        table.add_column(justify="right", no_wrap=True)
+        table.add_row(left, right)
+        return table
 
     def render_all(self) -> None:
         """Push every panel from the bound snapshot. Formats nothing itself."""
@@ -309,7 +333,7 @@ class ClaudeTui(App):
             self._usage_renderable(snap.get("usage"), now)  # TUI-01 / TUI-06 / TUI-07
         )
         self.query_one("#trends", Static).update(  # TUI-08 decoded colored column graph
-            self._trends_renderable(snap.get("trends"))
+            self._trends_renderable(snap.get("trends"), snap.get("heatmap"))
         )
         table = self.query_one("#sessions", DataTable)
         scroll_y = table.scroll_y  # DataTable.clear() zeroes scroll_x/scroll_y (8.2.8)
@@ -323,11 +347,11 @@ class ClaudeTui(App):
             # shape as the v1.3 Pango body and the v1.4 dashboard's textContent panel.
             # TUI-09: the D-07 status color is a rich Text STYLE, never a markup string,
             # so the :199 mitigation survives -- waiting yellow / running green / done dim.
-            band = core.sess_status_band(status)
+            status_style = core.sess_status_band(status)
             table.add_row(
-                Text(status, style=band),
-                Text(proj, style=band),
-                Text(elapsed, style=band),
+                Text(status, style=status_style),
+                Text(proj, style=status_style),
+                Text(elapsed, style=status_style),
             )
         # D-01: the 1s rebuild must not steal the scroll the user set; clear() zeroed it
         # above, so restore it. validate_scroll_y re-clamps if the session list shrank.
