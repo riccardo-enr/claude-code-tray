@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: TUI Polish
 current_phase: 10
-current_phase_name: btop-style
-status: roadmapped
-stopped_at: Phase 10 context gathered
-last_updated: "2026-07-24T09:03:46.015Z"
+current_phase_name: tui-polish-btop-style
+status: executing
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-07-24T10:03:03.596Z"
 last_activity: 2026-07-24
-last_activity_desc: v1.6 roadmap created (single phase, Phase 10)
+last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 1
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** v1.6 TUI Polish — Phase 10 roadmapped (btop-style: color/gauge/graph/border `claude-tui.py`). Plan next via `/gsd-plan-phase 10`.
+**Current focus:** Phase 10 — tui-polish-btop-style
 
 ## Current Position
 
-Phase: Phase 10 — TUI Polish (btop-style), not started
-Plan: — (roadmap created; plans TBD)
-Status: Roadmapped — awaiting `/gsd-plan-phase 10`
-Last activity: 2026-07-24 — v1.6 roadmap created (single phase, Phase 10)
+Phase: 10 (tui-polish-btop-style) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-07-24 — Phase 10 execution started
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Last activity: 2026-07-24 — v1.6 roadmap created (single phase, Phase 10)
 | Phase 08 P02 | 5min | 2 tasks | 1 files |
 | Phase 09 P01 | 18min | 2 tasks | 2 files |
 | Phase 09 P02 | 22min | 2 tasks | 5 files |
+| Phase 10 P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 09-02]: textual ships as an OPTIONAL `tui` extra (default `uv sync` stays at zero third-party packages); runtime resolution is claude-tui.py's own PEP 723 block, so a plain ./claude-tui.py works from any cwd and the daemon's PEP 668 interpreter never gains textual
 - [Phase ?]: [Phase 09-02]: both textual exit doors must be closed on every callback -- @work(exit_on_error=False) AND a blanket `except Exception` in the body; App._handle_exception "always results in the app exiting" and Timer._tick routes straight to it
 - [Phase ?]: [Phase 08-02]: serve() refactored to thread-per-connection (_handle_conn) so a stalled/malformed connection only blocks its own thread; query snapshot build runs entirely inside mon.sessions_lock, matching 08-01's lock discipline (SOCK-01/02/03)
+- [Phase ?]: core.band cutoffs are fixed literals (<70/70-<90/>=90), separate from the mutable badge USAGE_THRESHOLD (D-01)
+- [Phase ?]: Gauge cells colored by bar position so the meter always sweeps green->yellow->red (btop D-03); fill count in core.gauge_fill (D-04), glyphs/colors in claude-tui.py
 
 ### Pending Todos
 
@@ -161,9 +164,9 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-24T09:03:46.003Z
-Stopped at: Phase 10 context gathered
-Resume file: .planning/workstreams/notifications-predictive-alerts/phases/10-tui-polish-btop-style/10-CONTEXT.md
+Last session: 2026-07-24T10:03:03.587Z
+Stopped at: Completed 10-01-PLAN.md
+Resume file: None
 Next: `/gsd-plan-phase 10`
 
 ## Operator Next Steps

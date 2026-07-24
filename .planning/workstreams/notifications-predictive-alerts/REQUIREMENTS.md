@@ -24,8 +24,8 @@ values/strings belong in `core`. This is the main gray area for plan-phase.
 
 ### TUI (terminal rendering polish)
 
-- [ ] **TUI-06**: Usage %, burn rate, and reset countdown are colored by proximity to the cap — green / yellow / red thresholds — for both the 5-hour and 7-day caps.
-- [ ] **TUI-07**: The 5h and 7d usage each render as a gradient progress-bar gauge (btop-style meter), replacing the plain "N% of limit" text rows.
+- [x] **TUI-06**: Usage %, burn rate, and reset countdown are colored by proximity to the cap — green / yellow / red thresholds — for both the 5-hour and 7-day caps.
+- [x] **TUI-07**: The 5h and 7d usage each render as a gradient progress-bar gauge (btop-style meter), replacing the plain "N% of limit" text rows.
 - [ ] **TUI-08**: The trends panel renders a richer usage graph than the reused tray sparkline — taller and/or colored/braille-style — still sourcing its data from `core`'s existing trend functions (no new trend math).
 - [ ] **TUI-09**: The live sessions table is styled — status-colored rows and improved spacing/borders/striping — over the current plain DataTable.
 - [ ] **TUI-10**: Each panel (usage, trends, sessions) is wrapped in a titled, rounded bordered box, giving the btop-style paneled layout.
@@ -54,8 +54,8 @@ braille/block graphs. Take inspiration from its look, not its architecture.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUI-06 | Phase 10 | Pending |
-| TUI-07 | Phase 10 | Pending |
+| TUI-06 | Phase 10 | Complete |
+| TUI-07 | Phase 10 | Complete |
 | TUI-08 | Phase 10 | Pending |
 | TUI-09 | Phase 10 | Pending |
 | TUI-10 | Phase 10 | Pending |
