@@ -19,7 +19,9 @@ every tracked session with status/dir/duration, self-healing off the list when
 a tmux pane dies with no hook event required. v1.5 gave that data a **terminal
 home**: a `textual`-rendered `claude-tui.py` showing usage/quota/trends and live
 sessions, fed by a new read-only query verb on the daemon's existing unix socket
-— for people who live in the terminal and don't want a browser round-trip.
+— for people who live in the terminal and do not want a browser round-trip. v1.6
+turned that terminal view into a btop-inspired dashboard with colored quota
+gauges, a taller trends graph, styled sessions, and titled bordered panels.
 
 ## Core Value
 
@@ -45,8 +47,8 @@ it resets** — without launching a separate terminal monitor.
 
 ## Current State
 
-**Shipped:** v1.5 (TUI Dashboard), 2026-07-24 (tag `v1.5`). Six milestones, nine
-phases, all implemented and reviewed. `claude-monitor.py` was restructured into a
+**Completed:** v1.6 (TUI Polish), 2026-07-24, awaiting milestone closeout. Ten
+phases are implemented and reviewed. `claude-monitor.py` was restructured into the
 `claude_monitor/` package (`core.py` + `dashboard.py` + entry script) during
 v1.3/v1.4; v1.5 added `claude-tui.py` as the third consumer of `core.py`.
 
@@ -58,15 +60,13 @@ status, project dir, time-in-state — in the browser dashboard and now in a
 `textual` terminal UI (`claude-tui.py`), both fed off the daemon's existing socket,
 self-healing off the list when a tmux pane dies with no hook event required.
 
-**Next milestone:** none yet — a v1.6 "TUI polish" milestone is proposed (see STATE.md
-Deferred Items: color-by-threshold, progress bars, richer trends, optional pane
-focus). Plan next via `/gsd-new-milestone`.
+**Next milestone:** a Rust TUI rewrite is proposed for v2.0, using the Python
+Textual implementation as a behavioral and visual reference.
 
 ## Current Milestone
 
-No workstream is currently open. `notifications-predictive-alerts` shipped v1.5
-2026-07-24 (tag `v1.5`) and is archived under
-`workstreams/notifications-predictive-alerts/milestones/`.
+`notifications-predictive-alerts` completed v1.6 on 2026-07-24 and is ready for
+milestone closeout.
 
 ## Requirements
 
@@ -106,15 +106,16 @@ No workstream is currently open. `notifications-predictive-alerts` shipped v1.5
 - checkmark Dashboard stays self-contained with the sessions panel added (SESSVIEW-05) — v1.4
 - checkmark Read-only `{"query":"snapshot"}` verb on the daemon socket — sessions + latest usage/history, thread-per-connection, `sessions_lock` torn-read safety, chmod 0600 (SOCK-01/02/03) — v1.5
 - checkmark `claude-tui.py` textual TUI — 5h/7d usage, trends (sparkline/burn/peak reused from `core`), live sessions panel, auto-refresh, clean degradation when the daemon is unreachable (TUI-01..05) — v1.5
+- checkmark Btop-inspired TUI polish — threshold colors, quota gauges, taller trends graph, styled sessions, and titled rounded panels (TUI-06..10) — Phase 10
 
 ### Active
 
-None — no milestone currently open. v1.6 "TUI polish" is proposed but not yet scoped.
+None — v1.6 is complete and awaiting closeout.
 
 Still deferred: click-to-focus a pane from the TUI, standalone no-daemon TUI mode,
-TUI polish (v1.6), raw data export (HIST-F1 / DASH-F2), configurable
-ranges (TREND-F1 / DASH-F3), quiet hours (NOTIF-F1), per-event sound/urgency
-(NOTIF-F2), hard-threshold push (ALERT-F1). See
+raw data export (HIST-F1 / DASH-F2), configurable ranges (TREND-F1 / DASH-F3),
+quiet hours (NOTIF-F1), per-event sound/urgency (NOTIF-F2), and hard-threshold
+push (ALERT-F1). See
 `workstreams/notifications-predictive-alerts/STATE.md` "Deferred Items" for the
 full table with dates and reasoning.
 
@@ -158,6 +159,7 @@ as QUOTA-01 in v1.2.)*
 | v1.5 takes on `textual` as a runtime dependency, breaking the stdlib+PyGObject-only rule that held v1.0-v1.4 | User's explicit call at milestone scoping — `curses` was the lazy/consistent option but the user chose textual's nicer widgets/layout for the one entry point that needs them | ✓ Good — v1.5 shipped; scoped to `claude-tui.py` via PEP 723 + optional `tui` extra, so the daemon's system interpreter never gains it |
 | v1.5's TUI gets live sessions via a new query verb on the daemon's socket, not a standalone JSONL-only reader | Standalone was the lazier MVP (no daemon changes) but cannot see `self.sessions` — it lives only in the running `Monitor` process's memory, never on disk. Shared-socket was chosen to keep live sessions in v1 scope | ✓ Good — v1.5 shipped; thread-per-connection + `sessions_lock` kept the hook-event path un-slowed and torn-read-safe |
 | TUI substrate lives in `core.py` above the textual boundary; `query_snapshot` raises, degraded-mode swallowing lives at the App worker boundary | Everything assertable is provable by `--selfcheck` on the stock interpreter; `claude-tui.py` stays App-class-and-CSS only | ✓ Good — v1.5 Phase 9 |
+| Keep Phase 10 logic in pure `core` helpers and rendering in `claude-tui.py` | Preserves stock-interpreter self-checks and keeps Textual/Rich confined to the TUI boundary | ✓ Good — Phase 10 |
 
 ## Evolution
 
@@ -177,7 +179,5 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-24 — after v1.5 (TUI Dashboard) milestone. Shipped a
-`textual` terminal UI (`claude-tui.py`) over a new read-only daemon-socket query
-verb; closed SEED-007. 8/8 requirements delivered. Next: v1.6 "TUI polish" proposed
-but not yet scoped.*
+*Last updated: 2026-07-24 — after Phase 10. Completed v1.6 TUI Polish with
+5/5 requirements verified; milestone closeout is next.*

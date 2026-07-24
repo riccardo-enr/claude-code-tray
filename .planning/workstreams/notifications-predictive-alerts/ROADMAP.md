@@ -36,13 +36,13 @@ archived phase artifacts live under `.planning/workstreams/notifications-predict
 - ✅ **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (shipped 2026-07-17) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.4 Session Dashboard** — Phase 7 (shipped 2026-07-20) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.5 TUI Dashboard** — Phases 8-9 (shipped 2026-07-24) — [archive](./milestones/v1.5-ROADMAP.md)
-- 🚧 **v1.6 TUI Polish** — Phase 10 (planning)
+- ✅ **v1.6 TUI Polish** — Phase 10 (complete; awaiting milestone closeout)
 
 ## Phases
 
-### 🚧 v1.6 TUI Polish (Phase 10) — ACTIVE
+### ✅ v1.6 TUI Polish (Phase 10) — COMPLETE
 
-- [ ] **Phase 10: TUI Polish (btop-style)** — color/gauge/graph/border the v1.5 `claude-tui.py`, same data, same socket
+- [x] **Phase 10: TUI Polish (btop-style)** — color/gauge/graph/border the v1.5 `claude-tui.py`, same data, same socket (completed 2026-07-24)
 
 Full detail below under [Phase Details](#phase-details).
 
@@ -172,6 +172,6 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 | 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete    | 2026-07-18 |
 | 8. Daemon Socket Query Verb              | v1.5      | 2/2             | Complete    | 2026-07-20 |
 | 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 2/2             | Complete    | 2026-07-24 |
-| 10. TUI Polish (btop-style)              | v1.6      | 3/3 | In Progress|  |
+| 10. TUI Polish (btop-style)              | v1.6      | 3/3 | Complete   | 2026-07-24 |
 </content>
 </invoke>

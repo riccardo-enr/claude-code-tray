@@ -4,11 +4,11 @@ milestone: v1.6
 milestone_name: TUI Polish
 current_phase: 10
 current_phase_name: tui-polish-btop-style
-status: verifying
-stopped_at: Completed quick task 260724-hcm
-last_updated: "2026-07-24T11:09:22Z"
+status: complete
+stopped_at: Phase 10 complete; milestone ready for closeout
+last_updated: "2026-07-24T15:45:59Z"
 last_activity: 2026-07-24
-last_activity_desc: Added TUI quota projections and weekly heatmap
+last_activity_desc: Phase 10 complete
 progress:
   total_phases: 1
   completed_phases: 1
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 10 — tui-polish-btop-style
+**Current focus:** Milestone v1.6 complete — ready for closeout
 
 ## Current Position
 
-Phase: 10 (tui-polish-btop-style) — EXECUTING
+Phase: 10 (tui-polish-btop-style) — COMPLETE
 Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-07-24 — Phase 10 execution started
+Status: Milestone complete
+Last activity: 2026-07-24 — Phase 10 complete
 
 ## Performance Metrics
 
@@ -167,15 +167,14 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-24T11:09:22Z
-Stopped at: Completed quick task 260724-hcm
+Last session: 2026-07-24T15:45:59Z
+Stopped at: Phase 10 complete; milestone v1.6 ready for closeout
 Resume file: None
-Next: `/gsd-verify-work 10`
+Next: `/gsd-complete-milestone v1.6`
 
 ## Operator Next Steps
 
-- Run `just restart` once so the live daemon snapshot includes the new heatmap field.
-- Run `just tui` and visually verify projection spacing, heatmap colors, and terminal-width fit.
-- Complete Phase 10 conversational UAT with `/gsd-verify-work 10`.
+- Complete and archive milestone v1.6 with `/gsd-complete-milestone v1.6`.
+- Then start the Rust TUI milestone with `/gsd-new-milestone v2.0 Rust TUI`.
 
 - Plan-checker was skipped (`workflow.plan_check: false`); implementation gates passed.
