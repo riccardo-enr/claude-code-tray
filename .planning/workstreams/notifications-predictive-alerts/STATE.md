@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: TUI Polish
-status: planning
-last_updated: "2026-07-24T08:38:49.456Z"
+status: roadmapped
+last_updated: "2026-07-24T10:45:00.000Z"
 last_activity: 2026-07-24
 progress:
-  total_phases: 0
+  total_phases: 1
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** None — v1.5 shipped. v1.6 "TUI polish" proposed; plan next via `/gsd-new-milestone`.
+**Current focus:** v1.6 TUI Polish — Phase 10 roadmapped (btop-style: color/gauge/graph/border `claude-tui.py`). Plan next via `/gsd-plan-phase 10`.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-24 — Milestone v1.6 started
+Phase: Phase 10 — TUI Polish (btop-style), not started
+Plan: — (roadmap created; plans TBD)
+Status: Roadmapped — awaiting `/gsd-plan-phase 10`
+Last activity: 2026-07-24 — v1.6 roadmap created (single phase, Phase 10)
 
 ## Performance Metrics
 
@@ -74,6 +74,8 @@ Last activity: 2026-07-24 — Milestone v1.6 started
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- **v1.6 is 1 phase** (Phase 10, TUI Polish). All five requirements (TUI-06..TUI-10) touch the same two files (`claude-tui.py` + `core.py` helpers) with no hard data dependency between them — unlike v1.5's Phase 8->9 socket-then-TUI unblock. The core-vs-TUI boundary (assertable helpers in `core`, `--selfcheck`-proven; color/gauge/border rendering in `claude-tui.py`) runs INSIDE each of TUI-06..TUI-09, not between requirements, so it cannot split them into two phases without spanning a requirement across both — it is a PLAN-level split within Phase 10, mirroring v1.5's 09-01 (core substrate) then 09-02 (textual wiring). Matches the 1-2-phases-per-milestone precedent (v1.2 shipped 11 reqs in one phase).
 
 - v1.3 is **2 phases** (5: notification path + both producers; 6: config/control). Coarse granularity, and the project precedent is 1-2 phases per milestone (v1.2 shipped 11 requirements in one phase).
 - **Both producers (SESS-* and ALERT-*) land in Phase 5, not separate phases.** The deliverable is the shared emit path (de-dupe, mute hook, click-to-focus); building it against one producer and bolting the second on later is how it grows two heads — the exact failure SEED-004 called out.
@@ -155,9 +157,10 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-21T07:05:00.000Z
-Stopped at: Completed 09-02-PLAN.md — Phase 9 code-complete
+Last session: 2026-07-24T10:45:00.000Z
+Stopped at: v1.6 roadmap created — Phase 10 (TUI Polish) defined, TUI-06..TUI-10 mapped, traceability filled
 Resume file: None
+Next: `/gsd-plan-phase 10`
 
 ## Operator Next Steps
 

@@ -1,6 +1,6 @@
 # Requirements — claude-code-tray v1.6 (TUI Polish)
 
-**Status:** 🚧 PLANNING
+**Status:** 🚧 ROADMAPPED — Phase 10
 
 Milestone goal: turn the v1.5 plain-text `claude-tui.py` into a btop-inspired
 terminal dashboard — colored, gauged, and bordered — without changing what data it
@@ -54,8 +54,8 @@ braille/block graphs. Take inspiration from its look, not its architecture.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUI-06 | TBD | Pending |
-| TUI-07 | TBD | Pending |
-| TUI-08 | TBD | Pending |
-| TUI-09 | TBD | Pending |
-| TUI-10 | TBD | Pending |
+| TUI-06 | Phase 10 | Pending |
+| TUI-07 | Phase 10 | Pending |
+| TUI-08 | Phase 10 | Pending |
+| TUI-09 | Phase 10 | Pending |
+| TUI-10 | Phase 10 | Pending |

@@ -14,9 +14,16 @@ renders usage/quota/trends and live sessions as a `textual` TUI, fed by a new
 read-only query verb on the daemon's existing unix socket, for people who live
 in the terminal and don't want a browser round-trip.
 
+v1.6 makes that TUI look the part. The v1.5 renderer shows the right data but as
+flat, uncolored text; v1.6 turns it btop-inspired — threshold coloring, gradient
+progress-bar gauges, a richer trends graph, a styled sessions table, and titled
+rounded bordered panels. Pure presentation: no new data source, no new polling,
+no IPC change, no new runtime dependency.
+
 Constraints that held across all four shipped milestones: stdlib + PyGObject
 only, X11-only, one background poll, no new dependencies. v1.5 takes the first
-exception — `textual` as a runtime dependency, scoped to the one new entry point.
+exception — `textual` as a runtime dependency, scoped to the one new entry point;
+v1.6 adds nothing to that.
 
 Full phase detail for shipped milestones lives in `.planning/workstreams/notifications-predictive-alerts/milestones/`;
 archived phase artifacts live under `.planning/workstreams/notifications-predictive-alerts/milestones/v1.4-phases/`.
@@ -29,8 +36,15 @@ archived phase artifacts live under `.planning/workstreams/notifications-predict
 - ✅ **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (shipped 2026-07-17) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.4 Session Dashboard** — Phase 7 (shipped 2026-07-20) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.5 TUI Dashboard** — Phases 8-9 (shipped 2026-07-24) — [archive](./milestones/v1.5-ROADMAP.md)
+- 🚧 **v1.6 TUI Polish** — Phase 10 (planning)
 
 ## Phases
+
+### 🚧 v1.6 TUI Polish (Phase 10) — ACTIVE
+
+- [ ] **Phase 10: TUI Polish (btop-style)** — color/gauge/graph/border the v1.5 `claude-tui.py`, same data, same socket
+
+Full detail below under [Phase Details](#phase-details).
 
 <details>
 <summary>✅ v1.0 Usage & Quota Monitoring (Phase 1) — SHIPPED 2026-07-11</summary>
@@ -109,6 +123,26 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 
 </details>
 
+## Phase Details
+
+### Phase 10: TUI Polish (btop-style)
+**Goal**: The v1.5 plain-text `claude-tui.py` becomes a btop-inspired terminal dashboard — threshold-colored, gauged, richer-graphed, styled sessions, bordered panels — showing the same data from the same snapshot socket, with `claude_monitor.core` still the single source of every formatted value.
+**Depends on**: Phase 9 (the v1.5 `claude-tui.py` this polishes; its `core` substrate and CSS-only App are the surface being reworked)
+**Requirements**: TUI-06, TUI-07, TUI-08, TUI-09, TUI-10
+**Success Criteria** (what must be TRUE):
+  1. Usage %, burn rate, and reset countdown are colored green / yellow / red by proximity to the cap for both the 5h and 7d caps — a near-full cap reads red at a glance, a low one green (TUI-06).
+  2. Each of the 5h and 7d usage rows renders as a gradient progress-bar gauge (green->yellow->red fill), replacing the plain "N% of limit" text (TUI-07).
+  3. The trends panel shows a richer usage graph — taller and/or colored/braille — than the reused tray sparkline, drawn from `core`'s existing trend data with no new trend math (TUI-08).
+  4. The live sessions table shows status-colored rows with improved spacing / borders / striping, over the current plain DataTable (TUI-09).
+  5. Each of the three panels (usage, trends, sessions) appears as a titled, rounded, bordered box — the btop-style paneled layout (TUI-10).
+**Plans**: TBD
+**UI hint**: yes
+
+**Constraints & boundary (for plan-phase to respect):**
+- **Core-vs-TUI boundary is the central gray area, and it runs INSIDE each requirement, not between them.** Threshold-band decisions (TUI-06/09), gauge fill math (TUI-07), and any graph data expressible as plain values/strings (TUI-08) belong in `claude_monitor.core`, proven by `--selfcheck` on stock `/usr/bin/python3` (PEP 668 — must never import textual/rich). The visual application of color, gauge glyphs, borders, striping, and CSS stays in `claude-tui.py`. TUI-10 is almost entirely CSS with little-to-no core surface. Because the assertable half and the render-only half of TUI-06..TUI-09 live in one requirement each, this is a **plan-level split within this one phase** — mirroring v1.5's 09-01 (core substrate + `--selfcheck` asserts) then 09-02 (textual wiring) — NOT a phase boundary.
+- **D-05 parity holds:** `claude_monitor.core` stays the single source of truth for every formatted value, so the tray and TUI can never disagree; no new number/string formatter is introduced in `claude-tui.py`.
+- **No new data source, no new polling, no IPC/socket change, no new runtime dependency.** Same `{"query": "snapshot"}` verb; `textual` stays the only third-party dep, scoped to `claude-tui.py` via its PEP 723 block. Deferred: TUI click-to-focus, no-daemon standalone mode.
+
 ## Progress
 
 | Phase                                    | Milestone | Plans Complete | Status      | Completed  |
@@ -120,5 +154,8 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 | 5. Notification Path & Event Producers   | v1.3      | 3/3             | Complete    | 2026-07-14 |
 | 6. Notification Control & Config         | v1.3      | 2/2             | Complete    | 2026-07-17 |
 | 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete    | 2026-07-18 |
-| 8. Daemon Socket Query Verb              | v1.5      | 2/2 | Complete    | 2026-07-20 |
+| 8. Daemon Socket Query Verb              | v1.5      | 2/2             | Complete    | 2026-07-20 |
 | 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 2/2             | Complete    | 2026-07-24 |
+| 10. TUI Polish (btop-style)              | v1.6      | 0/TBD           | Not started | -          |
+</content>
+</invoke>
