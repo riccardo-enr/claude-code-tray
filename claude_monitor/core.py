@@ -450,28 +450,49 @@ def local_bounds(now):
 
 
 def trend_sparkline(records, now):
-    """24-char block sparkline of mean pct per hour; column 0 = 23h ago, 23 = now.
-    Heights auto-scale to the window's own min..max; empty hours render SPARK_GAP.
+    """24-char block sparkline of quota usage added per clock hour.
+
+    ``pct`` is cumulative inside the rolling 5h window, so its hourly mean produces a
+    misleading staircase. Sum only trustworthy per-sample rises instead, using the same
+    reset, gap and spike semantics as the usage heatmap. Column 0 is 23 clock hours ago
+    and column 23 is the current clock hour; populated zero-usage hours render at floor.
     """
-    buckets = [[] for _ in range(24)]
-    for rec in records:
-        bucket = 23 - int((now - rec["t"]) // 3600)
+    current_hour = int(
+        datetime.datetime.fromtimestamp(now)
+        .replace(minute=0, second=0, microsecond=0)
+        .timestamp()
+    )
+    buckets = [None] * 24
+    prev = None
+    for rec in sorted(records, key=lambda r: r["t"]):
+        rise = 0.0
+        if prev is not None and 0 <= rec["t"] - prev[0] <= GAP_MAX:
+            rise = rec["pct"] - prev[1]
+            if rise < 0 or rise > RISE_MAX:
+                rise = 0.0
+        prev = (rec["t"], rec["pct"])
+
+        rec_hour = int(
+            datetime.datetime.fromtimestamp(rec["t"])
+            .replace(minute=0, second=0, microsecond=0)
+            .timestamp()
+        )
+        bucket = 23 - int((current_hour - rec_hour) // 3600)
         if 0 <= bucket <= 23:
-            buckets[bucket].append(rec["pct"])
-    means = [sum(b) / len(b) if b else None for b in buckets]
-    vals = [m for m in means if m is not None]
+            buckets[bucket] = (buckets[bucket] or 0.0) + rise
+    vals = [value for value in buckets if value is not None]
     if not vals:
         return SPARK_GAP * 24
     lo, hi = min(vals), max(vals)
     span = hi - lo
     out = []
-    for m in means:
-        if m is None:
+    for value in buckets:
+        if value is None:
             out.append(SPARK_GAP)
         elif span == 0:
             out.append(SPARK_GLYPHS[0])  # flat window -> floor, and no ZeroDivisionError
         else:
-            idx = round((m - lo) / span * (len(SPARK_GLYPHS) - 1))
+            idx = round((value - lo) / span * (len(SPARK_GLYPHS) - 1))
             out.append(SPARK_GLYPHS[idx])
     return "".join(out)
 

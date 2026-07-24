@@ -266,10 +266,14 @@ def demo():
     assert datetime.datetime.fromtimestamp(week_start).weekday() == 0
     assert datetime.datetime.fromtimestamp(week_start).hour == 0
     assert week_start <= day_start <= now_lb
-    now_sp = 1_700_000_000
+    oldest_hour = int(datetime.datetime(2024, 1, 2, 1).timestamp())
+    current_hour = oldest_hour + 23 * 3600
+    now_sp = current_hour + 300
     recs_sp = [
-        {"t": now_sp - 23 * 3600, "pct": 5.0},  # bucket 0 (oldest), lowest mean
-        {"t": now_sp, "pct": 90.0},  # bucket 23 (current hour), highest mean
+        {"t": oldest_hour, "pct": 0.0},
+        {"t": oldest_hour + 60, "pct": 1.0},  # bucket 0: 1% used
+        {"t": current_hour, "pct": 1.0},  # data gap: no inferred usage
+        {"t": current_hour + 60, "pct": 10.0},  # bucket 23: 9% used
     ]
     spark = trend_sparkline(recs_sp, now_sp)
     assert len(spark) == 24
@@ -277,6 +281,35 @@ def demo():
     assert spark[23] == SPARK_GLYPHS[-1]
     assert spark[12] == SPARK_GAP  # interior empty hour stays a gap
     assert trend_sparkline([], now_sp) == SPARK_GAP * 24
+    # Equal usage in consecutive clock hours must render equal bars. The source pct is
+    # cumulative inside the rolling 5h window, so averaging pct itself would incorrectly
+    # render these hours as an ascending staircase.
+    hour_start = int(datetime.datetime(2024, 1, 2, 1).timestamp())
+    hourly = [{"t": hour_start - 60, "pct": 0.0}]
+    pct = 0.0
+    for hour in range(3):
+        for minute in range(0, 60, 5):
+            if minute:
+                pct += 1.0
+            hourly.append({
+                "t": hour_start + hour * 3600 + minute * 60,
+                "pct": pct,
+            })
+    hourly_spark = trend_sparkline(hourly, hour_start + 3 * 3600 - 1)
+    assert hourly_spark[21] == hourly_spark[22] == hourly_spark[23]
+    # Bins align to clock-hour boundaries, not rolling 60-minute slices anchored at now.
+    boundary = int(datetime.datetime(2024, 1, 2, 2).timestamp())
+    boundary_spark = trend_sparkline(
+        [
+            {"t": boundary + 49 * 60, "pct": 0.0},
+            {"t": boundary + 50 * 60, "pct": 5.0},
+            {"t": boundary + 55 * 60, "pct": 5.0},
+            {"t": boundary + 60 * 60, "pct": 5.0},
+        ],
+        boundary + 90 * 60,
+    )
+    assert boundary_spark[22] == SPARK_GLYPHS[-1]
+    assert boundary_spark[23] == SPARK_GLYPHS[0]
     flat = [{"t": now_sp - h * 3600, "pct": 42.0} for h in range(24)]
     fspark = trend_sparkline(flat, now_sp)
     assert all(c == SPARK_GLYPHS[0] for c in fspark)
