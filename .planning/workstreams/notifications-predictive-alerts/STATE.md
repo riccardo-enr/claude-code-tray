@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: TUI Dashboard
-current_phase: 9
-current_phase_name: claude-tui.py
-status: shipped
-stopped_at: Milestone v1.5 completed and archived (tag v1.5)
-last_updated: "2026-07-24T00:00:00.000Z"
+milestone: v1.6
+milestone_name: TUI Polish
+status: planning
+last_updated: "2026-07-24T08:38:49.456Z"
 last_activity: 2026-07-24
-last_activity_desc: v1.5 (TUI Dashboard) closed — archived, PROJECT.md evolved, tagged v1.5
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-Milestone: v1.5 (TUI Dashboard) — SHIPPED 2026-07-24 (tag `v1.5`)
-Phases: 8-9 complete (4/4 plans); archived to `milestones/v1.5-ROADMAP.md`, `v1.5-REQUIREMENTS.md`, `v1.5-phases/`
-Status: Milestone closed — no workstream open
-Last activity: 2026-07-24 — v1.5 archived, PROJECT.md full evolution review, tagged v1.5
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-24 — Milestone v1.6 started
 
 ## Performance Metrics
 
@@ -167,8 +163,10 @@ Resume file: None
 
 - Phase 9 is code-complete (both plans executed). Run `./install.sh` once to pick up the new
   `~/.local/bin/claude-tui` symlink, then `just tui`.
+
 - Verify with `/gsd-verify-work` — 09-02-PLAN.md carries 10 human-check steps. The ones with no
   automated substitute are step 5 (sparkline width, assumption A2), step 9 (tmux, assumption A1),
   the tray-menu cross-checks in steps 3-4, and step 10 (`claude-tui` on PATH).
+
 - Plan-checker was skipped (`workflow.plan_check: false`) — the plans were not independently
   verified before execution.
