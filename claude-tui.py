@@ -62,7 +62,11 @@ class ClaudeTui(App):
     #coldstart { display: none; height: 1fr; content-align: center middle; }
     """
 
-    # D-02: exactly one. Footer() renders this table itself, so the footer needs no code.
+    # D-02: exactly one binding, and no theme toggle. ENABLE_COMMAND_PALETTE defaults to
+    # True, which binds ctrl+p and advertises it in the Footer, exposing action_change_theme
+    # (the theme toggle D-02 rejected); switch it off so "q" is genuinely the only binding.
+    ENABLE_COMMAND_PALETTE = False
+    # Footer() renders this table itself, so the footer needs no code.
     BINDINGS = [("q", "quit", "quit")]
 
     # The bound snapshot being None is exactly the D-11 cold-start predicate.
