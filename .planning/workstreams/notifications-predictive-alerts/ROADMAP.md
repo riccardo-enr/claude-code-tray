@@ -135,7 +135,10 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
   3. The trends panel shows a richer usage graph — taller and/or colored/braille — than the reused tray sparkline, drawn from `core`'s existing trend data with no new trend math (TUI-08).
   4. The live sessions table shows status-colored rows with improved spacing / borders / striping, over the current plain DataTable (TUI-09).
   5. Each of the three panels (usage, trends, sessions) appears as a titled, rounded, bordered box — the btop-style paneled layout (TUI-10).
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 10-01-PLAN.md — Usage panel: threshold color bands + gradient gauge (TUI-06, TUI-07) [tracer]
+- [ ] 10-02-PLAN.md — Richer trends graph: decoded height-colored column graph (TUI-08)
+- [ ] 10-03-PLAN.md — Status-colored striped sessions + titled rounded bordered panels (TUI-09, TUI-10)
 **UI hint**: yes
 
 **Constraints & boundary (for plan-phase to respect):**
@@ -156,6 +159,6 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 | 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete    | 2026-07-18 |
 | 8. Daemon Socket Query Verb              | v1.5      | 2/2             | Complete    | 2026-07-20 |
 | 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 2/2             | Complete    | 2026-07-24 |
-| 10. TUI Polish (btop-style)              | v1.6      | 0/TBD           | Not started | -          |
+| 10. TUI Polish (btop-style)              | v1.6      | 0/3             | Not started | -          |
 </content>
 </invoke>
