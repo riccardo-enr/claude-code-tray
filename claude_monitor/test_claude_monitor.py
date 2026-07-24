@@ -27,6 +27,7 @@ from .core import (
     _embed_json,
     alert_due,
     alert_should_fire,
+    band,
     build_label,
     build_session_snapshot,
     build_trend_rows,
@@ -731,6 +732,17 @@ def demo():
     assert len(tui_usage_rows({**_usage, "used_percentage": 100}, _unow)) == 2
     assert tui_usage_rows({**_usage, "used_percentage": 0}, _unow)[0].startswith("5h  0%")
     assert tui_usage_rows({**_usage, "used_percentage": 100}, _unow)[0].startswith("5h  100%")
+
+    # --- tui band (TUI-06) ---
+    # Fixed three-band shape, both sides of each cutoff: <70 green / 70-<90 yellow / >=90 red.
+    assert band(69) == "green" and band(70) == "yellow"
+    assert band(89) == "yellow" and band(90) == "red"
+    # Total over out-of-range / over-limit input -- never clamped, never raises.
+    assert band(0) == "green" and band(100) == "red" and band(473.5) == "red"
+    assert band(-5) == "green"  # a negative (clock-skew) percent still bands, does not raise
+    # D-01: cutoffs are literals, independent of the mutable badge threshold. The badge
+    # USAGE_THRESHOLD default (80) lands in band's yellow zone, not on its yellow->red line.
+    assert band(80) == "yellow"
 
     # --- tui trend text (TUI-02) ---
     assert trend_text(None) == "trends: collecting history..."

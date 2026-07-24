@@ -177,14 +177,39 @@ class ClaudeTui(App):
             # stale-presented-as-live failure the header exists to prevent.
             self.sub_title = "render error -- frame may be stale"
 
+    def _usage_renderable(self, usage, now) -> Text:
+        """The #usage panel as a rich Text (the Static is markup=False, so a Text
+        renderable is the correct no-markup-parse path). Every displayed number still
+        comes from core.tui_usage_rows (D-05); this only applies band colors -- no new
+        formatter. Task-1 tracer scope: color the 5h row's percent segment by
+        core.band(used_percentage) to prove the core -> ANSI-palette pipeline end to end.
+        """
+        rows = core.tui_usage_rows(usage, now)
+        if usage is None or rows == ["usage unavailable"]:
+            return Text("\n".join(rows))
+        out = Text()
+        for i, row in enumerate(rows):
+            if i:
+                out.append("\n")
+            if i == 0:  # 5h row: band-color its percent cell (cell index 1)
+                b = core.band(usage["used_percentage"])
+                for j, cell in enumerate(row.split("  ")):
+                    if j:
+                        out.append("  ")
+                    out.append(cell, style=b if j == 1 else "")
+            else:
+                out.append(row)
+        return out
+
     def render_all(self) -> None:
         """Push every panel from the bound snapshot. Formats nothing itself."""
         snap = self.snapshot
         if snap is None:
             return
         now = time.time()
-        usage = "\n".join(core.tui_usage_rows(snap.get("usage"), now))  # TUI-01
-        self.query_one("#usage", Static).update(usage)
+        self.query_one("#usage", Static).update(
+            self._usage_renderable(snap.get("usage"), now)  # TUI-01 / TUI-06 / TUI-07
+        )
         self.query_one("#trends", Static).update(core.trend_text(snap.get("trends")))
         table = self.query_one("#sessions", DataTable)
         scroll_y = table.scroll_y  # DataTable.clear() zeroes scroll_x/scroll_y (8.2.8)

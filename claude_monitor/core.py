@@ -744,6 +744,22 @@ def query_snapshot(path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
         s.close()
 
 
+def band(pct):
+    """Fixed btop proximity-to-cap band for a usage percent: <70 -> "green",
+    70-<90 -> "yellow", >=90 -> "red" (TUI-06, D-01). Pure and total -- any numeric
+    input maps to a band and it never raises, so an over-limit percent (e.g. 473.5) or a
+    negative one still classifies. The cutoffs are LITERALS, deliberately kept separate
+    from the mutable badge USAGE_THRESHOLD / THRESHOLD_CHOICES: band means proximity to
+    the cap, not the user's "warn me" line. The token doubles as an ANSI style name so
+    the render side needs no translation table.
+    """
+    if pct < 70:
+        return "green"
+    if pct < 90:
+        return "yellow"
+    return "red"
+
+
 def tui_usage_rows(usage, now):
     """One compact row per visible cap (D-01), 5h first then 7d. Pure.
 
