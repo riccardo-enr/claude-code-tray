@@ -67,9 +67,12 @@ class ClaudeTui(App):
        so it would leave the three panels inside #body at full brightness. */
     #body.stale { opacity: 60%; }
 
-    #usage    { height: auto; padding: 0 1; border-bottom: solid $panel; }
-    #trends   { height: auto; padding: 0 1; border-bottom: solid $panel; }
-    #sessions { height: 1fr; }
+    /* TUI-10: btop paneled layout -- each panel a titled rounded box. Border color is
+       STATIC ($panel, theme-derived, not band-coupled): the threshold signal lives in the
+       row text (D-02) and gauge fill (D-03), never on the chrome (D-08). */
+    #usage    { height: auto; padding: 0 1; border: round $panel; }
+    #trends   { height: auto; padding: 0 1; border: round $panel; }
+    #sessions { height: 1fr; border: round $panel; }
 
     /* Sibling of #body, never inside it, so the cold-start message is never dimmed. */
     #coldstart { display: none; height: 1fr; content-align: center middle; }
@@ -107,6 +110,11 @@ class ClaudeTui(App):
         table.cursor_type = "none"  # D-01: nothing here is navigable
         table.zebra_stripes = True  # TUI-09: subtle alternating-row tint for scan-ability
         table.add_columns("status", "project", "time")
+        # TUI-10: static titled borders (btop paneled layout, D-08). Titles are chrome, not
+        # data -- set once here; the border color stays static in CSS.
+        self.query_one("#usage").border_title = "usage"
+        self.query_one("#trends").border_title = "trends"
+        table.border_title = "sessions"
         self.sub_title = "connecting..."
         self.set_interval(core.TUI_FETCH_INTERVAL, self.fetch)  # D-08
         self.set_interval(core.TUI_TICK_INTERVAL, self.tick)  # D-09
