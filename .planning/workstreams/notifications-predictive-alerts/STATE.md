@@ -5,10 +5,10 @@ milestone_name: TUI Polish
 current_phase: 10
 current_phase_name: tui-polish-btop-style
 status: verifying
-stopped_at: Completed 10-03-PLAN.md
-last_updated: "2026-07-24T10:14:07.013Z"
+stopped_at: Completed quick task 260724-hcm
+last_updated: "2026-07-24T11:09:22Z"
 last_activity: 2026-07-24
-last_activity_desc: Phase 10 execution started
+last_activity_desc: Added TUI quota projections and weekly heatmap
 progress:
   total_phases: 1
   completed_phases: 1
@@ -139,6 +139,7 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | 260718-pkg | (fast) Move core/dashboard/test into `claude_monitor/` package; entry script stays at root; relative internal imports; pyright extraPaths=["."] so first-party import resolves. --selfcheck green | 2026-07-18 | d2ac504 | Verified | - |
 | 260719-pzd | Symlink both hook scripts in install.sh (ln -sf, not install -m 0755); fixed stale ~/.claude/hooks/claude-send.py plain-file copy on this machine, root-causing the class of drift | 2026-07-19 | d9a13d3 | Verified | [260719-pzd-symlink-claude-hooks-claude-send-py-to-t](./quick/260719-pzd-symlink-claude-hooks-claude-send-py-to-t/) |
 | 260724-thm | claude-tui inherits the terminal palette: self.theme = "ansi-dark" in on_mount, so the TUI renders in Ghostty/Catppuccin colors and follows terminal-theme changes (chose inherit over hardcoded catppuccin-mocha). Headless run_test + selfcheck + lint green | 2026-07-24 | 4c05121 | Complete | [260724-thm-tui-inherit-terminal-theme](./quick/260724-thm-tui-inherit-terminal-theme/) |
+| 260724-hcm | Fill TUI right-side space with per-cap quota projections and a Mon-Sun usage heatmap; preserve degraded states and core formatting parity | 2026-07-24 | 14d5cf1 | Complete | [260724-hcm-tui-right-side-info-usage-projection-tre](./quick/260724-hcm-tui-right-side-info-usage-projection-tre/) |
 
 ## Deferred Items
 
@@ -166,19 +167,15 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 
 ## Session Continuity
 
-Last session: 2026-07-24T10:14:07.005Z
-Stopped at: Completed 10-03-PLAN.md
+Last session: 2026-07-24T11:09:22Z
+Stopped at: Completed quick task 260724-hcm
 Resume file: None
-Next: `/gsd-plan-phase 10`
+Next: `/gsd-verify-work 10`
 
 ## Operator Next Steps
 
-- Phase 9 is code-complete (both plans executed). Run `./install.sh` once to pick up the new
-  `~/.local/bin/claude-tui` symlink, then `just tui`.
+- Run `just restart` once so the live daemon snapshot includes the new heatmap field.
+- Run `just tui` and visually verify projection spacing, heatmap colors, and terminal-width fit.
+- Complete Phase 10 conversational UAT with `/gsd-verify-work 10`.
 
-- Verify with `/gsd-verify-work` — 09-02-PLAN.md carries 10 human-check steps. The ones with no
-  automated substitute are step 5 (sparkline width, assumption A2), step 9 (tmux, assumption A1),
-  the tray-menu cross-checks in steps 3-4, and step 10 (`claude-tui` on PATH).
-
-- Plan-checker was skipped (`workflow.plan_check: false`) — the plans were not independently
-  verified before execution.
+- Plan-checker was skipped (`workflow.plan_check: false`); implementation gates passed.
