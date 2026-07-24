@@ -116,6 +116,13 @@ class ClaudeTui(App):
         The two rebinds are single assignments, which is what makes a 1s render tick
         landing on the same beat safe: it observes either the whole old snapshot or the
         whole new one, never a half-applied one.
+
+        The render goes through tick(), not render_all() directly, so a render-time
+        exception is caught by the same guard the 1s tick uses and surfaced as
+        "render error", not routed to the worker's except and mislabelled "daemon
+        unreachable" while the daemon is healthy (WR-03). The "live" header is committed
+        only after that render succeeds, so a partial failure never leaves new state under
+        a "live" header.
         """
         self.snapshot = snap
         self.last_ok = time.time()
@@ -123,8 +130,9 @@ class ClaudeTui(App):
         body = self.query_one("#body")
         body.display = True
         body.set_class(False, "stale")
-        self.sub_title = "live"
-        self.render_all()
+        self.tick()  # renders under the same guard as the 1s tick
+        if self.sub_title != "render error -- frame may be stale":
+            self.sub_title = "live"
 
     def mark_stale(self) -> None:
         """Degraded presentation: D-11 on a cold start, D-10 once data has been seen."""
