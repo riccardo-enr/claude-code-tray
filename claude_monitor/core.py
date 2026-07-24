@@ -626,6 +626,48 @@ def heatmap_active_span(grid):
     return (active[0], active[-1]) if active else None
 
 
+def heatmap_levels(grid, levels):
+    """Quantize a 7x24 heatmap using the dashboard's relative intensity scale.
+
+    The dashboard starts its maximum at 1 and raises it to the largest populated
+    cell, then colors each value by value/max. This returns the same normalized
+    semantics as integer levels for terminal glyphs while preserving None as a
+    distinct no-data state. Malformed cells degrade to None.
+    """
+    if (
+        not isinstance(grid, (list, tuple))
+        or not isinstance(levels, int)
+        or isinstance(levels, bool)
+        or levels < 1
+    ):
+        return None
+    fixed = []
+    values = []
+    for day in range(7):
+        source = grid[day] if day < len(grid) and isinstance(grid[day], (list, tuple)) else []
+        row = []
+        for hour in range(24):
+            value = source[hour] if hour < len(source) else None
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+            ):
+                value = None
+            else:
+                values.append(value)
+            row.append(value)
+        fixed.append(row)
+    if not values:
+        return None
+    maximum = max(1.0, max(values))
+    top = levels - 1
+    return [
+        [None if value is None else round(max(0.0, min(maximum, value)) / maximum * top) for value in row]
+        for row in fixed
+    ]
+
+
 def _is_num(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 

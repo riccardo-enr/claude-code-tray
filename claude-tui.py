@@ -46,6 +46,13 @@ GAUGE_WIDTH = 20
 # stays blank -- a low-but-present hour never looks identical to an empty one. Render-only.
 TREND_ROWS = 8
 
+# Dashboard-parity heatmap: the dashboard is Mon..Sun rows by 00..23 columns and
+# normalizes cell intensity against the dataset maximum. core.heatmap_levels owns that
+# normalization; these are terminal-only equivalents of its dark-theme blue ramp.
+HEAT_DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+HEAT_GLYPHS = ("░", "▒", "▓", "█")
+HEAT_STYLES = ("blue", "bright_blue", "cyan", "bright_cyan")
+
 
 class ClaudeTui(App):
     """The whole application: three stacked panels, two timers, one socket worker.
@@ -273,23 +280,22 @@ class ClaudeTui(App):
         return table
 
     def _heatmap_renderable(self, grid) -> Text | None:
-        """Render the active hours of core's Mon..Sun heatmap, or no column."""
-        span = core.heatmap_active_span(grid)
-        if span is None:
+        """Render the dashboard's full weekday-by-hour heatmap in terminal cells."""
+        levels = core.heatmap_levels(grid, len(HEAT_GLYPHS))
+        if levels is None:
             return None
-        out = Text("    Mon Tue Wed Thu Fri Sat Sun\n", style="dim")
-        for hour in range(span[0], span[1] + 1):
-            out.append("%02d  " % hour, style="dim")
-            for dow in range(7):
-                row = grid[dow] if dow < len(grid) and isinstance(grid[dow], list) else []
-                value = row[hour] if hour < len(row) else None
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
-                    out.append("██", style=core.band(value))
-                else:
+        out = Text("    ", style="dim")
+        for hour in range(24):
+            out.append("%02d" % hour if hour % 3 == 0 else "  ", style="dim")
+        out.append("\n")
+        for day, label in enumerate(HEAT_DAYS):
+            out.append(label + " ", style="dim")
+            for level in levels[day]:
+                if level is None:
                     out.append("··", style="dim")
-                if dow < 6:
-                    out.append("  ")
-            if hour < span[1]:
+                else:
+                    out.append(HEAT_GLYPHS[level] * 2, style=HEAT_STYLES[level])
+            if day < len(HEAT_DAYS) - 1:
                 out.append("\n")
         return out
 

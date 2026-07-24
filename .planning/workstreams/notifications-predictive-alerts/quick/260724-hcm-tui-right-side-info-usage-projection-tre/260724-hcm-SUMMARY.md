@@ -150,6 +150,11 @@ None - no external service configuration required.
 
 `just lint`, `just selfcheck`, branch diff checks, and the headless Rich render smoke test all passed.
 
+## Post-Mortem
+
+> [!warning]
+> The first TUI heatmap applied quota bands at 70/90, transposed the grid, and collapsed empty edge hours. The dashboard instead renders Mon-Sun rows by all 24 hour columns and scales intensity relative to the dataset maximum. `core.heatmap_levels` now carries that dashboard normalization into the terminal renderer, with density glyphs standing in for the dashboard's continuous blue ramp.
+
 ---
 *Quick task: 260724-hcm*
 *Completed: 2026-07-24*

@@ -39,6 +39,7 @@ from .core import (
     gauge_fill,
     heatmap_active_span,
     heatmap_buckets,
+    heatmap_levels,
     history_keep,
     history_numeric,
     history_record,
@@ -382,6 +383,20 @@ def demo():
     assert heatmap_active_span(123) is None
     assert heatmap_active_span([[None], 123]) is None
     assert spark_levels(123) == []
+    parity_hm = [[None] * 24 for _ in range(7)]
+    parity_hm[0][0] = 0.0
+    parity_hm[0][1] = 5.0
+    parity_hm[0][2] = 10.0
+    parity_levels = heatmap_levels(parity_hm, 4)
+    assert len(parity_levels) == 7
+    assert all(len(row) == 24 for row in parity_levels)
+    assert parity_levels[0][:4] == [0, 2, 3, None]
+    assert heatmap_levels([[None] * 24 for _ in range(7)], 4) is None
+    assert heatmap_levels(None, 4) is None
+    assert heatmap_levels(parity_hm, 0) is None
+    low_hm = [[None] * 24 for _ in range(7)]
+    low_hm[3][12] = 0.5
+    assert heatmap_levels(low_hm, 4)[3][12] == 2  # dashboard floors max at 1
     assert reset_marks(
         [
             {"t": 1, "reset": 300},
