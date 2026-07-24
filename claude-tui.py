@@ -166,6 +166,7 @@ class ClaudeTui(App):
         self.query_one("#usage", Static).update(usage)
         self.query_one("#trends", Static).update(core.trend_text(snap.get("trends")))
         table = self.query_one("#sessions", DataTable)
+        scroll_y = table.scroll_y  # DataTable.clear() zeroes scroll_x/scroll_y (8.2.8)
         table.clear()  # keeps the column definitions
         for status, proj, elapsed in core.sess_rows(snap.get("sessions") or [], now):
             # Every cell is a rich Text, never a str: DataTable runs a str cell through
@@ -175,6 +176,9 @@ class ClaudeTui(App):
             # passthrough branch and never reaches the markup parser. Same mitigation
             # shape as the v1.3 Pango body and the v1.4 dashboard's textContent panel.
             table.add_row(Text(status), Text(proj), Text(elapsed))
+        # D-01: the 1s rebuild must not steal the scroll the user set; clear() zeroed it
+        # above, so restore it. validate_scroll_y re-clamps if the session list shrank.
+        table.scroll_y = scroll_y
 
 
 if __name__ == "__main__":
