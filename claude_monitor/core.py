@@ -684,7 +684,7 @@ TUI_SOCK_TIMEOUT = 1.5  # < TUI_FETCH_INTERVAL so at most one fetch is ever in f
 SESS_RANK = {"waiting": 0, "running": 1, "done": 2}  # D-03: the only ordering authority
 
 
-def read_line(sock):
+def read_line(sock, deadline=None, max_bytes=1 << 20):
     """Read one newline-terminated response line off an ALREADY-CONNECTED socket.
 
     Neither connects nor closes -- that is what lets --selfcheck drive it over a plain
@@ -693,13 +693,23 @@ def read_line(sock):
     utf-8 with errors="replace", matching _handle_conn's own decode posture, so a
     non-utf-8 byte inside a project dir degrades to a replacement character instead of
     raising UnicodeDecodeError inside a timer callback (T-09-05).
+
+    `settimeout` only bounds each individual `recv`, not the whole read, so a peer that
+    dribbles one byte per (timeout - epsilon) keeps the loop alive forever while the 2s
+    fetch interval keeps firing -- exactly the Pitfall-2 thread pile-up. `deadline` (a
+    time.monotonic() instant) bounds the whole function; `max_bytes` caps a daemon that
+    streams without ever sending a newline so `buf` cannot grow to OOM (T-09-02).
     """
     buf = b""
     while not buf.endswith(b"\n"):
+        if deadline is not None and time.monotonic() > deadline:
+            raise TimeoutError("snapshot read exceeded %ss" % TUI_SOCK_TIMEOUT)
         chunk = sock.recv(65536)
         if not chunk:
             break  # EOF: the daemon closed, buf is whatever arrived
         buf += chunk
+        if len(buf) > max_bytes:
+            raise ValueError("snapshot response exceeded %d bytes" % max_bytes)
     return buf.decode("utf-8", "replace")
 
 
@@ -722,7 +732,7 @@ def query_snapshot(path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
     try:
         s.connect(path)
         s.sendall(b'{"query": "snapshot"}\n')
-        return json.loads(read_line(s))
+        return json.loads(read_line(s, time.monotonic() + timeout))
     finally:
         s.close()
 
