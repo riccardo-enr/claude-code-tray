@@ -756,14 +756,23 @@ def tui_usage_rows(usage, now):
     if usage is None:
         # change both: claude-monitor.py:320 carries the same string.
         return ["usage unavailable"]
-    row = ["5h", "%d%%" % round(usage["used_percentage"])]
+    # parse_usage's "all three numeric or None wholesale" guarantee lives in another
+    # process and crosses a JSON socket enforced by nothing here; read defensively and
+    # fall back to the same string rather than subscript-raising into a false
+    # "daemon unreachable" (WR-03). Every sibling helper uses .get for this reason.
+    pct = usage.get("used_percentage")
+    reset = usage.get("resets_at_epoch")
+    burn = usage.get("burn_rate_per_min")
+    if pct is None or reset is None or burn is None:
+        return ["usage unavailable"]
+    row = ["5h", "%d%%" % round(pct)]
     # --api carries no token counts -> percent only; the P90 path has them -> "72k / 88k".
     if usage.get("tokens_used") is not None and usage.get("token_limit") is not None:
         row.append(
             "%s / %s" % (fmt_tokens(usage["tokens_used"]), fmt_tokens(usage["token_limit"]))
         )
-    row.append(fmt_countdown(usage["resets_at_epoch"] - now))
-    row.append("burn: %s tok/hr" % fmt_tokens(round(usage["burn_rate_per_min"] * 60)))
+    row.append(fmt_countdown(reset - now))
+    row.append("burn: %s tok/hr" % fmt_tokens(round(burn * 60)))
     rows = ["  ".join(row)]
     pct7 = usage.get("seven_day_pct")
     if pct7 is not None:  # an older CLI omits the whole weekly block -> one row only
