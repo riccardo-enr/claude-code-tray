@@ -165,6 +165,72 @@
 
 ---
 
+## Milestone: v1.6 — TUI Polish
+
+**Shipped:** 2026-07-24 (tag `v1.6`)
+**Phases:** 1 (10) | **Plans:** 3
+
+### What Was Built
+
+- A btop-inspired Textual dashboard with proximity-colored quota text,
+  green-to-yellow-to-red gauges, an eight-row colored trends graph,
+  status-colored striped session rows, and titled rounded panels.
+- Per-cap projections and a dashboard-parity Mon-Sun hourly heatmap, both
+  composed from existing core calculations and the existing daemon snapshot.
+- Selected-session focus, refresh-stable selection, background-work resilience,
+  and a corrected clock-hour increment trend chart.
+
+### What Worked
+
+- **The core/render boundary remained enforceable.** Threshold classification,
+  gauge fill, spark decoding, session bands, heatmap normalization, and trend
+  increments stayed in `claude_monitor.core`; Textual/Rich only applied layout
+  and presentation.
+- **One live UAT pass closed the visual contract.** Four screenshots verified
+  the gauges, richer graph and heatmap, styled sessions, and paneled layout in
+  the real inherited terminal palette.
+- **Follow-up work reused existing semantics.** Projections reused
+  `core.project`; the heatmap was corrected to match the browser dashboard
+  rather than creating a second interpretation of the same history.
+
+### What Was Inefficient
+
+- Phase 10's review report was not refreshed after its two warnings were fixed,
+  leaving a stale `issues_found` status that had to be reconciled at closeout.
+- The milestone accumulated several useful post-plan additions—projections,
+  heatmap, session focus, and selection retention—so the final release surface
+  was broader than the five planned presentation requirements.
+- The formal milestone audit was skipped, requiring an explicit closeout
+  override even though requirements, UAT, lint, self-check, and security passed.
+
+### Patterns Established
+
+- **Use an existing frontend as a rewrite oracle.** The Python Textual TUI stays
+  as the behavioral and visual reference for the proposed Rust implementation.
+- **Render cumulative quota data as increments when comparing hours.** Averaging
+  cumulative percentage produces a staircase; trustworthy per-sample rises
+  aligned to clock-hour boundaries express actual hourly activity.
+- **Preserve user interaction state across periodic redraws.** Auto-refreshing
+  tables should restore a still-present selection rather than snapping to the
+  first row.
+
+### Key Lessons
+
+1. Refresh review artifacts after their findings are fixed, or explicitly mark
+   them superseded while the evidence is fresh.
+2. A visual milestone still benefits from pure-data seams: they made nearly all
+   behavior self-checkable before the single human palette/layout pass.
+3. Keep the working Python TUI during the Rust rewrite so parity can be judged
+   against a real artifact instead of reconstructed from prose.
+
+### Cost Observations
+
+- No new runtime dependencies; `textual` remains confined to the existing
+  optional TUI extra.
+- One phase, three plans, six planned tasks, plus one three-task follow-up.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -176,6 +242,7 @@
 | v1.2 | 1 | Single coherent read-side capability; scope grew mid-flight (QUOTA-*). UAT against the live artifact drove two reversals. |
 | v1.3+v1.4 | 3 | First cross-phase regression (CR-01, reap x notification de-dupe intersection); v1.3 shipped without formal close-out, bundled into v1.4's archival. |
 | v1.5 | 2 | First runtime dependency (`textual`, quarantined to an optional extra); a new frontend as a thin `core.py` consumer; heavy post-UAT trust-boundary review-fix tail. |
+| v1.6 | 1 | Visual polish kept pure behavior in `core.py`; live screenshot UAT closed the terminal-palette contract; useful post-plan additions broadened the release. |
 
 ### Cumulative Quality
 
@@ -186,6 +253,7 @@
 | v1.2 | `--selfcheck` + code review + security audit + UI audit + human UAT | 0 |
 | v1.3+v1.4 | Phase 5: REVIEW.md + UAT 5/5 (no VERIFICATION.md, acknowledged override); Phase 6: VERIFICATION.md passed + UAT 6/6; Phase 7: VERIFICATION.md passed (re-verified after CR-01 gap closure) + UAT 2/2 + integration-checker sweep (0 broken flows) | 0 |
 | v1.5 | Phase 8: VERIFICATION.md passed + UAT 3/3; Phase 9: code review + `--selfcheck` + UAT 3 pass / 2 skipped (documented non-failures) + WR-01..06/CR-01/02 review-fix pass. No `v1.5-MILESTONE-AUDIT.md` (audit not run; override closeout) | 1 (`textual`, optional extra) |
+| v1.6 | UAT 4/4 + `just selfcheck` + lint + security 7/7 threats closed; no milestone audit (explicit override) | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 

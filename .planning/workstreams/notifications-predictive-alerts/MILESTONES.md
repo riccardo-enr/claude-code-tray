@@ -1,5 +1,38 @@
 # Milestones
 
+## v1.6 TUI Polish (Shipped: 2026-07-24)
+
+**Phases completed:** 1 phase (10), 3 plans, 6 planned tasks
+**Timeline:** 2026-07-24 (same-day milestone)
+**Git range:** `2fef6e9` (first polish feature) -> `b4c01a4` (hourly trend correction)
+
+**Delivered:**
+
+- Btop-inspired Textual presentation: fixed proximity bands, gradient quota
+  gauges, an eight-row colored trends graph, status-colored striped sessions,
+  and titled rounded panels — TUI-06/07/08/09/10
+- Per-cap quota projections and a dashboard-parity Mon-Sun hourly heatmap,
+  reusing existing core calculations and the daemon's read-only snapshot
+- Selected-session focus through the existing daemon/tmux path, selection
+  retention across refreshes, and background-work resilience
+- Corrected hourly trend chart based on trustworthy per-sample usage increments
+  aligned to clock hours
+
+**Verification:** Phase 10 conversational UAT 4/4 passed; `just selfcheck` and
+`just lint` passed; security review closed 7/7 threats with 0 open.
+
+**Closeout:** explicit override — no `v1.6-MILESTONE-AUDIT.md`. The historical
+`10-REVIEW.md` still says `issues_found`, but its 0 critical / 2 warning findings
+were fixed in `5fcb364` and `c604416` and verified by the release checks.
+
+**Known closeout notes:** 3 (see STATE.md "Deferred Items") — missing milestone
+audit acknowledged, stale pre-fix review status acknowledged, and standalone
+no-daemon mode remains deferred.
+
+**Phases:** 10-tui-polish-btop-style (UAT passed; security verified; archived).
+
+---
+
 ## v1.5 TUI Dashboard (Shipped: 2026-07-24)
 
 **Phases completed:** 2 phases (8-9), 4 plans, 8 tasks

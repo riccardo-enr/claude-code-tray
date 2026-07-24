@@ -4,11 +4,11 @@ milestone: v1.6
 milestone_name: TUI Polish
 current_phase: 10
 current_phase_name: tui-polish-btop-style
-status: complete
-stopped_at: Phase 10 complete; milestone ready for closeout
+status: shipped
+stopped_at: Milestone v1.6 completed, archived, and tagged
 last_updated: "2026-07-24T15:45:59Z"
 last_activity: 2026-07-24
-last_activity_desc: Phase 10 complete
+last_activity_desc: v1.6 TUI Polish shipped and archived
 progress:
   total_phases: 1
   completed_phases: 1
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Milestone v1.6 complete — ready for closeout
+**Current focus:** Planning next milestone — proposed v2.0 Rust TUI
 
 ## Current Position
 
-Phase: 10 (tui-polish-btop-style) — COMPLETE
-Plan: 3 of 3
-Status: Milestone complete
-Last activity: 2026-07-24 — Phase 10 complete
+Milestone: v1.6 (TUI Polish) — SHIPPED 2026-07-24
+Phase 10: complete and archived to `milestones/v1.6-phases/`
+Status: Milestone closed — no workstream open
+Last activity: 2026-07-24 — v1.6 archived and tagged
 
 ## Performance Metrics
 
@@ -158,23 +158,26 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | UAT | Phase 01 flagged by pre-close audit; 01-UAT.md is `[passed]` with 0 pending scenarios — audit-format false positive, no real gap | Acknowledged | 2026-07-13 |
 | UAT | Phase 05 flagged by pre-close audit at v1.4 close; 05-UAT.md status reads `unknown` but 0 pending scenarios — same audit-format false positive as Phase 01, no real gap, unrelated to v1.4/Phase 7 | Acknowledged | 2026-07-20 |
 | Verification | Phase 05 (Notification Path & Event Producers, v1.3) has no VERIFICATION.md — v1.3 was never run through /gsd-complete-milestone, so gsd-tools bundles Phases 5-7 into one open milestone bucket. Feature has been live since 2026-07-17 with a passing 05-REVIEW.md and 05-UAT.md; not re-verified retroactively at v1.4 close | Acknowledged (verification override) | 2026-07-20 |
-| v1.5 | Click-to-focus a pane from the TUI (reusing `pane`/`tmux` fields) — deferred; the tray remains the click-to-focus surface for v1.5 | Deferred | 2026-07-20 |
+| v1.5 | ~~Click-to-focus a pane from the TUI~~ | **DONE 2026-07-24** — selected-session focus shipped in v1.6 (`f2097e8`) | 2026-07-20 |
 | v1.5 | Standalone (no-daemon) mode reading `usage-history.jsonl` directly — deferred; shared-socket was chosen over it to get live sessions in v1.5 scope, but a fallback mode could still be added later | Deferred | 2026-07-20 |
 | UAT | Phase 01 + Phase 09 flagged by pre-close audit at v1.5 close; both UATs are `[passed]` with 0 pending scenarios — audit-format false positive, no real gap. Phase 09 additionally had 2 tests skipped (scroll-retention CR-01, daemon-outage D5/WR-03), documented as non-failures verified by tests + code re-read | Acknowledged (verification override) | 2026-07-24 |
-| v1.5 | TUI feels v1.0-tier — polish (color-by-threshold, progress bars, richer trends, optional pane focus) deferred to a proposed v1.6 milestone | Deferred | 2026-07-24 |
+| v1.5 | ~~TUI polish: threshold colors, gauges, richer trends, and paneled layout~~ | **DONE 2026-07-24** — v1.6 (TUI-06..10) | 2026-07-24 |
 | debug | `stale-session-status-stuck` [diagnosed] flagged by pre-close audit at v1.5 close — diagnose-only session whose fix (core.session_stale reap, CR-01) already shipped in v1.4/Phase 07; not a v1.5 gap | Acknowledged | 2026-07-24 |
 | quick_task | `260719-qc6-add-xdotool-zed-terminal-focus-toggle-ke` [missing] flagged by pre-close audit at v1.5 close — unrelated Zed terminal-focus keybind task, never in v1.5 (TUI) scope | Acknowledged | 2026-07-24 |
+
+| v1.6 | No `v1.6-MILESTONE-AUDIT.md` — closeout proceeded by explicit user choice with 5/5 requirements complete, UAT 4/4, and security 0 open | Acknowledged (audit override) | 2026-07-24 |
+| v1.6 | `10-REVIEW.md` retains pre-fix `issues_found` status; both warnings were fixed in `5fcb364` and `c604416`, and release checks passed | Acknowledged (stale artifact) | 2026-07-24 |
+| v1.6 | Standalone no-daemon TUI mode reading `usage-history.jsonl` directly | Deferred | 2026-07-24 |
 
 ## Session Continuity
 
 Last session: 2026-07-24T15:45:59Z
-Stopped at: Phase 10 complete; milestone v1.6 ready for closeout
+Stopped at: Milestone v1.6 shipped and archived
 Resume file: None
-Next: `/gsd-complete-milestone v1.6`
+Next: `/gsd-new-milestone v2.0 Rust TUI`
 
 ## Operator Next Steps
 
-- Complete and archive milestone v1.6 with `/gsd-complete-milestone v1.6`.
-- Then start the Rust TUI milestone with `/gsd-new-milestone v2.0 Rust TUI`.
+- Start the Rust TUI milestone with `/gsd-new-milestone v2.0 Rust TUI`.
 
 - Plan-checker was skipped (`workflow.plan_check: false`); implementation gates passed.

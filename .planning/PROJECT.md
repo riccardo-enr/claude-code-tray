@@ -47,7 +47,7 @@ it resets** — without launching a separate terminal monitor.
 
 ## Current State
 
-**Completed:** v1.6 (TUI Polish), 2026-07-24, awaiting milestone closeout. Ten
+**Completed:** v1.6 (TUI Polish), shipped and archived 2026-07-24. Ten
 phases are implemented and reviewed. `claude-monitor.py` was restructured into the
 `claude_monitor/` package (`core.py` + `dashboard.py` + entry script) during
 v1.3/v1.4; v1.5 added `claude-tui.py` as the third consumer of `core.py`.
@@ -60,13 +60,14 @@ status, project dir, time-in-state — in the browser dashboard and now in a
 `textual` terminal UI (`claude-tui.py`), both fed off the daemon's existing socket,
 self-healing off the list when a tmux pane dies with no hook event required.
 
-**Next milestone:** a Rust TUI rewrite is proposed for v2.0, using the Python
-Textual implementation as a behavioral and visual reference.
+**Next milestone:** a Rust TUI rewrite is proposed for v2.0. The shipped Python
+Textual implementation stays in the repository as its behavioral and visual
+reference.
 
 ## Current Milestone
 
-`notifications-predictive-alerts` completed v1.6 on 2026-07-24 and is ready for
-milestone closeout.
+No milestone is active. `notifications-predictive-alerts` shipped v1.6 on
+2026-07-24; the next proposed cycle is v2.0 Rust TUI.
 
 ## Requirements
 
@@ -107,13 +108,14 @@ milestone closeout.
 - checkmark Read-only `{"query":"snapshot"}` verb on the daemon socket — sessions + latest usage/history, thread-per-connection, `sessions_lock` torn-read safety, chmod 0600 (SOCK-01/02/03) — v1.5
 - checkmark `claude-tui.py` textual TUI — 5h/7d usage, trends (sparkline/burn/peak reused from `core`), live sessions panel, auto-refresh, clean degradation when the daemon is unreachable (TUI-01..05) — v1.5
 - checkmark Btop-inspired TUI polish — threshold colors, quota gauges, taller trends graph, styled sessions, and titled rounded panels (TUI-06..10) — Phase 10
+- checkmark TUI follow-through — per-cap projections, weekly usage heatmap, selected-session focus, refresh-stable selection, resilient background work, and clock-hour increment trends — v1.6
 
 ### Active
 
-None — v1.6 is complete and awaiting closeout.
+None — v1.6 is shipped; v2.0 Rust TUI is proposed but not yet scoped.
 
-Still deferred: click-to-focus a pane from the TUI, standalone no-daemon TUI mode,
-raw data export (HIST-F1 / DASH-F2), configurable ranges (TREND-F1 / DASH-F3),
+Still deferred: standalone no-daemon TUI mode, raw data export
+(HIST-F1 / DASH-F2), configurable ranges (TREND-F1 / DASH-F3),
 quiet hours (NOTIF-F1), per-event sound/urgency (NOTIF-F2), and hard-threshold
 push (ALERT-F1). See
 `workstreams/notifications-predictive-alerts/STATE.md` "Deferred Items" for the
@@ -160,6 +162,7 @@ as QUOTA-01 in v1.2.)*
 | v1.5's TUI gets live sessions via a new query verb on the daemon's socket, not a standalone JSONL-only reader | Standalone was the lazier MVP (no daemon changes) but cannot see `self.sessions` — it lives only in the running `Monitor` process's memory, never on disk. Shared-socket was chosen to keep live sessions in v1 scope | ✓ Good — v1.5 shipped; thread-per-connection + `sessions_lock` kept the hook-event path un-slowed and torn-read-safe |
 | TUI substrate lives in `core.py` above the textual boundary; `query_snapshot` raises, degraded-mode swallowing lives at the App worker boundary | Everything assertable is provable by `--selfcheck` on the stock interpreter; `claude-tui.py` stays App-class-and-CSS only | ✓ Good — v1.5 Phase 9 |
 | Keep Phase 10 logic in pure `core` helpers and rendering in `claude-tui.py` | Preserves stock-interpreter self-checks and keeps Textual/Rich confined to the TUI boundary | ✓ Good — Phase 10 |
+| Keep the Python Textual TUI when starting the proposed Rust rewrite | It is a working behavioral/visual oracle for parity tests and avoids mixing a rewrite into the v1.6 polish release | Decided at v1.6 closeout |
 
 ## Evolution
 
@@ -179,5 +182,5 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-24 — after Phase 10. Completed v1.6 TUI Polish with
-5/5 requirements verified; milestone closeout is next.*
+*Last updated: 2026-07-24 — v1.6 TUI Polish shipped and archived with 5/5
+requirements verified.*

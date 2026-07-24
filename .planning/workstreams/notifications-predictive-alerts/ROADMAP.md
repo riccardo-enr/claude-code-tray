@@ -3,7 +3,7 @@
 ## Overview
 
 A GNOME top-bar tray indicator for Claude Code. It shows per-session status and
-focuses the originating tmux pane + Ghostty window on click. Four shipped
+focuses the originating tmux pane + Ghostty window on click. Seven shipped
 milestones extended that same single-file helper (`claude-monitor.py`) into a
 quota monitor with a push voice and a live session view: point-in-time usage,
 then persisted history and in-menu trends, then a browsable HTML dashboard,
@@ -20,13 +20,13 @@ progress-bar gauges, a richer trends graph, a styled sessions table, and titled
 rounded bordered panels. Pure presentation: no new data source, no new polling,
 no IPC change, no new runtime dependency.
 
-Constraints that held across all four shipped milestones: stdlib + PyGObject
+Constraints that held across v1.0-v1.4: stdlib + PyGObject
 only, X11-only, one background poll, no new dependencies. v1.5 takes the first
 exception — `textual` as a runtime dependency, scoped to the one new entry point;
 v1.6 adds nothing to that.
 
 Full phase detail for shipped milestones lives in `.planning/workstreams/notifications-predictive-alerts/milestones/`;
-archived phase artifacts live under `.planning/workstreams/notifications-predictive-alerts/milestones/v1.4-phases/`.
+v1.6 execution artifacts live under `milestones/v1.6-phases/`.
 
 ## Milestones
 
@@ -36,11 +36,11 @@ archived phase artifacts live under `.planning/workstreams/notifications-predict
 - ✅ **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (shipped 2026-07-17) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.4 Session Dashboard** — Phase 7 (shipped 2026-07-20) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.5 TUI Dashboard** — Phases 8-9 (shipped 2026-07-24) — [archive](./milestones/v1.5-ROADMAP.md)
-- ✅ **v1.6 TUI Polish** — Phase 10 (complete; awaiting milestone closeout)
+- ✅ **v1.6 TUI Polish** — Phase 10 (shipped 2026-07-24) — [archive](./milestones/v1.6-ROADMAP.md)
 
 ## Phases
 
-### ✅ v1.6 TUI Polish (Phase 10) — COMPLETE
+### ✅ v1.6 TUI Polish (Phase 10) — SHIPPED 2026-07-24
 
 - [x] **Phase 10: TUI Polish (btop-style)** — color/gauge/graph/border the v1.5 `claude-tui.py`, same data, same socket (completed 2026-07-24)
 
