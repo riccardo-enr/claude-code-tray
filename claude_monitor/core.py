@@ -732,7 +732,14 @@ def query_snapshot(path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
     try:
         s.connect(path)
         s.sendall(b'{"query": "snapshot"}\n')
-        return json.loads(read_line(s, time.monotonic() + timeout))
+        obj = json.loads(read_line(s, time.monotonic() + timeout))
+        # json.loads happily returns null/[]/3/"x". A bare `null` would make
+        # apply_snapshot rebind snapshot=None -- re-arming the D-11 cold-start predicate
+        # under a "live" header (stale-as-live, Plan 09-02's first prohibition). Reject a
+        # non-object here so a malformed line is a failure the degraded state machine owns.
+        if not isinstance(obj, dict):
+            raise ValueError("snapshot response was %s, not an object" % type(obj).__name__)
+        return obj
     finally:
         s.close()
 
