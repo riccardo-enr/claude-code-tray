@@ -44,6 +44,7 @@ from .core import (
     history_numeric,
     history_record,
     hhmm,
+    hook_session_event,
     latest_state,
     local_bounds,
     notif_allowed,
@@ -532,6 +533,14 @@ def demo():
     assert sess_should_notify("done", "done") is False
     assert sess_should_notify("waiting", "running") is False
     assert sess_should_notify("done", "end") is False
+
+    # A parent Stop can fire while background subagents are still running. Claude's
+    # hook payload reports those tasks explicitly; the session is only done once the
+    # list is empty.
+    assert hook_session_event("done", [{"id": "agent-1"}]) == "running"
+    assert hook_session_event("done", []) == "done"
+    assert hook_session_event("done", None) == "done"
+    assert hook_session_event("waiting", [{"id": "agent-1"}]) == "waiting"
 
     # --- session_stale reap decision (G-07-2 self-heal) ---
     NOW = 2_000_000  # synthetic epoch, never time.time()

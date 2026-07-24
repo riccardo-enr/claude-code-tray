@@ -114,6 +114,18 @@ def sess_should_notify(old_status, new_status):
     return new_status in ("waiting", "done") and old_status != new_status
 
 
+def hook_session_event(event, background_tasks):
+    """Map a hook event to the session status shown by the monitor.
+
+    Claude's Stop hook can fire while background work is still in flight. Its
+    ``background_tasks`` payload lists that work, so treating such a Stop as final
+    would briefly show ``done`` and emit a false completion notification.
+    """
+    if event == "done" and isinstance(background_tasks, list) and background_tasks:
+        return "running"
+    return event
+
+
 def sess_notify_baseline(live_status, reaped_status):
     """Resolve the `old` status Monitor.handle feeds sess_should_notify. Pure.
     A reaped-then-resurrected session reads its live status as None (Monitor._pop_stale

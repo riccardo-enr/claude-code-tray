@@ -29,6 +29,7 @@ msg = {
     "pane": os.environ.get("TMUX_PANE", ""),
     "tmux": os.environ.get("TMUX", ""),
     "term": os.environ.get("TERM_PROGRAM", ""),  # "zed" -> raise the Zed window, not tmux
+    "background_tasks": data.get("background_tasks", []),
 }
 
 try:

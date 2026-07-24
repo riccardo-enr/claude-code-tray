@@ -407,7 +407,9 @@ class Monitor:
     # runs on the Gtk main thread (via idle_add)
     def handle(self, msg):
         sid = msg.get("session_id") or msg.get("pane") or "?"
-        event = msg.get("event", "done")
+        event = core.hook_session_event(
+            msg.get("event", "done"), msg.get("background_tasks")
+        )
         if event == "end":
             with self.sessions_lock:
                 self.sessions.pop(sid, None)
