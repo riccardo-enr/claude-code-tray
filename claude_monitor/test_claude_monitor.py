@@ -36,6 +36,7 @@ from .core import (
     fmt_countdown_wk,
     fmt_elapsed,
     fmt_tokens,
+    gauge_fill,
     heatmap_buckets,
     history_keep,
     history_numeric,
@@ -743,6 +744,18 @@ def demo():
     # D-01: cutoffs are literals, independent of the mutable badge threshold. The badge
     # USAGE_THRESHOLD default (80) lands in band's yellow zone, not on its yellow->red line.
     assert band(80) == "yellow"
+
+    # --- tui gauge fill (TUI-07) ---
+    _gw = 20
+    assert gauge_fill(0, _gw) == 0  # empty bar at 0%
+    assert gauge_fill(100, _gw) == _gw  # full bar at 100%
+    assert gauge_fill(50, _gw) == 10  # mid value
+    assert gauge_fill(150, _gw) == _gw  # over-limit clamps to full, never overflows the bar
+    assert gauge_fill(-5, _gw) == 0  # negative clamps to empty
+    # monotonic non-decreasing in pct across 0..100 (btop's fill only ever grows with usage).
+    _walk = [gauge_fill(p, _gw) for p in range(0, 101)]
+    assert _walk == sorted(_walk)
+    assert min(_walk) == 0 and max(_walk) == _gw
 
     # --- tui trend text (TUI-02) ---
     assert trend_text(None) == "trends: collecting history..."

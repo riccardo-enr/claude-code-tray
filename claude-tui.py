@@ -36,6 +36,10 @@ from textual.widgets import DataTable, Footer, Header, Static
 
 from claude_monitor import core
 
+# Width in cells of a usage gauge bar (TUI-07). Render-only: the fill-cell count is
+# core.gauge_fill(pct, GAUGE_WIDTH), the glyphs/colors are applied below.
+GAUGE_WIDTH = 20
+
 
 class ClaudeTui(App):
     """The whole application: three stacked panels, two timers, one socket worker.
@@ -177,28 +181,58 @@ class ClaudeTui(App):
             # stale-presented-as-live failure the header exists to prevent.
             self.sub_title = "render error -- frame may be stale"
 
+    def _gauge(self, pct) -> Text:
+        """A GAUGE_WIDTH-cell gradient meter Text (TUI-07, D-03): cells below the fill
+        count are a filled block colored by their POSITION along the bar
+        (core.band(cell/width*100)), so the bar always sweeps green->yellow->red like
+        btop's meter; the rest are a dim empty track. Fill count is core.gauge_fill --
+        this applies only glyphs and per-cell colors (D-04)."""
+        n = core.gauge_fill(pct, GAUGE_WIDTH)
+        bar = Text()
+        for i in range(GAUGE_WIDTH):
+            if i < n:
+                bar.append("█", style=core.band(i / GAUGE_WIDTH * 100))  # full block
+            else:
+                bar.append("░", style="dim")  # light-shade empty track
+        return bar
+
+    def _cap_row_text(self, row, pct) -> Text:
+        """Band-color a pre-formatted tui_usage_rows string by its cap's proximity band
+        (D-02): the %, reset-countdown and burn segments take the band color, the cap
+        label and any token-count segment stay default. Reformats nothing (D-05) -- the
+        cells are split back out of the string core.tui_usage_rows already produced."""
+        b = core.band(pct)
+        t = Text()
+        for i, cell in enumerate(row.split("  ")):
+            if i:
+                t.append("  ")
+            colored = i == 1 or cell.startswith(("resets", "week resets", "burn:"))
+            t.append(cell, style=b if colored else "")
+        return t
+
     def _usage_renderable(self, usage, now) -> Text:
         """The #usage panel as a rich Text (the Static is markup=False, so a Text
         renderable is the correct no-markup-parse path). Every displayed number still
-        comes from core.tui_usage_rows (D-05); this only applies band colors -- no new
-        formatter. Task-1 tracer scope: color the 5h row's percent segment by
-        core.band(used_percentage) to prove the core -> ANSI-palette pipeline end to end.
+        comes from core.tui_usage_rows (D-05); this applies only band colors and gauge
+        glyphs -- no new formatter. Each present cap renders as one line: its gradient
+        gauge (the headline visual, D-03) followed by the band-colored row text (D-02).
         """
         rows = core.tui_usage_rows(usage, now)
         if usage is None or rows == ["usage unavailable"]:
             return Text("\n".join(rows))
+        # rows[0] is always the 5h cap, rows[1] (when present) the 7d cap; pair each with
+        # the percent core banded on. used_percentage is non-None here (else the guard
+        # above caught it); seven_day_pct is non-None whenever the 7d row exists.
+        pcts = [usage["used_percentage"]]
+        if len(rows) > 1:
+            pcts.append(usage["seven_day_pct"])
         out = Text()
         for i, row in enumerate(rows):
             if i:
                 out.append("\n")
-            if i == 0:  # 5h row: band-color its percent cell (cell index 1)
-                b = core.band(usage["used_percentage"])
-                for j, cell in enumerate(row.split("  ")):
-                    if j:
-                        out.append("  ")
-                    out.append(cell, style=b if j == 1 else "")
-            else:
-                out.append(row)
+            out.append_text(self._gauge(pcts[i]))
+            out.append("  ")
+            out.append_text(self._cap_row_text(row, pcts[i]))
         return out
 
     def render_all(self) -> None:

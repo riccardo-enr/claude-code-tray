@@ -760,6 +760,17 @@ def band(pct):
     return "red"
 
 
+def gauge_fill(pct, width):
+    """Filled-cell count for a `width`-cell gradient gauge at usage `pct` (TUI-07, D-04).
+    Clamps pct to 0..100, then rounds pct/100 * width to a cell count: 0 at 0%, `width`
+    at 100%, monotonic non-decreasing between, and never past `width` for an over-limit
+    percent (so it cannot index past the bar). Counts cells only -- no glyph, no color;
+    claude-tui.py applies those.
+    """
+    pct = max(0.0, min(100.0, pct))
+    return round(pct / 100 * width)
+
+
 def tui_usage_rows(usage, now):
     """One compact row per visible cap (D-01), 5h first then 7d. Pure.
 
