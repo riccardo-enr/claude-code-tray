@@ -435,6 +435,7 @@ class Monitor:
             )
             # _onscreen pre-acknowledges the "!" when serve() found you already looking.
             s.update(
+                id=sid,
                 dir=d,
                 status=event,
                 pane=pane,
@@ -605,6 +606,18 @@ def _handle_conn(mon, conn):
                         "trends": mon.trends,
                     }
                     conn.sendall((json.dumps(snapshot) + "\n").encode("utf-8"))
+                continue
+            if msg.get("action") == "focus":
+                target = [
+                    msg.get("pane", ""),
+                    msg.get("tmux", ""),
+                    msg.get("title", ""),
+                    msg.get("term", ""),
+                ]
+                if all(isinstance(value, str) for value in target):
+                    # This connection already has its own worker thread. focus() only
+                    # shells out to tmux/wmctrl, so keep that blocking work off Gtk.
+                    mon.focus(*target)
                 continue
             # Decided here, off the Gtk main thread: looking_at() shells out.
             if msg.get("event") in ("done", "waiting"):

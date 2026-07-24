@@ -16,22 +16,24 @@ the T-09-SC supply-chain mitigation, in force for the interpreter that actually 
 
 The consequence is a rule rather than a preference: anything worth asserting belongs in
 claude_monitor.core, where --selfcheck can prove it. What is left here is layout, CSS,
-two timers, one thread worker and the degraded-mode presentation -- none of which a
+two timers, two thread workers and the degraded-mode presentation -- none of which a
 unit test on that interpreter can reach. Every string rendered below was already
 formatted by core; this file adds no formatting logic of its own.
 
-The daemon's read-only snapshot socket verb, reached through core.query_snapshot, is the
-only data source (D-04). No file is read, no process is spawned, no trend is recomputed,
-and the snapshot query is the only message ever written to the socket.
+The daemon socket is the only integration boundary. Snapshot reads go through
+core.query_snapshot and session activation goes through core.request_focus; no file is
+read, no process is spawned here, and no trend is recomputed.
 """
 
 import time
 
 from rich.table import Table
 from rich.text import Text
-from textual import work
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
+from textual.coordinate import Coordinate
+from textual.message import Message
 from textual.widgets import DataTable, Footer, Header, Static
 
 from claude_monitor import core
@@ -54,12 +56,39 @@ HEAT_GLYPHS = ("░", "▒", "▓", "█")
 HEAT_STYLES = ("blue", "bright_blue", "cyan", "bright_cyan")
 
 
-class ClaudeTui(App):
-    """The whole application: three stacked panels, two timers, one socket worker.
+class SessionTable(DataTable):
+    """DataTable that emits one activation message on a single click or Enter."""
 
-    Panel order is fixed and there is no navigation (D-01) -- the screen is glanceable
-    like the tray menu. The usage and trends blocks size to their content; the sessions
-    table absorbs whatever is left and scrolls internally.
+    class Chosen(Message):
+        def __init__(self, row_key: str):
+            self.row_key = row_key
+            super().__init__()
+
+    def _choose(self, row: int) -> None:
+        if row < 0 or row >= self.row_count:
+            return
+        self.move_cursor(row=row, column=0, scroll=True)
+        row_key = self.coordinate_to_cell_key(Coordinate(row, 0))[0].value
+        if row_key is not None:
+            self.post_message(self.Chosen(row_key))
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        row = event.style.meta.get("row")
+        if isinstance(row, int) and row >= 0:
+            self._choose(row)
+            event.stop()
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key == "enter" and self.row_count:
+            self._choose(self.cursor_row)
+            event.stop()
+
+
+class ClaudeTui(App):
+    """The whole application: three stacked panels, two timers, two socket workers.
+
+    Panel order is fixed. The usage and trends blocks size to their content; the
+    focusable sessions table absorbs whatever is left and scrolls internally.
     """
 
     TITLE = "claude-tui"
@@ -101,7 +130,7 @@ class ClaudeTui(App):
         with Vertical(id="body"):
             yield Static(id="usage", markup=False)
             yield Static(id="trends", markup=False)
-            yield DataTable(id="sessions")
+            yield SessionTable(id="sessions")
         yield Static(id="coldstart", markup=False)
         yield Footer()
 
@@ -113,8 +142,10 @@ class ClaudeTui(App):
         # with and follows any later change. ponytail: 16-color only, so #body.stale's
         # opacity dim has no RGB to blend and reads flatter -- acceptable for a mode signal.
         self.theme = "ansi-dark"
-        table = self.query_one("#sessions", DataTable)
-        table.cursor_type = "none"  # D-01: nothing here is navigable
+        self.session_targets = {}
+        self.selected_session_id = None
+        table = self.query_one("#sessions", SessionTable)
+        table.cursor_type = "row"
         table.zebra_stripes = (
             True  # TUI-09: subtle alternating-row tint for scan-ability
         )
@@ -150,6 +181,21 @@ class ClaudeTui(App):
             self.call_from_thread(self.apply_snapshot, snap)
         except Exception:
             self.call_from_thread(self.mark_stale)
+
+    @work(thread=True, exit_on_error=False)
+    def focus_session(self, session) -> None:
+        """Send focus work to the daemon without blocking Textual's event loop."""
+        try:
+            core.request_focus(session)
+        except Exception:
+            return
+
+    def on_session_table_chosen(self, event: SessionTable.Chosen) -> None:
+        target = self.session_targets.get(event.row_key)
+        if target is None:
+            return
+        self.selected_session_id = event.row_key
+        self.focus_session(target)
 
     def apply_snapshot(self, snap) -> None:
         """Bind a fresh snapshot, clear any stale presentation, re-render.
@@ -341,10 +387,29 @@ class ClaudeTui(App):
         self.query_one("#trends", Static).update(  # TUI-08 decoded colored column graph
             self._trends_renderable(snap.get("trends"), snap.get("heatmap"))
         )
-        table = self.query_one("#sessions", DataTable)
+        table = self.query_one("#sessions", SessionTable)
         scroll_y = table.scroll_y  # DataTable.clear() zeroes scroll_x/scroll_y (8.2.8)
         table.clear()  # keeps the column definitions
-        for status, proj, elapsed in core.sess_rows(snap.get("sessions") or [], now):
+        sessions = snap.get("sessions") or []
+        sorted_sessions = sorted(
+            sessions, key=lambda session: core.sess_rank(session.get("status", ""))
+        )
+        rows = core.sess_rows(sessions, now)
+        self.session_targets = {}
+        if not sorted_sessions:
+            row_targets = [(rows[0], None, "empty")]
+        else:
+            row_targets = []
+            for index, (row, session) in enumerate(zip(rows, sorted_sessions)):
+                key = session.get("id") or "\x1f".join(
+                    str(session.get(field, ""))
+                    for field in ("tmux", "pane", "term", "dir")
+                )
+                if key in self.session_targets:
+                    key += "\x1f%d" % index
+                self.session_targets[key] = session
+                row_targets.append((row, session, key))
+        for (status, proj, elapsed), _session, row_key in row_targets:
             # Every cell is a rich Text, never a str: DataTable runs a str cell through
             # Text.from_markup with no per-widget opt-out, so a project directory named
             # [bold]x is injection and one named [/] raises MarkupError inside a timer
@@ -358,9 +423,16 @@ class ClaudeTui(App):
                 Text(status, style=status_style),
                 Text(proj, style=status_style),
                 Text(elapsed, style=status_style),
+                key=row_key,
             )
-        # D-01: the 1s rebuild must not steal the scroll the user set; clear() zeroed it
-        # above, so restore it. validate_scroll_y re-clamps if the session list shrank.
+        if self.selected_session_id in self.session_targets:
+            table.move_cursor(
+                row=table.get_row_index(self.selected_session_id),
+                column=0,
+                scroll=False,
+            )
+        # The 1s rebuild must not steal the scroll the user set; clear() zeroed it above,
+        # so restore it. validate_scroll_y re-clamps if the session list shrank.
         table.scroll_y = scroll_y
 
 

@@ -10,6 +10,7 @@ import importlib.util
 import json
 import pathlib
 import socket
+import tempfile
 import threading
 import time
 
@@ -54,6 +55,7 @@ from .core import (
     project,
     _safe_cell,
     read_line,
+    request_focus,
     reset_marks,
     sess_elapsed,
     sess_notify_baseline,
@@ -507,20 +509,20 @@ def demo():
 
     # --- build_session_snapshot (SOCK-01 shape groundwork, SOCK-03 idempotency) ---
     _snap_in = [
-        {"dir": "proj-a", "status": "running", "entered": 100.0, "pane": "%1", "tmux": "/tmp/x"},
+        {"id": "sid-a", "dir": "proj-a", "status": "running", "entered": 100.0, "pane": "%1", "tmux": "/tmp/x", "term": "ghostty"},
         {"dir": "proj-b", "status": "done", "entered": 90.0, "run_dur": 12.5},
     ]
     _snap_out = build_session_snapshot(_snap_in)
     assert _snap_out == [
-        {"dir": "proj-a", "status": "running", "entered": 100.0, "frozen": None, "pane": "%1", "tmux": "/tmp/x"},
-        {"dir": "proj-b", "status": "done", "entered": 90.0, "frozen": 12.5, "pane": "", "tmux": ""},
+        {"id": "sid-a", "dir": "proj-a", "status": "running", "entered": 100.0, "frozen": None, "pane": "%1", "tmux": "/tmp/x", "term": "ghostty"},
+        {"id": "", "dir": "proj-b", "status": "done", "entered": 90.0, "frozen": 12.5, "pane": "", "tmux": "", "term": ""},
     ]
     assert build_session_snapshot([]) == []
     # purity: calling twice yields independent lists, input untouched.
     assert build_session_snapshot(_snap_in) == _snap_out
     assert build_session_snapshot(_snap_in) is not build_session_snapshot(_snap_in)
     assert _snap_in == [
-        {"dir": "proj-a", "status": "running", "entered": 100.0, "pane": "%1", "tmux": "/tmp/x"},
+        {"id": "sid-a", "dir": "proj-a", "status": "running", "entered": 100.0, "pane": "%1", "tmux": "/tmp/x", "term": "ghostty"},
         {"dir": "proj-b", "status": "done", "entered": 90.0, "run_dur": 12.5},
     ]
     json.dumps(_snap_out)  # must not raise
@@ -667,6 +669,10 @@ def demo():
             self.usage = {"used_percentage": 42}
             self.heatmap = [[None] * 24 for _ in range(7)]
             self.trends = ["line1"]
+            self.focused = []
+
+        def focus(self, pane, tmux, title, term):
+            self.focused.append((pane, tmux, title, term))
 
     _mon = _FakeMonitor()
     _server_sock, _client_sock = socket.socketpair()
@@ -688,10 +694,22 @@ def demo():
     assert _snapshot["usage"] == _mon.usage
     assert _snapshot["trends"] == _mon.trends
     assert _snapshot["sessions"] == build_session_snapshot(list(_mon.sessions.values()))
-    # IN-02, deferred: the wire shape carries no `term` key yet (matches
-    # build_session_snapshot's current 6-key output above) -- add it when a query-side
-    # consumer (e.g. Phase 9's TUI) actually needs to tell a Zed session from a tmux one.
-    assert "term" not in _snapshot["sessions"][0]
+    assert _snapshot["sessions"][0]["term"] == ""
+
+    # The focus action dispatches to the same Monitor.focus path as tray-menu clicks.
+    _focus_server, _focus_client = socket.socketpair()
+    _focus_thread = threading.Thread(
+        target=_daemon._handle_conn, args=(_mon, _focus_server), daemon=True
+    )
+    _focus_thread.start()
+    _focus_client.sendall(
+        b'{"action":"focus","pane":"%7","tmux":"/tmp/t","title":"proj","term":"ghostty"}\n'
+    )
+    _focus_client.shutdown(socket.SHUT_WR)
+    _focus_thread.join(timeout=5)
+    _focus_client.close()
+    assert not _focus_thread.is_alive()
+    assert _mon.focused == [("%7", "/tmp/t", "proj", "ghostty")]
 
     # --- tui socket client (TUI-05) ---
     # read_line takes an ALREADY-CONNECTED socket, so a bare socketpair drives it; the
@@ -736,6 +754,45 @@ def demo():
     # the fetch interval starts a new fetch while the previous recv is still blocked.
     assert TUI_SOCK_TIMEOUT < TUI_FETCH_INTERVAL
     assert TUI_TICK_INTERVAL < TUI_FETCH_INTERVAL  # D-09: re-render faster than we refetch
+
+    # --- tui focus client ---
+    with tempfile.TemporaryDirectory() as _focus_dir:
+        _focus_path = str(pathlib.Path(_focus_dir) / "focus.sock")
+        _listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        _listener.bind(_focus_path)
+        _listener.listen(1)
+        _received = []
+
+        def _receive_focus():
+            conn, _ = _listener.accept()
+            try:
+                _received.append(json.loads(read_line(conn)))
+            finally:
+                conn.close()
+
+        _receiver = threading.Thread(target=_receive_focus, daemon=True)
+        _receiver.start()
+        request_focus(
+            {"dir": "proj", "pane": "%3", "tmux": "/tmp/tmux", "term": "ghostty"},
+            path=_focus_path,
+        )
+        _receiver.join(timeout=5)
+        _listener.close()
+        assert not _receiver.is_alive()
+        assert _received == [
+            {
+                "action": "focus",
+                "pane": "%3",
+                "tmux": "/tmp/tmux",
+                "title": "proj",
+                "term": "ghostty",
+            }
+        ]
+    try:
+        request_focus({"dir": "missing target"})
+        assert False, "unfocusable session should raise"
+    except ValueError:
+        pass
 
     # --- tui usage rows (TUI-01) ---
     _unow = 1700000000

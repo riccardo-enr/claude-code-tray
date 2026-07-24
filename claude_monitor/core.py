@@ -167,18 +167,19 @@ def build_session_snapshot(sessions):
     """Snapshot a list of session dicts into plain, JSON-serializable primitives. Pure.
     `sessions` is a plain list already copied out of Monitor.sessions.values() by the
     caller (which must hold sessions_lock while copying, per D-01) -- this function does
-    no locking, no I/O, and never mutates its input or the dicts it reads. Six keys per
-    session: dir/status/entered/frozen (write_dashboard's original shape) plus pane/tmux
-    (D-06's "superset" extension, shared with Plan 08-02's query responder).
+    no locking, no I/O, and never mutates its input or the dicts it reads. Focus metadata
+    is included so socket clients can activate the same target as a tray-menu click.
     """
     return [
         {
+            "id": s.get("id", ""),
             "dir": s.get("dir", ""),
             "status": s.get("status", ""),
             "entered": s.get("entered"),
             "frozen": None if s.get("status") == "running" else s.get("run_dur"),
             "pane": s.get("pane", ""),
             "tmux": s.get("tmux", ""),
+            "term": s.get("term", ""),
         }
         for s in sessions
     ]
@@ -835,6 +836,31 @@ def query_snapshot(path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
         if not isinstance(obj, dict):
             raise ValueError("snapshot response was %s, not an object" % type(obj).__name__)
         return obj
+    finally:
+        s.close()
+
+
+def request_focus(session, path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
+    """Ask the daemon to focus one session target. Raises on malformed input or I/O."""
+    if not isinstance(session, dict):
+        raise ValueError("session focus target must be an object")
+    target = {
+        "pane": session.get("pane", ""),
+        "tmux": session.get("tmux", ""),
+        "title": session.get("dir", ""),
+        "term": session.get("term", ""),
+    }
+    if not all(isinstance(value, str) for value in target.values()):
+        raise ValueError("session focus fields must be strings")
+    if not target["pane"] and target["term"] != "zed":
+        raise ValueError("session has no focusable terminal target")
+
+    message = {"action": "focus", **target}
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(path)
+        s.sendall((json.dumps(message) + "\n").encode("utf-8"))
     finally:
         s.close()
 
