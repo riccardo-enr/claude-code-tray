@@ -71,6 +71,7 @@ from .core import (
     trend_text,
     tui_usage_rows,
     usage7_series,
+    weekday_hhmm,
     with_gaps,
 )
 from .dashboard import render_dashboard
@@ -643,6 +644,8 @@ def demo():
             if _p and "exhaust" in _p:
                 assert _p["proj"] > 100 and _p["exhaust"] < R
     assert len(hhmm(0)) == 5 and ":" in hhmm(0)  # the value itself is TZ-dependent
+    assert weekday_hhmm(0).split()[0] == time.strftime("%a", time.localtime(0))
+    assert weekday_hhmm(0).endswith(hhmm(0))
 
     # --- the arm/re-arm state machine ---
     now = S + WIN5 // 2

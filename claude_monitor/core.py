@@ -222,6 +222,11 @@ def hhmm(epoch):
     return time.strftime("%H:%M", time.localtime(epoch))
 
 
+def weekday_hhmm(epoch):
+    """Local abbreviated weekday and wall-clock time for an epoch."""
+    return time.strftime("%a %H:%M", time.localtime(epoch))
+
+
 def alert_due(p, now):
     """Is `p` (a project() result) worth alerting on, given the ALERT_LEAD floor? Pure.
     Membership-tests "exhaust" rather than reading p["proj"]: project() sets the key only

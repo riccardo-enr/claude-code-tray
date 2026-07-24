@@ -283,15 +283,16 @@ class ClaudeTui(App):
     def _projection_text(self, pct, reset, win, now) -> Text:
         """Render core.project's result without duplicating projection math."""
         projection = core.project(pct, reset, win, now)
+        timestamp = core.weekday_hhmm if win == core.WIN7 else core.hhmm
         if projection is None:
             return Text("proj --", style="dim")
         if projection.get("early"):
             return Text("proj -- (early)", style="dim")
         if "exhaust" in projection:
-            return Text("out ~%s" % core.hhmm(projection["exhaust"]), style="red")
+            return Text("out ~%s" % timestamp(projection["exhaust"]), style="red")
         projected_pct = projection["proj"]
         return Text(
-            "proj %d%% @%s" % (round(projected_pct), core.hhmm(reset)),
+            "proj %d%% @%s" % (round(projected_pct), timestamp(reset)),
             style=core.band(projected_pct),
         )
 
