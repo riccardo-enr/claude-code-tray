@@ -27,12 +27,12 @@ and the snapshot query is the only message ever written to the socket.
 
 import time
 
+from rich.table import Table
 from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widgets import DataTable, Footer, Header, Static
-
 
 from claude_monitor import core
 
@@ -108,7 +108,9 @@ class ClaudeTui(App):
         self.theme = "ansi-dark"
         table = self.query_one("#sessions", DataTable)
         table.cursor_type = "none"  # D-01: nothing here is navigable
-        table.zebra_stripes = True  # TUI-09: subtle alternating-row tint for scan-ability
+        table.zebra_stripes = (
+            True  # TUI-09: subtle alternating-row tint for scan-ability
+        )
         table.add_columns("status", "project", "time")
         # TUI-10: static titled borders (btop paneled layout, D-08). Titles are chrome, not
         # data -- set once here; the border color stays static in CSS.
@@ -225,30 +227,50 @@ class ClaudeTui(App):
             t.append(cell, style=b if colored else "")
         return t
 
-    def _usage_renderable(self, usage, now) -> Text:
-        """The #usage panel as a rich Text (the Static is markup=False, so a Text
-        renderable is the correct no-markup-parse path). Every displayed number still
-        comes from core.tui_usage_rows (D-05); this applies only band colors and gauge
-        glyphs -- no new formatter. Each present cap renders as one line: its gradient
-        gauge (the headline visual, D-03) followed by the band-colored row text (D-02).
+    def _projection_text(self, pct, reset, win, now) -> Text:
+        """Render core.project's result without duplicating projection math."""
+        projection = core.project(pct, reset, win, now)
+        if projection is None:
+            return Text("proj --", style="dim")
+        if projection.get("early"):
+            return Text("proj -- (early)", style="dim")
+        if "exhaust" in projection:
+            return Text("out ~%s" % core.hhmm(projection["exhaust"]), style="red")
+        projected_pct = projection["proj"]
+        return Text(
+            "proj %d%% @%s" % (round(projected_pct), core.hhmm(reset)),
+            style=core.band(projected_pct),
+        )
+
+    def _usage_renderable(self, usage, now):
+        """The #usage panel as a padless two-column rich Table.
+
+        Every displayed usage value still comes from core.tui_usage_rows (D-05);
+        this applies only band colors and gauge glyphs. The right column projects
+        each present cap with core.project and core's existing time formatter.
         """
         rows = core.tui_usage_rows(usage, now)
-        if usage is None or rows == ["usage unavailable"]:
+        five_pct = None if usage is None else usage.get("used_percentage")
+        if five_pct is None:
             return Text("\n".join(rows))
-        # rows[0] is always the 5h cap, rows[1] (when present) the 7d cap; pair each with
-        # the percent core banded on. used_percentage is non-None here (else the guard
-        # above caught it); seven_day_pct is non-None whenever the 7d row exists.
-        pcts = [usage["used_percentage"]]
+
+        caps = [(five_pct, usage.get("resets_at_epoch"), core.WIN5)]
         if len(rows) > 1:
-            pcts.append(usage["seven_day_pct"])
-        out = Text()
+            caps.append(
+                (usage.get("seven_day_pct"), usage.get("seven_day_reset"), core.WIN7)
+            )
+
+        table = Table.grid(expand=True, padding=(0, 2))
+        table.add_column(ratio=1)
+        table.add_column(justify="right", no_wrap=True)
         for i, row in enumerate(rows):
-            if i:
-                out.append("\n")
-            out.append_text(self._gauge(pcts[i]))
-            out.append("  ")
-            out.append_text(self._cap_row_text(row, pcts[i]))
-        return out
+            pct, reset, win = caps[i]
+            left = Text()
+            left.append_text(self._gauge(pct))
+            left.append("  ")
+            left.append_text(self._cap_row_text(row, pct))
+            table.add_row(left, self._projection_text(pct, reset, win, now))
+        return table
 
     def _trends_renderable(self, trends) -> Text:
         """The #trends panel as a rich Text (the Static is markup=False). Falsy trends is
@@ -272,7 +294,9 @@ class ClaudeTui(App):
                 else:
                     out.append(" ")
             out.append("\n")
-        out.append("\n".join(trends[1:]))  # today/wk + peak rows, core strings unchanged
+        out.append(
+            "\n".join(trends[1:])
+        )  # today/wk + peak rows, core strings unchanged
         return out
 
     def render_all(self) -> None:
@@ -300,7 +324,11 @@ class ClaudeTui(App):
             # TUI-09: the D-07 status color is a rich Text STYLE, never a markup string,
             # so the :199 mitigation survives -- waiting yellow / running green / done dim.
             band = core.sess_status_band(status)
-            table.add_row(Text(status, style=band), Text(proj, style=band), Text(elapsed, style=band))
+            table.add_row(
+                Text(status, style=band),
+                Text(proj, style=band),
+                Text(elapsed, style=band),
+            )
         # D-01: the 1s rebuild must not steal the scroll the user set; clear() zeroed it
         # above, so restore it. validate_scroll_y re-clamps if the session list shrank.
         table.scroll_y = scroll_y
