@@ -463,6 +463,23 @@ def trend_sparkline(records, now):
     return "".join(out)
 
 
+# Glyph -> level index, the exact inverse of the SPARK_GLYPHS mapping trend_sparkline
+# uses. SPARK_GAP and any other character are absent, so they decode to None via .get.
+_SPARK_LEVEL = {g: i for i, g in enumerate(SPARK_GLYPHS)}
+
+
+def spark_levels(sparkline):
+    """Decode a SPARK_GLYPHS sparkline back to its per-column levels (TUI-08, D-06).
+
+    Inverts the exact SPARK_GLYPHS mapping trend_sparkline produced: each glyph maps
+    to its index 0..7, which IS the column height an 8-row graph draws from the bottom.
+    SPARK_GAP (an empty hour) and any character not in the ramp decode to None -- a
+    blank column, never an index past the ramp, so a malformed/hostile trends[0]
+    (T-10-03) cannot raise. No new trend math: reads only SPARK_GLYPHS and the input.
+    """
+    return [_SPARK_LEVEL.get(ch) for ch in sparkline]
+
+
 def trend_burn(records, start, end):
     """Mean burn rate in tok/hr over [start, end), or None. Converts per-min -> per-hr."""
     vals = [rec["burn"] for rec in records if start <= rec["t"] < end]

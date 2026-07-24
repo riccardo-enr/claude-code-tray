@@ -58,6 +58,7 @@ from .core import (
     sess_rows,
     sess_should_notify,
     session_stale,
+    spark_levels,
     trend_burn,
     trend_peak_hour,
     trend_sparkline,
@@ -756,6 +757,18 @@ def demo():
     _walk = [gauge_fill(p, _gw) for p in range(0, 101)]
     assert _walk == sorted(_walk)
     assert min(_walk) == 0 and max(_walk) == _gw
+
+    # --- tui spark levels (TUI-08) ---
+    # Round-trip: the full ramp decodes to its own indices; no new trend math, pure inverse.
+    assert spark_levels(SPARK_GLYPHS) == [0, 1, 2, 3, 4, 5, 6, 7]
+    assert spark_levels(SPARK_GAP) == [None]  # an empty-hour column is not a level
+    assert spark_levels("?") == [None]  # unknown/hostile char is tolerated -> None, never raises
+    # A real trend_sparkline output (`spark` from the trend-logic block) decodes to 24
+    # columns, each an int 0..7 or None -- the exact column heights the graph draws.
+    _slv = spark_levels(spark)
+    assert len(_slv) == 24
+    assert all(x is None or (isinstance(x, int) and 0 <= x <= 7) for x in _slv)
+    assert _slv[0] == 0 and _slv[23] == 7 and _slv[12] is None  # matches the spark asserts above
 
     # --- tui trend text (TUI-02) ---
     assert trend_text(None) == "trends: collecting history..."
