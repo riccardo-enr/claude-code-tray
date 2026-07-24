@@ -87,6 +87,12 @@ class ClaudeTui(App):
 
     def on_mount(self) -> None:
         """Columns once, both timers, and one immediate fetch so frame 1 is not blank."""
+        # Inherit the host terminal's palette (e.g. Ghostty/Catppuccin) instead of
+        # textual's fixed dark theme: ansi-dark renders through the terminal's own 16
+        # ANSI colors + default fg/bg, so the TUI matches whatever the terminal is themed
+        # with and follows any later change. ponytail: 16-color only, so #body.stale's
+        # opacity dim has no RGB to blend and reads flatter -- acceptable for a mode signal.
+        self.theme = "ansi-dark"
         table = self.query_one("#sessions", DataTable)
         table.cursor_type = "none"  # D-01: nothing here is navigable
         table.add_columns("status", "project", "time")

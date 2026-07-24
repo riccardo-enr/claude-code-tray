@@ -131,6 +131,7 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | 260718-hz5 | Restructure claude-monitor.py (2081 lines) into 4 flat modules: core.py + dashboard.py + test_claude_monitor.py + slim 580-line entry. Pure move, --selfcheck green, 65/65 defs preserved, gi isolated | 2026-07-18 | 02aef11 | Verified | [260718-hz5-restructure-claude-monitor-py-into-4-mod](./quick/260718-hz5-restructure-claude-monitor-py-into-4-mod/) |
 | 260718-pkg | (fast) Move core/dashboard/test into `claude_monitor/` package; entry script stays at root; relative internal imports; pyright extraPaths=["."] so first-party import resolves. --selfcheck green | 2026-07-18 | d2ac504 | Verified | - |
 | 260719-pzd | Symlink both hook scripts in install.sh (ln -sf, not install -m 0755); fixed stale ~/.claude/hooks/claude-send.py plain-file copy on this machine, root-causing the class of drift | 2026-07-19 | d9a13d3 | Verified | [260719-pzd-symlink-claude-hooks-claude-send-py-to-t](./quick/260719-pzd-symlink-claude-hooks-claude-send-py-to-t/) |
+| 260724-thm | claude-tui inherits the terminal palette: self.theme = "ansi-dark" in on_mount, so the TUI renders in Ghostty/Catppuccin colors and follows terminal-theme changes (chose inherit over hardcoded catppuccin-mocha). Headless run_test + selfcheck + lint green | 2026-07-24 | 84657e2 | Complete | [260724-thm-tui-inherit-terminal-theme](./quick/260724-thm-tui-inherit-terminal-theme/) |
 
 ## Deferred Items
 
