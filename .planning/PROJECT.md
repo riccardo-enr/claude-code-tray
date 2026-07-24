@@ -16,37 +16,15 @@ tray a **push voice**: one shared desktop-notification path for session
 waiting/done events and predictive 5h/7d quota alerts, with per-event toggles
 and a global mute. v1.4 put a **live sessions panel** in that same dashboard —
 every tracked session with status/dir/duration, self-healing off the list when
-a tmux pane dies with no hook event required.
+a tmux pane dies with no hook event required. v1.5 gave that data a **terminal
+home**: a `textual`-rendered `claude-tui.py` showing usage/quota/trends and live
+sessions, fed by a new read-only query verb on the daemon's existing unix socket
+— for people who live in the terminal and don't want a browser round-trip.
 
 ## Core Value
 
 At a glance from the top bar, know **how much Claude Code quota is left and when
 it resets** — without launching a separate terminal monitor.
-
-## Current Milestone: v1.5 TUI Dashboard
-
-**Goal:** Surface usage/quota/trends and live sessions in a terminal UI, for people
-who live in the terminal and want the tray's data without a browser round-trip.
-
-**Target features:**
-- A `claude-tui.py` entry point (textual) rendering usage now, reset countdown,
-  trends/sparkline, and a live sessions panel — a third consumer of `claude_monitor.core`
-  alongside `claude-monitor.py` and `dashboard.py`
-- Live sessions via a new read-only query verb on the daemon's existing unix socket
-  (`serve()` is receive-only today; this adds a request/response snapshot of
-  `self.sessions` + last usage)
-- `textual` added as a runtime dependency — the first exception to the project's
-  stdlib+PyGObject-only rule, scoped to this one entry point
-
-**Key context:**
-- Closes SEED-007. The `claude_monitor/` package restructure (v1.3/v1.4) already
-  isolated all display computation into a GTK-free `core.py`, making this mostly a
-  new renderer over existing pure functions.
-- Load-bearing decisions settled at milestone scoping (not deferred to discuss-phase):
-  shared-socket data source (not standalone JSONL-only) to get live sessions in v1,
-  and `textual` over `curses` for rendering.
-- Thread-safety around `self.sessions` (mutated on the Gtk main thread, now also read
-  by a socket responder) is the new query verb's problem to solve correctly.
 
 ## Context
 
@@ -67,25 +45,27 @@ who live in the terminal and want the tray's data without a browser round-trip.
 
 ## Current State
 
-**Shipped:** v1.4 (Session Dashboard), 2026-07-20 — bundled with v1.3's formal
-close-out (Notifications & Predictive Alerts, features live since 2026-07-17).
-Five milestones, seven phases, all implemented and reviewed. `claude-monitor.py`
-was restructured into a `claude_monitor/` package (`core.py` + `dashboard.py` +
-entry script) during v1.3/v1.4.
+**Shipped:** v1.5 (TUI Dashboard), 2026-07-24 (tag `v1.5`). Six milestones, nine
+phases, all implemented and reviewed. `claude-monitor.py` was restructured into a
+`claude_monitor/` package (`core.py` + `dashboard.py` + entry script) during
+v1.3/v1.4; v1.5 added `claude-tui.py` as the third consumer of `core.py`.
 
-The tray now covers the full quota picture (both rolling caps, projected reset,
-30 days of persisted history, in-menu trends, a self-contained browser dashboard),
-pushes the user back via desktop notifications (session waiting/done, predictive
-5h/7d quota alerts, per-event toggles, global mute), and shows every live session
-— status, project dir, time-in-state — directly in that same dashboard, self-healing
-off the list when a tmux pane dies with no hook event required.
+The tray covers the full quota picture (both rolling caps, projected reset, 30 days
+of persisted history, in-menu trends, a self-contained browser dashboard), pushes
+the user back via desktop notifications (session waiting/done, predictive 5h/7d
+quota alerts, per-event toggles, global mute), and shows every live session —
+status, project dir, time-in-state — in the browser dashboard and now in a
+`textual` terminal UI (`claude-tui.py`), both fed off the daemon's existing socket,
+self-healing off the list when a tmux pane dies with no hook event required.
 
-**Next milestone:** none yet — planning next via `/gsd-new-milestone`.
+**Next milestone:** none yet — a v1.6 "TUI polish" milestone is proposed (see STATE.md
+Deferred Items: color-by-threshold, progress bars, richer trends, optional pane
+focus). Plan next via `/gsd-new-milestone`.
 
 ## Current Milestone
 
-No workstream is currently open. `notifications-predictive-alerts` shipped v1.4
-2026-07-20 (tag `v1.4`) and is archived under
+No workstream is currently open. `notifications-predictive-alerts` shipped v1.5
+2026-07-24 (tag `v1.5`) and is archived under
 `workstreams/notifications-predictive-alerts/milestones/`.
 
 ## Requirements
@@ -124,14 +104,15 @@ No workstream is currently open. `notifications-predictive-alerts` shipped v1.4
 - checkmark Live in-memory reflect on existing meta-refresh, no new IPC/socket/persistence (SESSVIEW-03) — v1.4
 - checkmark Clean empty state with no active sessions (SESSVIEW-04) — v1.4
 - checkmark Dashboard stays self-contained with the sessions panel added (SESSVIEW-05) — v1.4
+- checkmark Read-only `{"query":"snapshot"}` verb on the daemon socket — sessions + latest usage/history, thread-per-connection, `sessions_lock` torn-read safety, chmod 0600 (SOCK-01/02/03) — v1.5
+- checkmark `claude-tui.py` textual TUI — 5h/7d usage, trends (sparkline/burn/peak reused from `core`), live sessions panel, auto-refresh, clean degradation when the daemon is unreachable (TUI-01..05) — v1.5
 
 ### Active
 
-**v1.5 (TUI Dashboard)** — REQ-IDs in `.planning/REQUIREMENTS.md`: terminal
-rendering of usage/quota/trends and live sessions (TUI-*), the daemon's new
-socket query verb (SOCK-*).
+None — no milestone currently open. v1.6 "TUI polish" is proposed but not yet scoped.
 
-Still deferred: raw data export (HIST-F1 / DASH-F2), configurable
+Still deferred: click-to-focus a pane from the TUI, standalone no-daemon TUI mode,
+TUI polish (v1.6), raw data export (HIST-F1 / DASH-F2), configurable
 ranges (TREND-F1 / DASH-F3), quiet hours (NOTIF-F1), per-event sound/urgency
 (NOTIF-F2), hard-threshold push (ALERT-F1). See
 `workstreams/notifications-predictive-alerts/STATE.md` "Deferred Items" for the
@@ -174,8 +155,9 @@ as QUOTA-01 in v1.2.)*
 | `urgency` hint drives notification lifetime (D-02), not `expire_timeout` | gnome-shell destructures `expire_timeout` as `timeout_` and never reads it; banner life is a hardcoded 4000ms. Only `urgency=2/CRITICAL` skips the auto-dismiss timer | ✓ Good — Phase 5 |
 | `Monitor._reaped_status` + pure `core.sess_notify_baseline` seed the notification de-dupe baseline across a reap/resurrect | CR-01: a genuinely-alive session reaped past `REAP_MAX_AGE` and resuming the same status re-fired a spurious "Waiting for input" popup, regressing NOTIF-02. Fixed with a one-shot Gtk-thread-only memory, not by excluding `alive=True` from the age reap (would have broken the same-pane `/exit` self-heal) | ✓ Good — Phase 7-03, closed CR-01/WR-06 |
 | v1.3 was never run through `/gsd-complete-milestone` on its own; closed out bundled with v1.4 | Phase 5 had no VERIFICATION.md (missing, not failed) despite shipping live 2026-07-17 with a passing REVIEW.md and UAT.md. Re-verifying weeks-old shipped code was judged lower value than accepting a recorded closeout override | Acknowledged override — see `workstreams/.../STATE.md` Deferred Items |
-| v1.5 takes on `textual` as a runtime dependency, breaking the stdlib+PyGObject-only rule that held v1.0-v1.4 | User's explicit call at milestone scoping — `curses` was the lazy/consistent option but the user chose textual's nicer widgets/layout for the one entry point that needs them | Decided at v1.5 scoping |
-| v1.5's TUI gets live sessions via a new query verb on the daemon's socket, not a standalone JSONL-only reader | Standalone was the lazier MVP (no daemon changes) but cannot see `self.sessions` — it lives only in the running `Monitor` process's memory, never on disk. Shared-socket was chosen to keep live sessions in v1 scope | Decided at v1.5 scoping |
+| v1.5 takes on `textual` as a runtime dependency, breaking the stdlib+PyGObject-only rule that held v1.0-v1.4 | User's explicit call at milestone scoping — `curses` was the lazy/consistent option but the user chose textual's nicer widgets/layout for the one entry point that needs them | ✓ Good — v1.5 shipped; scoped to `claude-tui.py` via PEP 723 + optional `tui` extra, so the daemon's system interpreter never gains it |
+| v1.5's TUI gets live sessions via a new query verb on the daemon's socket, not a standalone JSONL-only reader | Standalone was the lazier MVP (no daemon changes) but cannot see `self.sessions` — it lives only in the running `Monitor` process's memory, never on disk. Shared-socket was chosen to keep live sessions in v1 scope | ✓ Good — v1.5 shipped; thread-per-connection + `sessions_lock` kept the hook-event path un-slowed and torn-read-safe |
+| TUI substrate lives in `core.py` above the textual boundary; `query_snapshot` raises, degraded-mode swallowing lives at the App worker boundary | Everything assertable is provable by `--selfcheck` on the stock interpreter; `claude-tui.py` stays App-class-and-CSS only | ✓ Good — v1.5 Phase 9 |
 
 ## Evolution
 
@@ -195,6 +177,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-20 — milestone v1.5 (TUI Dashboard) started, closing
-SEED-007. Scoping decided: shared-socket data source (live sessions in v1) and
-`textual` for rendering (first exception to the stdlib-only rule).*
+*Last updated: 2026-07-24 — after v1.5 (TUI Dashboard) milestone. Shipped a
+`textual` terminal UI (`claude-tui.py`) over a new read-only daemon-socket query
+verb; closed SEED-007. 8/8 requirements delivered. Next: v1.6 "TUI polish" proposed
+but not yet scoped.*

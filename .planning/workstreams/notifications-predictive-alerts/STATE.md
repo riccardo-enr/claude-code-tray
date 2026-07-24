@@ -4,14 +4,14 @@ milestone: v1.5
 milestone_name: TUI Dashboard
 current_phase: 9
 current_phase_name: claude-tui.py
-status: in progress
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-07-21T07:05:00.000Z"
-last_activity: 2026-07-21
-last_activity_desc: 09-02 executed (claude-tui.py textual App + textual packaging)
+status: shipped
+stopped_at: Milestone v1.5 completed and archived (tag v1.5)
+last_updated: "2026-07-24T00:00:00.000Z"
+last_activity: 2026-07-24
+last_activity_desc: v1.5 (TUI Dashboard) closed — archived, PROJECT.md evolved, tagged v1.5
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
   completed_plans: 4
   percent: 100
@@ -21,17 +21,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-13)
+See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Phase 9 — Terminal Dashboard (claude-tui.py)
+**Current focus:** None — v1.5 shipped. v1.6 "TUI polish" proposed; plan next via `/gsd-new-milestone`.
 
 ## Current Position
 
-Phase: 9 — Terminal Dashboard (claude-tui.py)
-Plan: 2/2 complete (Wave 1: 09-01 done, Wave 2: 09-02 done)
-Status: Code-complete — Phase 9 awaiting UAT (`/gsd-verify-work`)
-Last activity: 2026-07-21 — 09-02 executed (claude-tui.py textual App, CSS, two-timer loop + textual packaging)
+Milestone: v1.5 (TUI Dashboard) — SHIPPED 2026-07-24 (tag `v1.5`)
+Phases: 8-9 complete (4/4 plans); archived to `milestones/v1.5-ROADMAP.md`, `v1.5-REQUIREMENTS.md`, `v1.5-phases/`
+Status: Milestone closed — no workstream open
+Last activity: 2026-07-24 — v1.5 archived, PROJECT.md full evolution review, tagged v1.5
 
 ## Performance Metrics
 
@@ -152,6 +152,10 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | Verification | Phase 05 (Notification Path & Event Producers, v1.3) has no VERIFICATION.md — v1.3 was never run through /gsd-complete-milestone, so gsd-tools bundles Phases 5-7 into one open milestone bucket. Feature has been live since 2026-07-17 with a passing 05-REVIEW.md and 05-UAT.md; not re-verified retroactively at v1.4 close | Acknowledged (verification override) | 2026-07-20 |
 | v1.5 | Click-to-focus a pane from the TUI (reusing `pane`/`tmux` fields) — deferred; the tray remains the click-to-focus surface for v1.5 | Deferred | 2026-07-20 |
 | v1.5 | Standalone (no-daemon) mode reading `usage-history.jsonl` directly — deferred; shared-socket was chosen over it to get live sessions in v1.5 scope, but a fallback mode could still be added later | Deferred | 2026-07-20 |
+| UAT | Phase 01 + Phase 09 flagged by pre-close audit at v1.5 close; both UATs are `[passed]` with 0 pending scenarios — audit-format false positive, no real gap. Phase 09 additionally had 2 tests skipped (scroll-retention CR-01, daemon-outage D5/WR-03), documented as non-failures verified by tests + code re-read | Acknowledged (verification override) | 2026-07-24 |
+| v1.5 | TUI feels v1.0-tier — polish (color-by-threshold, progress bars, richer trends, optional pane focus) deferred to a proposed v1.6 milestone | Deferred | 2026-07-24 |
+| debug | `stale-session-status-stuck` [diagnosed] flagged by pre-close audit at v1.5 close — diagnose-only session whose fix (core.session_stale reap, CR-01) already shipped in v1.4/Phase 07; not a v1.5 gap | Acknowledged | 2026-07-24 |
+| quick_task | `260719-qc6-add-xdotool-zed-terminal-focus-toggle-ke` [missing] flagged by pre-close audit at v1.5 close — unrelated Zed terminal-focus keybind task, never in v1.5 (TUI) scope | Acknowledged | 2026-07-24 |
 
 ## Session Continuity
 

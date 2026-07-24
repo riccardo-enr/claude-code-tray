@@ -28,7 +28,7 @@ archived phase artifacts live under `.planning/workstreams/notifications-predict
 - ✅ **v1.2 Usage Web Dashboard** — Phase 4 (shipped 2026-07-13) — [archive](./milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 Notifications & Predictive Alerts** — Phases 5-6 (shipped 2026-07-17) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.4 Session Dashboard** — Phase 7 (shipped 2026-07-20) — [archive](./milestones/v1.4-ROADMAP.md)
-- 📋 **v1.5 TUI Dashboard** — Phases 8-9 (planned)
+- ✅ **v1.5 TUI Dashboard** — Phases 8-9 (shipped 2026-07-24) — [archive](./milestones/v1.5-ROADMAP.md)
 
 ## Phases
 
@@ -93,65 +93,21 @@ closure CR-01 restored the NOTIF-02 de-dupe guarantee across a reap/resurrect.
 
 </details>
 
-### 📋 v1.5 TUI Dashboard (Phases 8-9) — PLANNED
+<details>
+<summary>✅ v1.5 TUI Dashboard (Phases 8-9) — SHIPPED 2026-07-24</summary>
 
-**Milestone Goal:** Surface usage/quota/trends and live sessions in a terminal UI,
-so people who live in the terminal get the tray's data without a browser
-round-trip. Closes SEED-007.
+- [x] Phase 8: Daemon Socket Query Verb (2/2 plans) — completed 2026-07-20
+- [x] Phase 9: Terminal Dashboard (claude-tui.py) (2/2 plans) — completed 2026-07-24
 
-- [x] **Phase 8: Daemon Socket Query Verb** - Read-only JSON snapshot of live sessions + latest usage/history over the existing unix socket, without disrupting the fire-and-forget hook-event path (completed 2026-07-20)
-- [ ] **Phase 9: Terminal Dashboard (claude-tui.py)** - A `textual`-rendered TUI showing usage/quota/trends and live sessions, auto-refreshing, degrading cleanly when the daemon is unreachable
+Read-only `{"query": "snapshot"}` verb on the daemon's existing unix socket
+(thread-per-connection, `sessions_lock` for torn-read safety, chmod 0600), feeding
+a new `textual`-rendered `claude-tui.py`: 5h/7d usage rows, trends reused verbatim
+from `core`, a live sessions panel sorted waiting -> running -> done, auto-refresh,
+and clean degradation when the daemon is unreachable. `textual` is the project's
+first runtime-dependency exception, scoped to the one entry point via PEP 723 + an
+optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 
-## Phase Details
-
-### Phase 8: Daemon Socket Query Verb
-
-**Goal**: The daemon's existing unix socket can answer a read-only query for the live session table plus the latest usage/history state, without disrupting or blocking the existing fire-and-forget hook-event path.
-**Depends on**: Phase 7 (`self.sessions` and the read-only snapshot precedent already established by `write_dashboard`)
-**Requirements**: SOCK-01, SOCK-02, SOCK-03
-**Success Criteria** (what must be TRUE):
-
-  1. Connecting to the daemon's socket with a query message returns a JSON snapshot containing every tracked session (dir/status/pane/tmux) plus the last polled usage/history state.
-  2. Sending hook events (running/waiting/done/end) continues to work unchanged and un-slowed while query connections are made, including a stalled or malformed one.
-  3. A malformed or slow query connection cannot block or corrupt a concurrent session-event write — the hook-event path keeps flowing.
-  4. The session snapshot returned never reflects a torn/partial in-flight mutation of `self.sessions` — a read racing a Gtk-thread update returns either the before- or after-state, never a mixed one.
-
-**Plans**: 2/2 plans executed
-
-Plans:
-**Wave 1**
-
-- [x] 08-01-PLAN.md — sessions_lock + core.build_session_snapshot (thread-safety foundation, SOCK-03 + SOCK-01 shape groundwork)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 08-02-PLAN.md — thread-per-connection serve() + query dispatch + socket hardening (SOCK-01, SOCK-02, SOCK-03 live)
-
-### Phase 9: Terminal Dashboard (claude-tui.py)
-
-**Goal**: A person living in a terminal can see the tray's full usage/quota/trends/live-sessions picture without opening a browser — a new `claude-tui.py` entry point querying Phase 8's socket verb, the third consumer of `claude_monitor.core` alongside `claude-monitor.py` and `dashboard.py`.
-**Depends on**: Phase 8 (the socket query verb is this phase's only data source)
-**Requirements**: TUI-01, TUI-02, TUI-03, TUI-04, TUI-05
-**Success Criteria** (what must be TRUE):
-
-  1. Running `claude-tui.py` shows current usage — percent, tokens, reset countdown, burn rate — for both the 5-hour and 7-day caps.
-  2. The same screen shows trends (sparkline, daily/weekly burn, peak-usage hour) computed by `claude_monitor.core`'s existing trend functions, not reimplemented.
-  3. A live sessions panel lists every tracked session (project dir, status, time-in-state), sorted waiting -> running -> done, matching the v1.4 dashboard panel's semantics.
-  4. The screen refreshes automatically on an interval with no manual re-run or keypress needed to see new data.
-  5. When the daemon isn't running or the socket is unreachable, the TUI shows a clear message instead of crashing or printing a traceback.
-
-**Plans**: 2/2 plans executed
-
-Plans:
-**Wave 1**
-
-- [x] 09-01-PLAN.md -- pure TUI substrate in `claude_monitor/core.py` (socket client, usage rows, trend text, session rows, timing constants) plus its `--selfcheck` asserts, all above the textual boundary
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 09-02-PLAN.md -- `claude-tui.py` textual App, CSS and two-timer refresh loop, plus packaging (`pyproject.toml` `tui` extra, `install.sh` symlink, `just tui`)
-
-**UI hint**: yes
+</details>
 
 ## Progress
 
@@ -165,4 +121,4 @@ Plans:
 | 6. Notification Control & Config         | v1.3      | 2/2             | Complete    | 2026-07-17 |
 | 7. Live Session View in the Dashboard    | v1.4      | 3/3             | Complete    | 2026-07-18 |
 | 8. Daemon Socket Query Verb              | v1.5      | 2/2 | Complete    | 2026-07-20 |
-| 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 2/2             | Awaiting UAT | -          |
+| 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 2/2             | Complete    | 2026-07-24 |

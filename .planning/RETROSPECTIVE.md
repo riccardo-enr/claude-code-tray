@@ -123,6 +123,48 @@
 
 ---
 
+## Milestone: v1.5 — TUI Dashboard
+
+**Shipped:** 2026-07-24 (tag `v1.5`)
+**Phases:** 2 (8, 9) | **Plans:** 4
+
+### What Was Built
+
+- **A read-only `{"query": "snapshot"}` verb** on the daemon's existing unix socket, returning every tracked session (dir/status/pane/tmux) plus the last polled usage/history — the first time `serve()` answered a request instead of only receiving fire-and-forget hook events.
+- **`claude-tui.py`** — a `textual`-rendered terminal dashboard: 5h/7d usage rows, trends (sparkline, daily/weekly burn, peak hour) reused verbatim from `core`, a live sessions panel sorted waiting -> running -> done, auto-refresh, and clean degradation when the daemon is unreachable. The third consumer of `claude_monitor.core` alongside `claude-monitor.py` and `dashboard.py`.
+- **The project's first runtime-dependency exception** — `textual`, scoped to the one entry point via a PEP 723 inline block and an optional `tui` extra, so the daemon's PEP 668 system interpreter never gains a third-party package.
+
+### What Worked
+
+- **Splitting the socket verb (Phase 8) from the renderer (Phase 9) on a real unblocks-the-next boundary.** Phase 9 had no data source until the query verb existed, and the verb was independently verifiable (connect + query, no TUI needed) — not an arbitrary horizontal-layer split.
+- **Putting the whole TUI substrate in `core.py` above the textual boundary.** Socket client, usage rows, trend text, session rows, and timing constants are all `--selfcheck`-provable on the stock interpreter; `claude-tui.py` stayed App-class-and-CSS only. `TUI_SOCK_TIMEOUT < TUI_FETCH_INTERVAL` became a standing selfcheck assert against fetch-thread pile-up.
+- **Reusing the thread-safety precedent instead of inventing one.** `sessions_lock` wraps every `self.sessions` call site; the query responder reads `usage`/`trends` outside the lock as single-reference rebinds, matching `compute_trends`' existing no-lock posture. `serve()`'s per-connection `except` guard (from `260713-fry`) was the precedent for SOCK-02's containment.
+
+### What Was Inefficient
+
+- **Textual has two independent exit doors and both had to be closed on every callback** — `@work(exit_on_error=False)` and a blanket `except Exception` in the body — because `App._handle_exception` "always results in the app exiting" and `Timer._tick` routes straight to it. A single guard would have let an unreachable-daemon tick silently kill the app.
+- **A cluster of post-UAT review fixes (WR-01..06, CR-01/02)** landed after the App was "done": unbounded socket read, non-object JSON at the parse boundary, render-failure crash path, command-palette leak, unpinned deps, missing usage keys, ANSI injection via session-dir cells, lost scroll position on the render tick. Several (ANSI injection, unbounded read) are the kind of trust-boundary hardening that ideally lands in the plan, not the review.
+- **Subtle textual property trap:** D-10's dimming needed CSS `opacity`, not `text-opacity` — textual 8.2.8 declares `opacity` with `children=True` but `text_opacity` without it, so `text-opacity` dims only the container's own content and leaves child panels bright. Cost a debugging cycle.
+
+### Patterns Established
+
+- **A new rendering surface should be a thin consumer of `core.py`, never a reimplementation.** `claude-tui.py` is the third consumer proving the v1.3/v1.4 GTK-free-core restructure paid off: the TUI is mostly a new view over existing pure functions.
+- **A new runtime dependency can be introduced without polluting the base install** — PEP 723 inline metadata + an optional extra keeps `uv sync` at zero third-party packages and lets a plain `./claude-tui.py` resolve its own deps through a symlink from any cwd.
+- **Every DataTable cell as `rich.text.Text`, every `Static` with `markup=False`** — untrusted session dirs must not be parsed as markup (the same summary-vs-body markup-injection lesson from v1.3, re-applied to the TUI surface).
+
+### Key Lessons
+
+1. **Trust-boundary hardening for a new input surface belongs in the plan, not the review.** A socket that now answers queries, and a TUI that renders untrusted session dirs, both introduced input boundaries — most of the WR/CR fixes were bounding and sanitizing those, and could have been acceptance criteria up front.
+2. **A GTK-free `core.py` is what makes a second (and third) frontend cheap.** The restructure done mid-v1.3/v1.4 as tech-debt paydown is precisely what let v1.5 add a whole terminal UI as a thin renderer.
+3. **When a framework "always exits on unhandled exception," every async callback needs belt-and-suspenders containment** — one guard is not enough when the framework has multiple independent paths into its exit handler.
+
+### Cost Observations
+
+- One new runtime dependency (`textual` 8.2.8 + transitive `rich`), the first in the project's history — deliberately quarantined to the optional `tui` extra so the daemon and default install stay zero-third-party.
+- Coarse 2-phase milestone (4 plans, 8 tasks, ~4 days) matching the 1-2-phases-per-milestone precedent; no VERIFICATION-blocking rework, but a heavy post-UAT review-fix tail.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -133,6 +175,7 @@
 | v1.1 | 2 | Split persistence from the read-side views — the store shipped and got verified before anything depended on it. |
 | v1.2 | 1 | Single coherent read-side capability; scope grew mid-flight (QUOTA-*). UAT against the live artifact drove two reversals. |
 | v1.3+v1.4 | 3 | First cross-phase regression (CR-01, reap x notification de-dupe intersection); v1.3 shipped without formal close-out, bundled into v1.4's archival. |
+| v1.5 | 2 | First runtime dependency (`textual`, quarantined to an optional extra); a new frontend as a thin `core.py` consumer; heavy post-UAT trust-boundary review-fix tail. |
 
 ### Cumulative Quality
 
@@ -142,6 +185,7 @@
 | v1.1 | UAT 3/3 + security review; `--selfcheck` green | 0 |
 | v1.2 | `--selfcheck` + code review + security audit + UI audit + human UAT | 0 |
 | v1.3+v1.4 | Phase 5: REVIEW.md + UAT 5/5 (no VERIFICATION.md, acknowledged override); Phase 6: VERIFICATION.md passed + UAT 6/6; Phase 7: VERIFICATION.md passed (re-verified after CR-01 gap closure) + UAT 2/2 + integration-checker sweep (0 broken flows) | 0 |
+| v1.5 | Phase 8: VERIFICATION.md passed + UAT 3/3; Phase 9: code review + `--selfcheck` + UAT 3 pass / 2 skipped (documented non-failures) + WR-01..06/CR-01/02 review-fix pass. No `v1.5-MILESTONE-AUDIT.md` (audit not run; override closeout) | 1 (`textual`, optional extra) |
 
 ### Top Lessons (Verified Across Milestones)
 
