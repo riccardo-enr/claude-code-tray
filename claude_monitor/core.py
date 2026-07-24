@@ -477,6 +477,8 @@ def spark_levels(sparkline):
     blank column, never an index past the ramp, so a malformed/hostile trends[0]
     (T-10-03) cannot raise. No new trend math: reads only SPARK_GLYPHS and the input.
     """
+    if not isinstance(sparkline, str):
+        return []
     return [_SPARK_LEVEL.get(ch) for ch in sparkline]
 
 
@@ -600,6 +602,28 @@ def heatmap_buckets(records):
     for (dow, hour), days in acc.items():
         grid[dow][hour] = sum(days.values()) / len(days)
     return grid
+
+
+def heatmap_active_span(grid):
+    """Inclusive hour bounds containing any heatmap data, or None when empty.
+
+    Leading and trailing empty hours can be collapsed without disturbing interior
+    gaps. Malformed rows are ignored so a bad same-user socket payload degrades to
+    no heatmap instead of breaking the TUI render tick.
+    """
+    if not isinstance(grid, (list, tuple)):
+        return None
+    active = [
+        hour
+        for hour in range(24)
+        if any(
+            isinstance(row, (list, tuple))
+            and hour < len(row)
+            and row[hour] is not None
+            for row in grid[:7]
+        )
+    ]
+    return (active[0], active[-1]) if active else None
 
 
 def _is_num(v):

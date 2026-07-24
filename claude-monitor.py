@@ -65,6 +65,7 @@ class Monitor:
         self.usage = None  # latest parse_usage() dict, or None if unavailable
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
         self.trends = None  # cached trend row strings, or None (collecting state)
+        self.heatmap = None  # cached 7x24 usage-rise grid, or None until history is read
         self.dash_ready = False  # gates the menu item until the first dashboard write
 
         self.notif_slots = {}  # ("sess", sid) / ("cap", "5h") -> daemon notification id
@@ -367,6 +368,7 @@ class Monitor:
             return  # keep last-known trends; never crash the poll thread
         # ponytail: single list rebind, read-only in the Gtk redraw -- no lock.
         self.trends = core.build_trend_rows(records, now)
+        self.heatmap = core.heatmap_buckets(core.history_numeric(records))
 
     def write_dashboard(self, now):
         """Read history off the Gtk main thread, render, atomic-write, flip dash_ready.
@@ -595,6 +597,7 @@ def _handle_conn(mon, conn):
                     # mon.usage/mon.trends: single-reference rebinds, same no-lock
                     # posture compute_trends already uses -- no second lock needed.
                     snapshot = {
+                        "heatmap": mon.heatmap,
                         "sessions": sessions,
                         "usage": mon.usage,
                         "trends": mon.trends,

@@ -37,6 +37,7 @@ from .core import (
     fmt_elapsed,
     fmt_tokens,
     gauge_fill,
+    heatmap_active_span,
     heatmap_buckets,
     history_keep,
     history_numeric,
@@ -368,6 +369,19 @@ def demo():
         {"t": tue + 7 * 86400 + 15, "pct": 60.0},   # +10 -> day 2 total 10
     ])
     assert hm[1][9] == 15.0  # mean(20, 10)
+    empty_hm = [[None] * 24 for _ in range(7)]
+    assert heatmap_active_span(empty_hm) is None
+    span_hm = [[None] * 24 for _ in range(7)]
+    span_hm[0][9] = 1.0
+    span_hm[6][14] = 2.0
+    assert heatmap_active_span(span_hm) == (9, 14)
+    one_hour_hm = [[None] * 24 for _ in range(7)]
+    one_hour_hm[3][7] = 0.0
+    assert heatmap_active_span(one_hour_hm) == (7, 7)
+    assert heatmap_active_span(None) is None
+    assert heatmap_active_span(123) is None
+    assert heatmap_active_span([[None], 123]) is None
+    assert spark_levels(123) == []
     assert reset_marks(
         [
             {"t": 1, "reset": 300},
@@ -627,6 +641,7 @@ def demo():
             }
             self.sessions_lock = threading.Lock()
             self.usage = {"used_percentage": 42}
+            self.heatmap = [[None] * 24 for _ in range(7)]
             self.trends = ["line1"]
 
     _mon = _FakeMonitor()
@@ -644,7 +659,8 @@ def demo():
     _thread.join(timeout=5)
     _client_sock.close()
     _snapshot = json.loads(_resp.decode("utf-8"))
-    assert set(_snapshot.keys()) == {"sessions", "usage", "trends"}
+    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends"}
+    assert _snapshot["heatmap"] == _mon.heatmap
     assert _snapshot["usage"] == _mon.usage
     assert _snapshot["trends"] == _mon.trends
     assert _snapshot["sessions"] == build_session_snapshot(list(_mon.sessions.values()))
