@@ -47,6 +47,7 @@ from .core import (
     parse_history,
     parse_usage,
     project,
+    _safe_cell,
     read_line,
     reset_marks,
     sess_elapsed,
@@ -765,9 +766,13 @@ def demo():
     assert sess_elapsed({"status": "done", "entered": _unow - 30, "frozen": 12.5}, _unow) == 12.5
     assert sess_elapsed({}, _unow) is None
     assert sess_rows([], _unow) == [("", "No active Claude Code sessions", "")]
-    # A project dir is an arbitrary repo path; sess_rows is a pure string builder and must
-    # return it byte-for-byte, neither escaping nor interpreting it. The markup escaping
-    # belongs at the widget (Plan 09-02); asserting it here would encode the wrong contract.
+    # A project dir is an arbitrary repo path. Printable content (including rich markup)
+    # passes through byte-for-byte -- markup injection is closed at the widget (Plan 09-02).
+    # But sess_rows strips C0/C1 control characters via _safe_cell so an ESC-based terminal
+    # sequence in a hostile dir name cannot reach the terminal (T-09-01, control half):
+    assert _safe_cell("[bold]myrepo[/]") == "[bold]myrepo[/]"  # printable markup untouched
+    assert _safe_cell("A\x1b[2JB") == "A?[2JB"  # ESC -> '?', clear-screen defused
+    assert _safe_cell("\x07\x08\x1b\x9b") == "????"  # BEL/BS/ESC/CSI all stripped
     _hostile = "[bold]myrepo[/]"  # planner-discipline-allow: [bold]myrepo[/]
     _srows_in = [
         {"dir": "done-proj", "status": "done", "entered": _unow - 500, "frozen": 4920},

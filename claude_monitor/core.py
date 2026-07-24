@@ -804,6 +804,19 @@ def sess_elapsed(session, now):
     return session.get("frozen")
 
 
+def _safe_cell(s):
+    """Strip C0/C1 control characters from an arbitrary filesystem path. Pure.
+
+    rich.text.Text only strips BEL/BS/VT/FF/CR (rich/control.py), so ESC-based
+    terminal-control sequences would otherwise reach the terminal verbatim through the
+    sessions table -- the control-sequence half of T-09-01. A hostile repo can ship a
+    subdirectory named e.g. $'\\e[2J' (clear screen) or an OSC 52 clipboard write; every
+    such byte becomes '?'. Printable characters, including markup like [bold]x[/], are
+    left byte-for-byte -- markup injection is closed separately at the widget (Plan 09-02).
+    """
+    return "".join(c if c.isprintable() or c == " " else "?" for c in s)
+
+
 def sess_rows(sessions, now):
     """(status, dir, duration) cells for the sessions table, sorted per D-03. Pure.
 
@@ -821,7 +834,7 @@ def sess_rows(sessions, now):
         rows.append(
             (
                 s.get("status", ""),
-                s.get("dir", ""),
+                _safe_cell(s.get("dir", "")),
                 "-" if secs is None else fmt_elapsed(secs),
             )
         )
