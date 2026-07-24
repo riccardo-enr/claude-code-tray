@@ -37,6 +37,10 @@ status:
 selfcheck:
     python3 {{entry}} --selfcheck
 
+# Exercise Textual interactions in its optional uv environment.
+tui-selfcheck:
+    uv run --extra tui python -m claude_monitor.test_tui
+
 # Lint (ruff, scoped by pyproject.toml).
 lint:
     ruff check .

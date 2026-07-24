@@ -389,6 +389,13 @@ class ClaudeTui(App):
         )
         table = self.query_one("#sessions", SessionTable)
         scroll_y = table.scroll_y  # DataTable.clear() zeroes scroll_x/scroll_y (8.2.8)
+        selected_session_id = self.selected_session_id
+        if table.row_count and table.is_valid_coordinate(table.cursor_coordinate):
+            cursor_key = table.coordinate_to_cell_key(table.cursor_coordinate)[0].value
+            if cursor_key in self.session_targets:
+                # Arrow-key navigation changes DataTable's cursor without emitting the
+                # activation message, so capture its stable key before clear() resets it.
+                selected_session_id = cursor_key
         table.clear()  # keeps the column definitions
         sessions = snap.get("sessions") or []
         sorted_sessions = sorted(
@@ -425,12 +432,15 @@ class ClaudeTui(App):
                 Text(elapsed, style=status_style),
                 key=row_key,
             )
-        if self.selected_session_id in self.session_targets:
+        if selected_session_id in self.session_targets:
             table.move_cursor(
-                row=table.get_row_index(self.selected_session_id),
+                row=table.get_row_index(selected_session_id),
                 column=0,
                 scroll=False,
             )
+            self.selected_session_id = selected_session_id
+        else:
+            self.selected_session_id = None
         # The 1s rebuild must not steal the scroll the user set; clear() zeroed it above,
         # so restore it. validate_scroll_y re-clamps if the session list shrank.
         table.scroll_y = scroll_y
