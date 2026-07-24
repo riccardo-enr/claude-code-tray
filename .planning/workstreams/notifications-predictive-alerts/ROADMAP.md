@@ -145,7 +145,7 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 10-02-PLAN.md — Richer trends graph: decoded height-colored column graph (TUI-08)
+- [x] 10-02-PLAN.md — Richer trends graph: decoded height-colored column graph (TUI-08)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
