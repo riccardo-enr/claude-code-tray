@@ -57,6 +57,7 @@ from .core import (
     sess_rank,
     sess_rows,
     sess_should_notify,
+    sess_status_band,
     session_stale,
     spark_levels,
     trend_burn,
@@ -790,6 +791,16 @@ def demo():
     assert SESS_RANK == {"waiting": 0, "running": 1, "done": 2}
     assert [sess_rank(s) for s in ("waiting", "running", "done")] == [0, 1, 2]
     assert sess_rank("") == 99 and sess_rank("nope") == 99 and sess_rank(None) == 99
+
+    # --- tui session band (TUI-09) ---
+    # Fixed D-07 palette; the token is a rich style name applied per-cell in claude-tui.py.
+    assert sess_status_band("waiting") == "yellow"
+    assert sess_status_band("running") == "green"
+    assert sess_status_band("done") == "dim"
+    # Total like sess_rank: any unknown/empty/None status -> one neutral default, never raises.
+    assert sess_status_band("") == "default"
+    assert sess_status_band("zombie") == "default"
+    assert sess_status_band(None) == "default"
     assert fmt_elapsed(-5) == "0m 00s" and fmt_elapsed(0) == "0m 00s"
     assert fmt_elapsed(134) == "2m 14s"
     assert fmt_elapsed(3599) == "59m 59s"

@@ -847,6 +847,19 @@ def sess_rank(status):
     return SESS_RANK.get(status, 99)
 
 
+SESS_STATUS_BAND = {"waiting": "yellow", "running": "green", "done": "dim"}
+
+
+def sess_status_band(status):
+    """ANSI style token for a session status (D-07, TUI-09): "waiting" -> "yellow",
+    "running" -> "green", "done" -> "dim", any unknown/None status -> "default"
+    (the terminal's own foreground). Pure and total, mirroring sess_rank's
+    unknown-tolerance -- an unrecognized status never raises. The token doubles as a
+    rich style name so claude-tui.py needs no translation table (same shape as band).
+    """
+    return SESS_STATUS_BAND.get(status, "default")
+
+
 def fmt_elapsed(secs):
     """Time-in-state: 134 -> '2m 14s', 4920 -> '1h 22m', 266400 -> '3d 02h'. Pure.
     Negative (clock skew) clamps to '0m 00s'. Below an hour the seconds field is always

@@ -105,6 +105,7 @@ class ClaudeTui(App):
         self.theme = "ansi-dark"
         table = self.query_one("#sessions", DataTable)
         table.cursor_type = "none"  # D-01: nothing here is navigable
+        table.zebra_stripes = True  # TUI-09: subtle alternating-row tint for scan-ability
         table.add_columns("status", "project", "time")
         self.sub_title = "connecting..."
         self.set_interval(core.TUI_FETCH_INTERVAL, self.fetch)  # D-08
@@ -288,7 +289,10 @@ class ClaudeTui(App):
             # callback -- which exits the app. A Text instance takes the renderable
             # passthrough branch and never reaches the markup parser. Same mitigation
             # shape as the v1.3 Pango body and the v1.4 dashboard's textContent panel.
-            table.add_row(Text(status), Text(proj), Text(elapsed))
+            # TUI-09: the D-07 status color is a rich Text STYLE, never a markup string,
+            # so the :199 mitigation survives -- waiting yellow / running green / done dim.
+            band = core.sess_status_band(status)
+            table.add_row(Text(status, style=band), Text(proj, style=band), Text(elapsed, style=band))
         # D-01: the 1s rebuild must not steal the scroll the user set; clear() zeroed it
         # above, so restore it. validate_scroll_y re-clamps if the session list shrank.
         table.scroll_y = scroll_y
