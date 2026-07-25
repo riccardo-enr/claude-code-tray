@@ -160,7 +160,12 @@ rolled" rather than "usage fell".
   `~/.local/bin/claude-monitor` — e.g. `uv tool install claude-monitor`. Only
   needed for the usage rows/badge; without it they show `usage unavailable`.
 - `tmux` (pane switching) and `wmctrl` (X11 window raise). Both optional —
-  click-to-focus degrades gracefully without them.
+  click-to-focus degrades gracefully without them. Add `set -g set-titles on` to
+  your `tmux.conf` if you run more than one terminal window: a terminal serves
+  every window from one process, so PID and WM_CLASS cannot tell them apart and
+  the session name in the title is what lets focus raise the window that already
+  hosts the session — switching to its workspace — instead of picking one at
+  random. Without it, focus falls back to raising an arbitrary window.
 - `xprop` (X11) — optional; used to detect when you are already looking at a
   session's pane so its `!` is suppressed / auto-cleared.
 
