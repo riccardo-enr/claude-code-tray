@@ -1,0 +1,19 @@
+{
+  "name": "unknown-fields-ignored",
+  "note": "Forward compatibility: a newer daemon adding fields must not break an older client.",
+  "wire": "{\"usage\": {\"used_percentage\": 1.0, \"resets_at_epoch\": 2, \"burn_rate_per_min\": 3, \"brand_new_metric\": {\"nested\": [1, 2]}}, \"some_future_section\": {\"anything\": true}, \"sessions\": [{\"id\": \"a\", \"dir\": \"~/x\", \"status\": \"running\", \"pane\": \"%1\", \"future_field\": \"ignored\"}]}",
+  "expect": {
+    "usage": {
+      "used_percentage": 1.0
+    },
+    "sessions": {
+      "rejected": 0,
+      "entries": [
+        {
+          "id": "a",
+          "focusable": true
+        }
+      ]
+    }
+  }
+}

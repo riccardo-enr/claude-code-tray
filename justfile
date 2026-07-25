@@ -52,3 +52,23 @@ dashboard:
 # Open the terminal dashboard (needs a real TTY -- textual drives the terminal directly).
 tui:
     ./claude-tui.py
+
+# --- Rust TUI (v2.0, phase 11) --------------------------------------------
+# The Rust rewrite of the terminal dashboard. Talks to the SAME daemon socket as
+# claude-tui.py and never invokes it; the Python TUI stays the oracle. Not yet
+# installed as the default -- that is the phase 14 cutover.
+
+# Open the Rust terminal dashboard (needs a real TTY; release build for real speed).
+rust-tui:
+    cd rust && cargo run --release --quiet
+
+# Run the Rust test suite -- the verification gate for the Rust client.
+rust-test:
+    cd rust && cargo test --quiet
+
+# Lint the Rust crate.
+rust-lint:
+    cd rust && cargo clippy --all-targets -- -D warnings
+
+# Both verification gates in one shot.
+check: selfcheck rust-test

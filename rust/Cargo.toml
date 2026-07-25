@@ -1,0 +1,26 @@
+[package]
+name = "claude-tui"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "Rust client for the claude-code-tray daemon socket (Phase 11 foundation)"
+license = "MIT"
+
+[[bin]]
+name = "claude-tui"
+path = "src/main.rs"
+
+[lib]
+name = "claude_tui"
+path = "src/lib.rs"
+
+[dependencies]
+crossterm = "0.29.0"
+ratatui = "0.30.2"
+# The only runtime dependency. Normalization deliberately walks `serde_json::Value`
+# by hand rather than deriving Deserialize: D-04 forbids type coercion and requires
+# "missing" and "wrong type" to stay distinguishable, which derive collapses.
+serde_json = "1"
+
+[profile.release]
+strip = true

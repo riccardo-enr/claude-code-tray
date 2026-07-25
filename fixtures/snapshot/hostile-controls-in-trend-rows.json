@@ -1,0 +1,13 @@
+{
+  "name": "hostile-controls-in-trend-rows",
+  "note": "Daemon-built text still crosses the trust boundary. 'The daemon made this string' is not the same as 'this string is safe'.",
+  "wire": "{\"trends\": [\"peak \\u001b]52;c;x\\u0007hour\", \"\\u001b[31mred\"]}",
+  "expect": {
+    "trends": {
+      "rows": [
+        "peak ?hour",
+        "?red"
+      ]
+    }
+  }
+}

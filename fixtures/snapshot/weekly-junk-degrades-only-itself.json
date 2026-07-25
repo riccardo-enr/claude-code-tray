@@ -1,0 +1,12 @@
+{
+  "name": "weekly-junk-degrades-only-itself",
+  "note": "The weekly block is secondary; junk there must never cost the 5h numbers.",
+  "wire": "{\"usage\": {\"used_percentage\": 55.0, \"resets_at_epoch\": 1700000000, \"burn_rate_per_min\": 3, \"seven_day_pct\": \"junk\", \"seven_day_reset\": []}}",
+  "expect": {
+    "usage": {
+      "used_percentage": 55.0,
+      "seven_day_pct": null,
+      "seven_day_reset": null
+    }
+  }
+}

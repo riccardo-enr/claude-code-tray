@@ -1,0 +1,20 @@
+{
+  "name": "sessions-narrow-rejection",
+  "note": "D-03: one bad entry costs that entry. Survivors keep daemon order and the reject count is retained, so a UI can say 2 sessions, 2 unreadable.",
+  "wire": "{\"sessions\": [{\"id\": \"ok1\", \"dir\": \"~/a\", \"status\": \"running\", \"pane\": \"%1\"}, {\"id\": 42, \"dir\": \"~/b\", \"status\": \"running\", \"pane\": \"%2\"}, \"not an object\", {\"id\": \"ok2\", \"dir\": \"~/c\", \"status\": \"done\", \"pane\": \"%3\"}]}",
+  "expect": {
+    "sessions": {
+      "rejected": 2,
+      "entries": [
+        {
+          "id": "ok1",
+          "dir": "~/a"
+        },
+        {
+          "id": "ok2",
+          "dir": "~/c"
+        }
+      ]
+    }
+  }
+}

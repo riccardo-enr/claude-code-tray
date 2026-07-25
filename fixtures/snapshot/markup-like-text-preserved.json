@@ -1,0 +1,20 @@
+{
+  "name": "markup-like-text-preserved",
+  "note": "D-11: printable markup is a legitimate directory name and survives byte for byte. Markup injection is closed at the renderer, not by mangling user content here.",
+  "wire": "{\"trends\": [\"[bold]today[/] 1k/hr\"], \"sessions\": [{\"id\": \"a\", \"dir\": \"[bold]repo[/]\", \"status\": \"done\", \"pane\": \"%1\"}]}",
+  "expect": {
+    "trends": {
+      "rows": [
+        "[bold]today[/] 1k/hr"
+      ]
+    },
+    "sessions": {
+      "rejected": 0,
+      "entries": [
+        {
+          "dir": "[bold]repo[/]"
+        }
+      ]
+    }
+  }
+}

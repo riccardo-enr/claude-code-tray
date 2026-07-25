@@ -1,0 +1,14 @@
+{
+  "name": "missing-optional-fields",
+  "note": "--api mode: percentages only, token counts null, no weekly block at all (older CLI). All three are absence, so the 5h gauge still draws.",
+  "wire": "{\"usage\": {\"used_percentage\": 7.5, \"resets_at_epoch\": 1700000000, \"burn_rate_per_min\": 90, \"tokens_used\": null, \"token_limit\": null}}",
+  "expect": {
+    "usage": {
+      "used_percentage": 7.5,
+      "tokens_used": null,
+      "token_limit": null,
+      "seven_day_pct": null,
+      "seven_day_reset": null
+    }
+  }
+}

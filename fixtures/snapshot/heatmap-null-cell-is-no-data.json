@@ -1,0 +1,13 @@
+{
+  "name": "heatmap-null-cell-is-no-data",
+  "note": "A null cell means no samples for that hour, which is distinct from a genuine zero. Collapsing them would draw a cold hour as a worked hour.",
+  "wire": "{\"heatmap\": [[0.0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]]}",
+  "expect": {
+    "heatmap": {
+      "rows": 7,
+      "cols": 24,
+      "cell_0_0": 0.0,
+      "cell_0_1": null
+    }
+  }
+}

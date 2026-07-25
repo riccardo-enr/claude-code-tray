@@ -1,0 +1,11 @@
+{
+  "name": "sessions-no-placeholder-invented",
+  "note": "A rejected entry is dropped, never replaced by a blank row -- a renderable row implies data we do not have.",
+  "wire": "{\"sessions\": [{\"id\": 1}, {\"id\": 2}, {\"id\": 3}]}",
+  "expect": {
+    "sessions": {
+      "rejected": 3,
+      "entries": []
+    }
+  }
+}

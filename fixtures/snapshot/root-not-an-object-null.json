@@ -1,0 +1,14 @@
+{
+  "name": "root-not-an-object-null",
+  "note": "D-01: a bare null must be rejected outright. Accepting it would rebind live state to nothing, which reads on screen as a cold start under a live header.",
+  "wire_bytes": [
+    110,
+    117,
+    108,
+    108,
+    10
+  ],
+  "expect": {
+    "error": "schema"
+  }
+}

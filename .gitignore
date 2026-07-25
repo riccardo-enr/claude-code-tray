@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 *.log
 .venv/
+
+# Rust build artifacts
+rust/target/

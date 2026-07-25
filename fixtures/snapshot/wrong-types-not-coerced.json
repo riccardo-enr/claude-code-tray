@@ -1,0 +1,8 @@
+{
+  "name": "wrong-types-not-coerced",
+  "note": "D-04: a numeric string is contract drift, not a number. Coercing it here would put a silently wrong percentage on screen.",
+  "wire": "{\"usage\": {\"used_percentage\": \"42.5\", \"resets_at_epoch\": 2, \"burn_rate_per_min\": 3}}",
+  "expect": {
+    "usage": "malformed"
+  }
+}

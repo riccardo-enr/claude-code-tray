@@ -1,0 +1,43 @@
+{
+  "name": "valid-full",
+  "note": "The happy path: every section present, both quota caps, token counts, one session per status.",
+  "wire": "{\"usage\": {\"used_percentage\": 42.5, \"resets_at_epoch\": 1700000000, \"burn_rate_per_min\": 1200, \"tokens_used\": 417000, \"token_limit\": 880000, \"seven_day_pct\": 15.0, \"seven_day_reset\": 1700500000}, \"trends\": [\"today 13.8M/hr | wk 16.5M/hr\", \"peak hour: 14:00 (29.3M/hr)\"], \"heatmap\": [[null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]], \"sessions\": [{\"id\": \"s1\", \"dir\": \"~/code/tray\", \"status\": \"running\", \"entered\": 1699999000, \"frozen\": null, \"pane\": \"%1\", \"tmux\": \"main\", \"term\": \"ghostty\"}, {\"id\": \"s2\", \"dir\": \"~/code/uav\", \"status\": \"waiting\", \"entered\": 1699998000, \"frozen\": 300, \"pane\": \"%2\", \"tmux\": \"main\", \"term\": \"ghostty\"}]}",
+  "expect": {
+    "usage": {
+      "used_percentage": 42.5,
+      "resets_at_epoch": 1700000000,
+      "burn_rate_per_min": 1200,
+      "tokens_used": 417000,
+      "token_limit": 880000,
+      "seven_day_pct": 15.0,
+      "seven_day_reset": 1700500000
+    },
+    "trends": {
+      "rows": [
+        "today 13.8M/hr | wk 16.5M/hr",
+        "peak hour: 14:00 (29.3M/hr)"
+      ]
+    },
+    "heatmap": {
+      "rows": 7,
+      "cols": 24
+    },
+    "sessions": {
+      "rejected": 0,
+      "entries": [
+        {
+          "id": "s1",
+          "dir": "~/code/tray",
+          "status": "running",
+          "focusable": true
+        },
+        {
+          "id": "s2",
+          "dir": "~/code/uav",
+          "status": "waiting",
+          "focusable": true
+        }
+      ]
+    }
+  }
+}

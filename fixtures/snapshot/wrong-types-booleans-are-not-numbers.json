@@ -1,0 +1,8 @@
+{
+  "name": "wrong-types-booleans-are-not-numbers",
+  "note": "JSON true is not 1. A client whose JSON reader conflates them would pass the other fixtures by accident, which is why this one is pinned separately.",
+  "wire": "{\"usage\": {\"used_percentage\": true, \"resets_at_epoch\": 2, \"burn_rate_per_min\": 3}}",
+  "expect": {
+    "usage": "malformed"
+  }
+}

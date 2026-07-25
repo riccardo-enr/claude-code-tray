@@ -1,0 +1,15 @@
+{
+  "name": "focus-routing-value-over-bound",
+  "note": "D-12: an over-long pane id rejects its entry rather than being truncated. A clipped routing value would focus the wrong window, which is worse than not focusing at all.",
+  "wire": "{\"sessions\": [{\"id\": \"ok\", \"dir\": \"~/a\", \"status\": \"running\", \"pane\": \"%1\"}, {\"id\": \"huge\", \"dir\": \"~/b\", \"status\": \"running\", \"pane\": \"%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\"}]}",
+  "expect": {
+    "sessions": {
+      "rejected": 1,
+      "entries": [
+        {
+          "id": "ok"
+        }
+      ]
+    }
+  }
+}

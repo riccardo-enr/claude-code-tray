@@ -1,0 +1,24 @@
+{
+  "name": "focus-targets-valid-and-invalid",
+  "note": "A tmux pane is focusable; so is Zed by window title alone; a terminal with neither is not. Mirrors request_focus's own refusal.",
+  "wire": "{\"sessions\": [{\"id\": \"pane\", \"dir\": \"~/a\", \"status\": \"running\", \"pane\": \"%1\", \"term\": \"ghostty\"}, {\"id\": \"zed\", \"dir\": \"~/b\", \"status\": \"running\", \"pane\": \"\", \"term\": \"zed\"}, {\"id\": \"none\", \"dir\": \"~/c\", \"status\": \"running\", \"pane\": \"\", \"term\": \"ghostty\"}]}",
+  "expect": {
+    "sessions": {
+      "rejected": 0,
+      "entries": [
+        {
+          "id": "pane",
+          "focusable": true
+        },
+        {
+          "id": "zed",
+          "focusable": true
+        },
+        {
+          "id": "none",
+          "focusable": false
+        }
+      ]
+    }
+  }
+}

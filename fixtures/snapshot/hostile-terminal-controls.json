@@ -1,0 +1,28 @@
+{
+  "name": "hostile-terminal-controls",
+  "note": "RTUI-13. A repo can legally contain a directory named with a CSI clear-screen or an OSC 52 clipboard write. Each complete sequence collapses to one marker; no ESC byte survives.",
+  "wire": "{\"sessions\": [{\"id\": \"a\", \"dir\": \"~/\\u001b[2Jcleared\", \"status\": \"running\", \"pane\": \"%1\"}, {\"id\": \"b\", \"dir\": \"~/\\u001b]52;c;aGk=\\u0007clip\", \"status\": \"done\", \"pane\": \"%2\"}, {\"id\": \"c\", \"dir\": \"bell\\u0007back\\bspace\", \"status\": \"done\", \"pane\": \"%3\"}, {\"id\": \"d\", \"dir\": \"gj‮pj.txt\", \"status\": \"done\", \"pane\": \"%4\"}]}",
+  "expect": {
+    "sessions": {
+      "rejected": 0,
+      "entries": [
+        {
+          "id": "a",
+          "dir": "~/?cleared"
+        },
+        {
+          "id": "b",
+          "dir": "~/?clip"
+        },
+        {
+          "id": "c",
+          "dir": "bell?back?space"
+        },
+        {
+          "id": "d",
+          "dir": "gj?pj.txt"
+        }
+      ]
+    }
+  }
+}
