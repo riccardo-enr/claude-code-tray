@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: TUI Polish
-current_phase: 10
-current_phase_name: tui-polish-btop-style
-status: shipped
-stopped_at: Milestone v1.6 completed, archived, and tagged
-last_updated: "2026-07-24T15:45:59Z"
-last_activity: 2026-07-24
-last_activity_desc: "Completed quick task 260724-wdy: fix weekly projected time and show the day"
+milestone: v2.0
+milestone_name: Rust TUI
+status: planning
+last_updated: "2026-07-25T08:11:59.405Z"
+last_activity: 2026-07-25
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-Milestone: v1.6 (TUI Polish) — SHIPPED 2026-07-24
-Phase 10: complete and archived to `milestones/v1.6-phases/`
-Status: Milestone closed — no workstream open
-Last activity: 2026-07-24 — Completed quick task 260724-wdy: fix weekly projected time and show the day
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-25 — Milestone v2.0 started
 
 ## Performance Metrics
 
