@@ -2,11 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Rust TUI
-status: planning
-last_updated: "2026-07-25T08:11:59.405Z"
+current_phase: 11
+current_phase_name: rust-client-foundation
+status: ready_to_plan
+last_updated: "2026-07-25T08:59:42Z"
 last_activity: 2026-07-25
+last_activity_desc: Roadmap created for milestone v2.0
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** At a glance from the top bar, know how much Claude Code quota is left and when it resets — without launching a separate terminal monitor.
-**Current focus:** Planning next milestone — proposed v2.0 Rust TUI
+**Current focus:** Phase 11 — Rust Client Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 11 of 14 (Rust Client Foundation)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-25 — Milestone v2.0 started
+Status: Ready to plan
+Last activity: 2026-07-25 — Roadmap created for milestone v2.0
 
 ## Performance Metrics
 

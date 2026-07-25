@@ -55,26 +55,26 @@ Populated during roadmap creation. Every v2.0 requirement must map to exactly on
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RTUI-01 | TBD | Pending |
-| RTUI-02 | TBD | Pending |
-| RTUI-03 | TBD | Pending |
-| RTUI-04 | TBD | Pending |
-| RTUI-05 | TBD | Pending |
-| RTUI-06 | TBD | Pending |
-| RTUI-07 | TBD | Pending |
-| RTUI-08 | TBD | Pending |
-| RTUI-09 | TBD | Pending |
-| RTUI-10 | TBD | Pending |
-| RTUI-11 | TBD | Pending |
-| RTUI-12 | TBD | Pending |
-| RTUI-13 | TBD | Pending |
-| RTUI-14 | TBD | Pending |
+| RTUI-01 | Phase 14 | Pending |
+| RTUI-02 | Phase 14 | Pending |
+| RTUI-03 | Phase 11 | Pending |
+| RTUI-04 | Phase 12 | Pending |
+| RTUI-05 | Phase 12 | Pending |
+| RTUI-06 | Phase 12 | Pending |
+| RTUI-07 | Phase 12 | Pending |
+| RTUI-08 | Phase 13 | Pending |
+| RTUI-09 | Phase 13 | Pending |
+| RTUI-10 | Phase 13 | Pending |
+| RTUI-11 | Phase 13 | Pending |
+| RTUI-12 | Phase 11 | Pending |
+| RTUI-13 | Phase 11 | Pending |
+| RTUI-14 | Phase 14 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-25*
-*Last updated: 2026-07-25 after v2.0 scope confirmation*
+*Last updated: 2026-07-25 after roadmap creation*

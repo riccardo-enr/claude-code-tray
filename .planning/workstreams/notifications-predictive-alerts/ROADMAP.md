@@ -20,6 +20,12 @@ progress-bar gauges, a richer trends graph, a styled sessions table, and titled
 rounded bordered panels. Pure presentation: no new data source, no new polling,
 no IPC change, no new runtime dependency.
 
+v2.0 replaces the default Textual frontend with an installed Rust binary while
+keeping the Python daemon, socket protocol, and `claude-tui.py` parity oracle.
+The rewrite proceeds contract-first: harden the Rust client boundary, reproduce
+the complete visual surface, match interaction and outage behavior, then cut
+over installation only after automated parity verification.
+
 Constraints that held across v1.0-v1.4: stdlib + PyGObject
 only, X11-only, one background poll, no new dependencies. v1.5 takes the first
 exception — `textual` as a runtime dependency, scoped to the one new entry point;
@@ -37,8 +43,18 @@ v1.6 execution artifacts live under `milestones/v1.6-phases/`.
 - ✅ **v1.4 Session Dashboard** — Phase 7 (shipped 2026-07-20) — [archive](./milestones/v1.4-ROADMAP.md)
 - ✅ **v1.5 TUI Dashboard** — Phases 8-9 (shipped 2026-07-24) — [archive](./milestones/v1.5-ROADMAP.md)
 - ✅ **v1.6 TUI Polish** — Phase 10 (shipped 2026-07-24) — [archive](./milestones/v1.6-ROADMAP.md)
+- 🚧 **v2.0 Rust TUI** — Phases 11-14 (planned)
 
 ## Phases
+
+### 🚧 v2.0 Rust TUI (Phases 11-14)
+
+- [ ] **Phase 11: Rust Client Foundation** — establish the safe socket client and parity-test substrate
+- [ ] **Phase 12: Visual and Data Parity** — reproduce every quota, trend, heatmap, session, and layout detail
+- [ ] **Phase 13: Interaction and Resilience Parity** — match refresh, focus, selection, exit, and degraded-state behavior
+- [ ] **Phase 14: Parity Verification and Installation Cutover** — prove parity and make the standalone Rust binary the installed default
+
+Full detail below under [Phase Details](#phase-details).
 
 ### ✅ v1.6 TUI Polish (Phase 10) — SHIPPED 2026-07-24
 
@@ -159,6 +175,54 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 - **D-05 parity holds:** `claude_monitor.core` stays the single source of truth for every formatted value, so the tray and TUI can never disagree; no new number/string formatter is introduced in `claude-tui.py`.
 - **No new data source, no new polling, no IPC/socket change, no new runtime dependency.** Same `{"query": "snapshot"}` verb; `textual` stays the only third-party dep, scoped to `claude-tui.py` via its PEP 723 block. Deferred: TUI click-to-focus, no-daemon standalone mode.
 
+### Phase 11: Rust Client Foundation
+
+**Goal**: A panic-free Rust client safely consumes the existing daemon contract and exposes deterministic state for rendering and parity tests, without daemon changes.
+**Depends on**: Phase 10
+**Requirements**: RTUI-03, RTUI-12, RTUI-13
+**Success Criteria** (what must be TRUE):
+
+  1. The Rust client uses the existing snapshot and focus protocol without adding or changing socket fields or verbs.
+  2. Timeouts, oversized or malformed responses, missing fields, rendering failures, and focus errors become controlled UI states rather than panics or tracebacks.
+  3. Session text is sanitized so terminal control sequences and markup cannot affect rendering.
+  4. Deterministic fixtures exercise valid, partial, malformed, and hostile snapshots without requiring a running daemon.
+
+### Phase 12: Visual and Data Parity
+
+**Goal**: Given the same snapshot and clock, the Rust TUI presents the same information hierarchy, values, and visual signals as the Python oracle.
+**Depends on**: Phase 11
+**Requirements**: RTUI-04, RTUI-05, RTUI-06, RTUI-07
+**Success Criteria** (what must be TRUE):
+
+  1. Both quota panels match percentages, token counts, reset countdowns, burn rates, projections, proximity colors, and gauge gradients.
+  2. The eight-row trend graph, daily and weekly burn, peak hour, and Monday-Sunday hourly heatmap match the oracle's quantization and colors.
+  3. The sessions panel matches fields, ordering, elapsed time, status colors, striping, and empty state.
+  4. Panel order, titled rounded borders, terminal-derived palette, header clock, footer, spacing, and responsive allocation remain equivalent at representative terminal sizes.
+
+### Phase 13: Interaction and Resilience Parity
+
+**Goal**: The Rust event loop behaves like the Python TUI during normal use and daemon outages.
+**Depends on**: Phase 12
+**Requirements**: RTUI-08, RTUI-09, RTUI-10, RTUI-11
+**Success Criteria** (what must be TRUE):
+
+  1. Snapshot refreshes use the existing cadence while countdowns and durations tick every second without busy polling.
+  2. Keyboard navigation, session activation, focus requests, selection retention, and scroll retention match the oracle.
+  3. `q` is the sole advertised exit binding, with no command palette or independent theme toggle.
+  4. Cold start shows the established unavailable message; later outages preserve and dim the last good frame while retrying indefinitely.
+
+### Phase 14: Parity Verification and Installation Cutover
+
+**Goal**: Automated evidence establishes full parity before installation switches the default command to the standalone Rust binary.
+**Depends on**: Phase 13
+**Requirements**: RTUI-01, RTUI-02, RTUI-14
+**Success Criteria** (what must be TRUE):
+
+  1. Shared fixtures verify representative output, layout, degraded states, navigation, and focus behavior against the Python oracle at representative terminal sizes.
+  2. A release build launches and operates without Python, Textual, or `uv` available at runtime.
+  3. `install.sh` builds and installs `~/.local/bin/claude-tui` without changing the daemon installation or protocol.
+  4. `claude-tui.py` remains runnable as the behavioral and visual oracle and is never silently invoked by the Rust binary.
+
 ## Progress
 
 | Phase                                    | Milestone | Plans Complete | Status      | Completed  |
@@ -173,5 +237,9 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 | 8. Daemon Socket Query Verb              | v1.5      | 2/2             | Complete    | 2026-07-20 |
 | 9. Terminal Dashboard (claude-tui.py)    | v1.5      | 2/2             | Complete    | 2026-07-24 |
 | 10. TUI Polish (btop-style)              | v1.6      | 3/3 | Complete   | 2026-07-24 |
+| 11. Rust Client Foundation               | v2.0      | 0/0             | Not started | —          |
+| 12. Visual and Data Parity               | v2.0      | 0/0             | Not started | —          |
+| 13. Interaction and Resilience Parity    | v2.0      | 0/0             | Not started | —          |
+| 14. Parity Verification and Install Cutover | v2.0   | 0/0             | Not started | —          |
 </content>
 </invoke>
