@@ -381,7 +381,10 @@ fn no_fixture_output_ever_contains_a_raw_escape_byte() {
         }
         if let Section::Present(sessions) = &snapshot.sessions {
             for s in &sessions.entries {
-                display.extend([s.id.as_str(), s.dir.as_str(), s.status.as_str()]);
+                /* `id` is deliberately excluded: it is identity-only, never rendered
+                (see the Session struct doc), and is kept raw so two daemon-distinct
+                ids cannot collapse onto the same stable_key. */
+                display.extend([s.dir.as_str(), s.status.as_str()]);
             }
         }
         for text in display {

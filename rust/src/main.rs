@@ -1326,6 +1326,26 @@ mod tests {
     }
 
     #[test]
+    fn stable_key_uses_the_raw_id_not_the_sanitized_display_string() {
+        /*
+        Regression for keying on the sanitized display id: sanitize_display
+        collapses any complete terminal control sequence to one '?' marker, so
+        "a<ESC>[2Jsame" and "a<ESC>[31msame" used to both sanitize to "a?same" --
+        stable_key(a) == stable_key(b) then made selected_index's `position` always
+        resolve to the first of the two, so the second session could never be
+        selected. Session::id is now kept raw (identity-only, never rendered), so
+        two daemon-distinct ids stay distinct keys.
+        */
+        let wire = "{\"sessions\":[\
+            {\"id\":\"a\\u001b[2Jsame\",\"dir\":\"~/one\",\"status\":\"running\",\"pane\":\"%1\"},\
+            {\"id\":\"a\\u001b[31msame\",\"dir\":\"~/two\",\"status\":\"running\",\"pane\":\"%2\"}]}";
+        let app = sessions_app(wire);
+        let keys: Vec<String> = app.ordered_sessions().iter().map(|s| stable_key(s)).collect();
+        assert_eq!(keys.len(), 2);
+        assert_ne!(keys[0], keys[1], "two distinct daemon ids collapsed onto the same stable_key");
+    }
+
+    #[test]
     fn a_focus_attempt_never_disturbs_snapshot_state() {
         /*
         D-07 as a test: a focus failure is action-scoped. If it could mark the

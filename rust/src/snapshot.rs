@@ -203,8 +203,15 @@ pub struct Usage {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Session {
-    /* Display strings: already sanitized and bounded. */
+    /* Identity, not a display string: raw and unsanitized on purpose. The renderer
+    never draws `id` -- it exists only so `main.rs::stable_key` can key a session
+    across refreshes. Sanitizing it would collapse any complete terminal control
+    sequence to the same one marker, so two daemon-distinct ids differing only in
+    escape-sequence content would collide onto the same stable key and the second
+    session could never be selected. `dir` and `status` below ARE rendered, so they
+    stay sanitized. */
     pub id: String,
+    /* Display strings: already sanitized and bounded. */
     pub dir: String,
     pub status: String,
     /* Epoch seconds this session entered its current status. */
@@ -544,7 +551,10 @@ fn normalize_session(raw: &Value) -> Option<Session> {
     }
 
     Some(Session {
-        id: sanitize_display(&text("id")?),
+        /* Raw, not sanitized: id is identity-only (see the Session struct doc),
+        and sanitizing it would let two distinct daemon ids collapse onto the same
+        stable_key. */
+        id: text("id")?,
         dir: sanitize_display(&text("dir")?),
         status: sanitize_display(&text("status")?),
         entered: optional_number("entered")?,
