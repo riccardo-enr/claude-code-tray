@@ -11,7 +11,9 @@ provides:
   - "build_trend_rows emits a 'spent today <n> | wk <n>' row"
   - "trend_sparkline columns are tokens burned per clock hour, not quota % added, scaled 0..peak"
   - "hourly_tokens(records, now) -- the 24 hourly buckets both the graph and its axis label read"
-  - "core.trend_scale + snapshot key trend_scale: pre-formatted y-axis top label"
+  - "core.trend_scale + snapshot key trend_scale: pre-formatted y-axis top label, tokens + share of a 5h window"
+  - "hourly_buckets(records, now, contribution) -- shared 24-bucket-by-clock-hour accumulator"
+  - "hourly_pct(records, now) -- the same hours read as 5h-quota % consumed"
   - "Rust Snapshot.trend_scale: Option<String>, drawn as a left gutter beside the graph"
   - "fmt_tokens has a G tier for counts past 1e9"
 affects: []
@@ -85,10 +87,30 @@ come from one bucketing, not two.
 costs a label, not a panel. It is sanitized and length-bounded like every other
 daemon-built string, and `--once` prints it as `trends: present (y-axis 0..60.0M)`.
 
+## Follow-up: anchoring the axis (commit c0fafd2)
+
+`60.0M` at the top of the graph is unanchored -- 60M means nothing unless you know
+what a full 5h window holds. The label now reads `60.0M/18%`: the tallest bar's tokens
+AND what that same hour cost as a share of one window.
+
+`hourly_pct` is the share-of-window reading of the very hours `hourly_tokens` measures
+in tokens, carrying `heatmap_buckets`' reset/gap/RISE_MAX semantics (`pct` is cumulative
+inside the window, so only trusted rises count). Both now run through one
+`hourly_buckets(records, now, contribution)`, so the two readings cannot bucket
+differently.
+
+The percentage is read at the tokens-peak bucket index, never from a separately
+argmaxed pct peak -- otherwise the label would describe an hour other than the bar it
+sits above. A regression test pins exactly that case.
+
+The bars stay scaled 0..peak rather than 0..100% of the window: a full window is ~5x
+what even the busiest hour burns, so a fixed 0..100 axis would flatten every real day
+into the bottom row.
+
 ## Panel now reads
 
 ```
-60.0M                    #
+60.0M/18%                #
       _/_        __/_/#/_//_/_
     0 ##########################
       today 22.8M/hr | wk 18.0M/hr
@@ -101,6 +123,7 @@ daemon-built string, and `--once` prints it as `trends: present (y-axis 0..60.0M
 - `just selfcheck` — exit 0
 - `just lint` — clean
 - `just rust-test` — 112 pass (new: trend_scale normalization, the gutter)
+- `claude-tui --once` — `trends: present (y-axis 0..60.0M/18%)`
 - `just rust-lint` — clean
 - `just restart` — daemon relaunched on the new code; live snapshot carries
   `trend_scale: 60.0M`
