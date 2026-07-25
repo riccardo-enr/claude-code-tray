@@ -9,7 +9,10 @@ requires: []
 provides:
   - "trend_spent(records, start, end) integrates burn over sub-GAP_MAX intervals"
   - "build_trend_rows emits a 'spent today <n> | wk <n>' row"
-  - "trend_sparkline columns are tokens burned per clock hour, not quota % added"
+  - "trend_sparkline columns are tokens burned per clock hour, not quota % added, scaled 0..peak"
+  - "hourly_tokens(records, now) -- the 24 hourly buckets both the graph and its axis label read"
+  - "core.trend_scale + snapshot key trend_scale: pre-formatted y-axis top label"
+  - "Rust Snapshot.trend_scale: Option<String>, drawn as a left gutter beside the graph"
   - "fmt_tokens has a G tier for counts past 1e9"
 affects: []
 
@@ -66,20 +69,41 @@ Alternatives rejected: a second graph below the first (+8 rows, squeezes the ses
 list for a signal that tracks the first closely), and annotating the existing bars
 while leaving them meaning quota %.
 
+## Follow-up: the y-axis (commit d7c631a)
+
+A graph with no scale makes a column height mean nothing absolute. The daemon now
+sends `trend_scale` -- the tallest hour's tokens, formatted by `fmt_tokens` -- and the
+TUI draws it in a left gutter with `0` at the floor.
+
+For that axis to be honest the sparkline had to move from min..max to **0..peak**
+scaling. Under min..max the quietest sampled hour always rendered at the floor
+(indistinguishable from an idle one) and the bottom of the axis was a value nobody
+could see. `hourly_tokens` is split out of `trend_sparkline` so the graph and its label
+come from one bucketing, not two.
+
+`trend_scale` is `Option<String>` on the Rust side, not a `Section`: a missing label
+costs a label, not a panel. It is sanitized and length-bounded like every other
+daemon-built string, and `--once` prints it as `trends: present (y-axis 0..60.0M)`.
+
 ## Panel now reads
 
 ```
- _/////_ ...   _//___//_/////_/////_////_//_       <- columns = tokens/hour
-today 23.0M/hr | wk 18.0M/hr
-spent today 212.4M | wk 879.7M
-peak hour: 14:00 (33.9M/hr)
+60.0M                    #
+      _/_        __/_/#/_//_/_
+    0 ##########################
+      today 22.8M/hr | wk 18.0M/hr
+      spent today 221.0M | wk 888.3M
+      peak hour: 14:00 (33.9M/hr)
 ```
 
 ## Verification
 
 - `just selfcheck` — exit 0
 - `just lint` — clean
-- `just restart` — daemon relaunched (pid 1540192) on the new code
+- `just rust-test` — 112 pass (new: trend_scale normalization, the gutter)
+- `just rust-lint` — clean
+- `just restart` — daemon relaunched on the new code; live snapshot carries
+  `trend_scale: 60.0M`
 
 No Rust change: `draw_trends` renders whatever rows the daemon sends and
 `trends_panel_height` sizes to content.

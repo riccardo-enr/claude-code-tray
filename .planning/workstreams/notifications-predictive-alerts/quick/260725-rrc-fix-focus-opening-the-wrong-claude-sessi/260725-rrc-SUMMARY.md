@@ -63,13 +63,38 @@ explanation with it. Footer binding hint reads `enter focus+exit`.
 Rejected: a second key for focus-without-closing. One binding until someone
 actually runs `claude-tui` as a persistent monitor pane and misses it.
 
+## Correction: the desktop travels, not the session (commit 71a9c90)
+
+The `switch-client` fix solved the wrong problem. The two terminal windows live on
+different GNOME workspaces -- personal on 1, work on 2 -- so moving the attached
+client dragged a work session into the personal workspace. The requirement is the
+opposite: leave every session where it lives and move the *desktop* to it.
+
+- `switch-client` removed. `core.focus_tmux_cmds` is now `select-window` +
+  `select-pane` only, acting inside the session's own server.
+- `core.pick_window(listing, wm_class, session)` (pure) parses `wmctrl -lx` and
+  returns the window whose WM_CLASS matches AND whose title starts with
+  `<session>:`. One terminal process serves every window, so PID and WM_CLASS are
+  identical across them -- the title is the only per-window handle, and tmux writes
+  it per client when `set-titles` is on (the default `set-titles-string` leads with
+  `#S`).
+- `terminal_window_for(pane, tmux)` in the daemon: `display-message -p -t <pane>
+  '#S'` then `pick_window`. Best-effort, bounded, returns "" on any failure.
+- `Monitor.focus` raises with `wmctrl -i -a <id>`, which activates by id and so
+  switches to that window's workspace. No match falls back to the old blind class
+  raise -- a wrong window still beats nothing happening.
+- `set -g set-titles on` added to `~/.dotfiles/tmux/.config/tmux/tmux.conf`
+  (uncommitted there) and documented in the README requirements.
+
+Verified live: `%1 -> session 0 -> 0x03000004 (desktop 1)`,
+`%5 -> session 1 -> 0x030001cc (desktop 0)`.
+
 ## Known limitation
 
-Recorded as a `ponytail:` comment in `focus()`: when the terminal is *not* focused
-(a tray click from the top bar) the raise is still blind. Ghostty serves every
-window from a single process, so neither PID nor WM_CLASS identifies which X
-window hosts which tmux client. Upgrade path is tmux `set-titles on` plus
-title-based `wmctrl -a`.
+A session attached to no client has no window to raise, and `set-titles off` makes
+every title a launch command. Both land on the blind class raise, which is only
+right when a single terminal window exists. Wayland has no `wmctrl` at all -- the
+whole focus path is X11-only, as it already was.
 
 ## Deviation from the quick workflow
 
