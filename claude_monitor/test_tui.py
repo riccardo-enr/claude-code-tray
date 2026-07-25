@@ -5,6 +5,9 @@ import asyncio
 import importlib.util
 import pathlib
 
+from rich.console import Console
+from rich.table import Table
+
 
 def _load_tui():
     path = pathlib.Path(__file__).resolve().parent.parent / "claude-tui.py"
@@ -37,6 +40,16 @@ async def demo():
     tui.core.query_snapshot = lambda: snapshot
 
     app = tui.ClaudeTui()
+    heatmap = app._heatmap_renderable([[1.0] * 24 for _ in range(7)])
+    heatmap_table = Table.grid(expand=True, padding=0)
+    heatmap_table.add_column(justify="right", no_wrap=True)
+    heatmap_table.add_row(heatmap)
+    console = Console(width=60, color_system=None)
+    with console.capture() as capture:
+        console.print(heatmap_table)
+    heatmap_lines = capture.get().splitlines()
+    assert heatmap_lines[0].index("00") == heatmap_lines[1].index("██")
+
     reset5 = 1_000_000
     now5 = reset5 - tui.core.WIN5 // 2
     normal5 = app._projection_text(10.0, reset5, tui.core.WIN5, now5)

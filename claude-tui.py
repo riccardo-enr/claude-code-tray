@@ -333,7 +333,10 @@ class ClaudeTui(App):
             return None
         out = Text("    ", style="dim")
         for hour in range(24):
-            out.append("%02d" % hour if hour % 3 == 0 else "  ", style="dim")
+            # Blank braille cells keep the four empty slots after "21" from being
+            # stripped when Rich right-aligns the multiline heatmap.
+            label = "%02d" % hour if hour % 3 == 0 else "\N{BRAILLE PATTERN BLANK}" * 2
+            out.append(label, style="dim")
         out.append("\n")
         for day, label in enumerate(HEAT_DAYS):
             out.append(label + " ", style="dim")
