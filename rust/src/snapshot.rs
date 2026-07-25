@@ -39,7 +39,9 @@ The wire contract being consumed is fixed and lives in
     {"heatmap": [[float|null; 24]; 7] | null,
      "sessions": [{id, dir, status, entered, frozen, pane, tmux, term}],
      "usage":    {tokens_used, token_limit, used_percentage, resets_at_epoch,
-                  burn_rate_per_min, seven_day_pct, seven_day_reset} | null,
+                  burn_rate_per_min, seven_day_pct, seven_day_reset,
+                  cost_usd, cost_per_hour, pace_used_pct, pace_elapsed_pct,
+                  pace_label, model_mix} | null,
      "trends":   [string] | null}
 */
 
@@ -48,7 +50,12 @@ use std::fmt;
 use serde_json::Value;
 
 use crate::error::ClientError;
-use crate::sanitize::{sanitize_display, MAX_ROUTE_CHARS};
+use crate::sanitize::{sanitize_display, sanitize_display_bounded, MAX_ROUTE_CHARS};
+
+/* Cap for the short CLI-chosen labels (pace, model mix). Matches
+`claude_monitor.core.EXTRA_TEXT_MAX_CHARS` -- the daemon already bounds them; this is the
+second wall, and it is tight because they share one narrow row. */
+const MAX_LABEL_CHARS: usize = 32;
 
 /* Rows and columns of the heatmap grid: Monday-Sunday by hour 0-23. Fixed by
 `claude_monitor.core.heatmap_buckets`. */
@@ -182,6 +189,16 @@ pub struct Usage {
     pub token_limit: Option<f64>,
     pub seven_day_pct: Option<f64>,
     pub seven_day_reset: Option<f64>,
+    /* Cost, pace and model mix. Follows the weekly block's posture: absent or
+    wrong-typed degrades the field, never the section, because a cosmetic extra is
+    not allowed to cost the gauge. The two text fields are CLI-chosen strings, so they
+    arrive sanitized like every other display string. */
+    pub cost_usd: Option<f64>,
+    pub cost_per_hour: Option<f64>,
+    pub pace_used_pct: Option<f64>,
+    pub pace_elapsed_pct: Option<f64>,
+    pub pace_label: Option<String>,
+    pub model_mix: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -365,6 +382,28 @@ fn normalize_usage(raw: Option<&Value>) -> Section<Usage> {
         _ => None,
     };
 
+    /* Extras: same degrade-alone posture as the weekly block. A wrong type here is
+    silently dropped rather than escalated, because none of these can change what the
+    gauges say -- claude_monitor.core.parse_usage nulls them the same way. */
+    let opt_num = |key: &str| match number_field(obj, key) {
+        Field::Value(n) => Some(n),
+        _ => None,
+    };
+    /* The daemon built these strings, but they originate in CLI output (a pace label,
+    a model family) -- "the daemon built it" is not "it is safe", the same reasoning
+    the trends rows already carry, so they are sanitized again at this boundary. */
+    let opt_text = |key: &str| match obj.get(key) {
+        Some(Value::String(s)) => {
+            let cleaned = sanitize_display_bounded(s, MAX_LABEL_CHARS);
+            if cleaned.is_empty() {
+                None
+            } else {
+                Some(cleaned)
+            }
+        }
+        _ => None,
+    };
+
     Section::Present(Usage {
         used_percentage,
         resets_at_epoch,
@@ -373,6 +412,12 @@ fn normalize_usage(raw: Option<&Value>) -> Section<Usage> {
         token_limit,
         seven_day_pct,
         seven_day_reset,
+        cost_usd: opt_num("cost_usd"),
+        cost_per_hour: opt_num("cost_per_hour"),
+        pace_used_pct: opt_num("pace_used_pct"),
+        pace_elapsed_pct: opt_num("pace_elapsed_pct"),
+        pace_label: opt_text("pace_label"),
+        model_mix: opt_text("model_mix"),
     })
 }
 

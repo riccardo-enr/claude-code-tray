@@ -304,7 +304,51 @@ pub fn tui_usage_rows(usage: Option<&Usage>, now: f64) -> Vec<String> {
         }
         rows.push(wrow.join("  "));
     }
+
+    if let Some(extra) = usage_extra_row(usage) {
+        rows.push(extra);
+    }
     rows
+}
+
+/*
+The cost / pace / model-mix detail row (claude_monitor.core.usage_extra_row).
+
+The deliberate mirror of the Python helper, cell for cell, under the same
+reproduce-verbatim rule `tui_usage_rows` states above: the tray lists this same
+string as one more insensitive menu row, the TUI appends it as the trailing usage
+row, and neither surface reformats a number. Every cell is independently optional,
+and the pace cell only appears whole -- label plus both percentages -- never partial.
+
+The row carries no cap, so `draw_usage` finds no matching entry in its `caps`
+vector and renders it plain: no gauge, no band colour, no projection.
+*/
+pub fn usage_extra_row(usage: &Usage) -> Option<String> {
+    let mut cells = Vec::new();
+    if let Some(cost) = usage.cost_usd {
+        cells.push(format!("${:.2}", cost));
+    }
+    if let Some(rate) = usage.cost_per_hour {
+        cells.push(format!("${}/hr", rate.round() as i64));
+    }
+    if let (Some(label), Some(used), Some(elapsed)) =
+        (usage.pace_label.as_deref(), usage.pace_used_pct, usage.pace_elapsed_pct)
+    {
+        cells.push(format!(
+            "pace: {}%/{}% {}",
+            used.round() as i64,
+            elapsed.round() as i64,
+            label
+        ));
+    }
+    if let Some(mix) = usage.model_mix.as_deref() {
+        cells.push(mix.to_string());
+    }
+    if cells.is_empty() {
+        None
+    } else {
+        Some(cells.join("  "))
+    }
 }
 
 #[cfg(test)]
@@ -321,7 +365,61 @@ mod tests {
         Usage {
             used_percentage, resets_at_epoch, burn_rate_per_min,
             tokens_used, token_limit, seven_day_pct, seven_day_reset,
+            /* Extras are exercised by their own tests below; the row tests predate
+            them and must keep asserting the row shape without them. */
+            cost_usd: None, cost_per_hour: None,
+            pace_used_pct: None, pace_elapsed_pct: None, pace_label: None, model_mix: None,
         }
+    }
+
+    fn usage_with_extras() -> Usage {
+        Usage {
+            cost_usd: Some(113.9296),
+            cost_per_hour: Some(143.31),
+            pace_used_pct: Some(27.0),
+            pace_elapsed_pct: Some(16.0),
+            pace_label: Some("slow down".to_string()),
+            model_mix: Some("opus 100%".to_string()),
+            ..usage_of(27.0, 7380.0, 1200.0, None, None, None, None)
+        }
+    }
+
+    #[test]
+    fn usage_extra_row_matches_the_python_order_and_spelling() {
+        assert_eq!(
+            usage_extra_row(&usage_with_extras()),
+            Some("$113.93  $143/hr  pace: 27%/16% slow down  opus 100%".to_string())
+        );
+    }
+
+    #[test]
+    fn usage_extra_row_degrades_one_group_at_a_time() {
+        let mut usage = usage_with_extras();
+        usage.cost_usd = None;
+        usage.model_mix = None;
+        /* Pace only counts once label and BOTH percentages survive together. */
+        assert_eq!(usage_extra_row(&usage), Some("$143/hr  pace: 27%/16% slow down".to_string()));
+        usage.pace_used_pct = None;
+        assert_eq!(usage_extra_row(&usage), Some("$143/hr".to_string()));
+        /* Nothing present -> no trailing row at all, not an empty one. */
+        let bare = usage_of(27.0, 7380.0, 1200.0, None, None, None, None);
+        assert_eq!(usage_extra_row(&bare), None);
+        assert_eq!(tui_usage_rows(Some(&bare), 0.0).len(), 1);
+    }
+
+    #[test]
+    fn tui_usage_rows_appends_the_extras_row_last() {
+        let rows = tui_usage_rows(Some(&usage_with_extras()), 0.0);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[1], "$113.93  $143/hr  pace: 27%/16% slow down  opus 100%");
+    }
+
+    #[test]
+    fn tui_usage_rows_unchanged_without_extras() {
+        /* Regression guard for silent row growth: no new fields -> same row count and
+        text the pre-extras tests already pin. */
+        let usage = usage_of(42.5, 1700000000.0, 1200.0, Some(417000.0), Some(880000.0), None, None);
+        assert_eq!(tui_usage_rows(Some(&usage), 1700000000.0 - 7380.0).len(), 1);
     }
 
     #[test]

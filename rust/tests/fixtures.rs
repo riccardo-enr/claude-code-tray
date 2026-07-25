@@ -191,6 +191,18 @@ fn check_optional_number(
     }
 }
 
+fn check_optional_string(
+    got: Option<&str>,
+    expected: &Value,
+    field: &str,
+) -> Result<(), String> {
+    match (got, expected) {
+        (None, Value::Null) => Ok(()),
+        (Some(g), Value::String(want)) if g == want => Ok(()),
+        (g, e) => Err(format!("{}: expected {}, got {:?}", field, e, g)),
+    }
+}
+
 fn check_usage(snapshot: &Snapshot, expected: &Value) -> Result<(), String> {
     if !check_state(&snapshot.usage, expected, "usage")? {
         return Ok(());
@@ -208,6 +220,12 @@ fn check_usage(snapshot: &Snapshot, expected: &Value) -> Result<(), String> {
             "token_limit" => check_optional_number(usage.token_limit, want, field)?,
             "seven_day_pct" => check_optional_number(usage.seven_day_pct, want, field)?,
             "seven_day_reset" => check_optional_number(usage.seven_day_reset, want, field)?,
+            "cost_usd" => check_optional_number(usage.cost_usd, want, field)?,
+            "cost_per_hour" => check_optional_number(usage.cost_per_hour, want, field)?,
+            "pace_used_pct" => check_optional_number(usage.pace_used_pct, want, field)?,
+            "pace_elapsed_pct" => check_optional_number(usage.pace_elapsed_pct, want, field)?,
+            "pace_label" => check_optional_string(usage.pace_label.as_deref(), want, field)?,
+            "model_mix" => check_optional_string(usage.model_mix.as_deref(), want, field)?,
             other => return Err(format!("usage: unknown field {:?}", other)),
         }
     }

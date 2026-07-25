@@ -1,0 +1,16 @@
+{
+  "name": "cost-pace-junk-degrades-only-itself",
+  "note": "Same D-04 posture as the weekly block, extended to the extras: junk in cost_usd, pace_elapsed_pct, pace_label or model_mix costs only that field, never the 5h numbers that ride alongside them.",
+  "wire": "{\"usage\": {\"used_percentage\": 9.0, \"resets_at_epoch\": 1700000000, \"burn_rate_per_min\": 3, \"cost_usd\": \"lots\", \"pace_elapsed_pct\": true, \"pace_label\": {\"junk\": true}, \"model_mix\": []}}",
+  "expect": {
+    "usage": {
+      "used_percentage": 9.0,
+      "resets_at_epoch": 1700000000,
+      "burn_rate_per_min": 3,
+      "cost_usd": null,
+      "pace_elapsed_pct": null,
+      "pace_label": null,
+      "model_mix": null
+    }
+  }
+}

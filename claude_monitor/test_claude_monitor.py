@@ -16,6 +16,7 @@ import time
 
 from .core import (
     DEFAULT_CONFIG,
+    EXTRA_TEXT_MAX_CHARS,
     GAP_MAX,
     SESS_RANK,
     SPARK_GAP,
@@ -70,6 +71,7 @@ from .core import (
     trend_sparkline,
     trend_text,
     tui_usage_rows,
+    usage_extra_row,
     usage7_series,
     weekday_hhmm,
     with_gaps,
@@ -188,6 +190,164 @@ def demo():
     )
     assert junk7 is not None and junk7["used_percentage"] == 7.0
     assert junk7["seven_day_pct"] is None and junk7["seven_day_reset"] is None
+    # The cost/pace/model extras: absent in the samples above, so all six must read as
+    # None rather than KeyError-ing whichever surface renders them, and the untouched
+    # 5h keys survive verbatim.
+    assert official["cost_usd"] is None and official["cost_per_hour"] is None
+    assert official["pace_used_pct"] is None and official["pace_elapsed_pct"] is None
+    assert official["pace_label"] is None and official["model_mix"] is None
+    assert official["used_percentage"] == 5.0 and official["tokens_used"] is None
+    extras = parse_usage(
+        json.dumps(
+            {
+                "limits": {
+                    "five_hour": {
+                        "tokens_used": None,
+                        "token_limit": None,
+                        "used_percentage": 27.0,
+                        "resets_at_epoch": now_plus,
+                    }
+                },
+                "local": {
+                    "burn_rate_tokens_per_minute": 1000.0,
+                    "cost_usd": 113.9296,
+                    "burn_rate_cost_per_hour": 143.31,
+                    "model_distribution": [
+                        {"family": "sonnet", "percentage": 28.0},
+                        {"family": "opus", "percentage": 72.0},
+                        {"family": "haiku", "percentage": 0.4},
+                    ],
+                },
+                "pace": {
+                    "label": "slow down",
+                    "used_percentage": 27.0,
+                    "elapsed_percentage": 16.0,
+                },
+            }
+        )
+    )
+    assert extras["cost_usd"] == 113.9296 and extras["cost_per_hour"] == 143.31
+    # Shares sorted, haiku's 0.4% rounds to 0 and is dropped, tail dropped past the
+    # 2-family cap.
+    assert extras["model_mix"] == "opus 72% sonnet 28%"
+    assert extras["pace_label"] == "slow down"
+    assert extras["pace_used_pct"] == 27.0 and extras["pace_elapsed_pct"] == 16.0
+    assert usage_extra_row(extras) == "$113.93  $143/hr  pace: 27%/16% slow down  opus 72% sonnet 28%"
+    # Wrong types degrade only their own field -- the 5h payload and every sibling extra
+    # survive.
+    junk_extra = parse_usage(
+        json.dumps(
+            {
+                "limits": {
+                    "five_hour": {
+                        "tokens_used": None,
+                        "token_limit": None,
+                        "used_percentage": 9.0,
+                        "resets_at_epoch": now_plus,
+                    }
+                },
+                "local": {
+                    "burn_rate_tokens_per_minute": 1000.0,
+                    "cost_usd": "lots",
+                    "model_distribution": "opus",
+                },
+                "pace": ["slow down"],
+            }
+        )
+    )
+    assert junk_extra is not None and junk_extra["used_percentage"] == 9.0
+    assert junk_extra["cost_usd"] is None and junk_extra["model_mix"] is None
+    assert junk_extra["pace_label"] is None and junk_extra["pace_used_pct"] is None
+    assert usage_extra_row(junk_extra) is None
+    junk_label = parse_usage(
+        json.dumps(
+            {
+                "limits": {
+                    "five_hour": {
+                        "tokens_used": None,
+                        "token_limit": None,
+                        "used_percentage": 9.0,
+                        "resets_at_epoch": now_plus,
+                    }
+                },
+                "local": {
+                    "burn_rate_tokens_per_minute": 1000.0,
+                    "model_distribution": [
+                        {"family": None, "percentage": 100.0},
+                        {"family": "opus"},  # missing percentage
+                    ],
+                },
+                "pace": {"label": 42, "used_percentage": 1.0, "elapsed_percentage": 1.0},
+            }
+        )
+    )
+    assert junk_label["pace_label"] is None and junk_label["model_mix"] is None
+    assert junk_label["used_percentage"] == 9.0
+    # Non-finite input never survives to become a bare Infinity/NaN token on the wire
+    # (T-klg-02): json.loads parses the literal, parse_usage must still null it.
+    nonfinite = parse_usage(
+        json.dumps(
+            {
+                "limits": {
+                    "five_hour": {
+                        "tokens_used": None,
+                        "token_limit": None,
+                        "used_percentage": 3.0,
+                        "resets_at_epoch": now_plus,
+                    }
+                },
+                "local": {"burn_rate_tokens_per_minute": 1000.0, "cost_usd": float("inf")},
+                "pace": {"used_percentage": float("nan"), "elapsed_percentage": 1.0},
+            }
+        )
+    )
+    assert nonfinite["cost_usd"] is None and nonfinite["pace_used_pct"] is None
+    assert nonfinite["used_percentage"] == 3.0
+    assert json.dumps(nonfinite["cost_usd"]) == "null"
+    # Hostile text is neutralized before it reaches a terminal or a Gtk label, and
+    # bounded in length.
+    hostile = parse_usage(
+        json.dumps(
+            {
+                "limits": {
+                    "five_hour": {
+                        "tokens_used": None,
+                        "token_limit": None,
+                        "used_percentage": 1.0,
+                        "resets_at_epoch": now_plus,
+                    }
+                },
+                "local": {
+                    "burn_rate_tokens_per_minute": 1000.0,
+                    "model_distribution": [
+                        {"family": "opus\x1b[2J\x07\u202e" + "x" * 40, "percentage": 100.0}
+                    ],
+                },
+                "pace": {
+                    "label": "slow\x1b[2J\x07\u202edown" + "y" * 40,
+                    "used_percentage": 1.0,
+                    "elapsed_percentage": 1.0,
+                },
+            }
+        )
+    )
+    assert all(c.isprintable() for c in hostile["pace_label"])
+    assert all(c.isprintable() for c in hostile["model_mix"])
+    assert len(hostile["pace_label"]) <= EXTRA_TEXT_MAX_CHARS
+    # usage_extra_row: None when everything is absent, one cell alone when only one
+    # group is present.
+    assert usage_extra_row({}) is None and usage_extra_row(None) is None
+    assert usage_extra_row({"cost_usd": 4.2}) == "$4.20"
+    assert usage_extra_row({"model_mix": "opus 100%"}) == "opus 100%"
+    assert usage_extra_row({"pace_label": "slow down", "pace_used_pct": 27.0}) is None
+    # tui_usage_rows: row count and text unchanged when no new fields are present (no
+    # silent row growth); one extra trailing row equal to usage_extra_row's output when
+    # they are.
+    plain_rows = tui_usage_rows(official, time.time())
+    assert len(plain_rows) == 1 and plain_rows[0].startswith("5h")  # no weekly, no extras
+    rows_with_extras = tui_usage_rows(extras, time.time())
+    assert len(rows_with_extras) == len(plain_rows) + 1  # extras carries no weekly block
+    assert rows_with_extras[-1] == usage_extra_row(extras)
     assert (
         parse_usage(
             json.dumps(

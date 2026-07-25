@@ -265,10 +265,48 @@ SPARK_GAP = " "  # hours with no samples (keeps columns time-aligned)
 TREND_MIN_SPAN = 3600  # min history span (s) before real rows replace empty state
 
 
+EXTRA_TEXT_MAX_CHARS = 32  # ceiling for a daemon-sourced pace label or model family
+# ponytail: keep at most 2 model-mix entries -- three entries plus the cost and pace
+# cells overflow the left column of an 80-col terminal and the panel clips rather than
+# wraps; widen this when the panel gets a width-aware layout.
+MODEL_MIX_MAX_ENTRIES = 2
+
+
+def model_mix(dist, top=MODEL_MIX_MAX_ENTRIES):
+    """local.model_distribution -> 'opus 72% sonnet 28%', or None when unusable. Pure.
+
+    Keeps only entries with a string family and a finite percentage, drops anything that
+    rounds to 0%, sorts by share descending, and keeps at most `top` families -- the panel
+    has room for the mix, not for an inventory. Family text is untrusted CLI-chosen
+    display text (T-klg-01), so it is routed through _safe_cell and bounded before it is
+    joined, exactly like every other display string in this file.
+    """
+    if not isinstance(dist, list):
+        return None
+    parts = []
+    for entry in dist:
+        if not isinstance(entry, dict):
+            continue
+        fam, pct = entry.get("family"), entry.get("percentage")
+        if not isinstance(fam, str) or not _is_num(pct) or not math.isfinite(pct):
+            continue
+        if round(pct) <= 0:
+            continue
+        parts.append((pct, "%s %d%%" % (_safe_cell(fam)[:EXTRA_TEXT_MAX_CHARS], round(pct))))
+    parts.sort(key=lambda p: -p[0])
+    return " ".join(text for _, text in parts[:top]) or None
+
+
 def parse_usage(stdout):
     """Parse claude-monitor JSON stdout into a normalized usage dict, or None.
     Parses stdout regardless of exit status: the CLI exits 11 while printing valid JSON
     at limit-hit. None on any parse failure or missing limits.five_hour.
+
+    Also carries six optional cost/pace/model-mix keys the CLI already emits: each
+    degrades to None on its own (wrong type, missing block, older CLI) and never costs
+    the 5h payload (D-04). Non-finite numbers are rejected here rather than left for
+    display to filter: a bare Infinity/NaN token reaching json.dumps on the socket line
+    is a whole-fetch decode failure for the Rust client (T-klg-02), not a cosmetic glitch.
     """
     try:
         doc = json.loads(stdout)
@@ -279,6 +317,9 @@ def parse_usage(stdout):
         seven = doc["limits"].get("seven_day")
         if not isinstance(seven, dict):
             seven = {}
+        pace = doc.get("pace")
+        if not isinstance(pace, dict):
+            pace = {}
         u = {
             "tokens_used": five["tokens_used"],
             "token_limit": five["token_limit"],
@@ -288,6 +329,14 @@ def parse_usage(stdout):
             # Weekly cap; often the binding one. Optional: older CLIs omit the block.
             "seven_day_pct": seven.get("used_percentage"),
             "seven_day_reset": seven.get("resets_at_epoch"),
+            # Cost / pace / model mix. All optional -- --api can null any of them, and an
+            # older CLI omits the blocks entirely; each degrades on its own below.
+            "cost_usd": local.get("cost_usd"),
+            "cost_per_hour": local.get("burn_rate_cost_per_hour"),
+            "pace_used_pct": pace.get("used_percentage"),
+            "pace_elapsed_pct": pace.get("elapsed_percentage"),
+            "pace_label": pace.get("label"),
+            "model_mix": model_mix(local.get("model_distribution")),
         }
     except Exception:
         return None
@@ -306,6 +355,19 @@ def parse_usage(stdout):
     for k in ("seven_day_pct", "seven_day_reset"):
         if not is_num(u[k]):
             u[k] = None
+    # Same posture for the cost/pace extras: a wrong type or non-finite value costs that
+    # field alone, never the 5h payload. math.isfinite is checked here (not just is_num)
+    # so an Infinity/NaN sample can never reach json.dumps on the socket line.
+    for k in ("cost_usd", "cost_per_hour", "pace_used_pct", "pace_elapsed_pct"):
+        v = u[k]
+        u[k] = v if (is_num(v) and math.isfinite(v)) else None
+    # pace_label is untrusted CLI-chosen text (T-klg-01): routed through _safe_cell and
+    # bounded, same posture as a model family.
+    u["pace_label"] = (
+        _safe_cell(u["pace_label"])[:EXTRA_TEXT_MAX_CHARS] or None
+        if isinstance(u["pace_label"], str)
+        else None
+    )
     return u
 
 
@@ -330,6 +392,32 @@ def fmt_tokens(n):
     if n >= 1e6:
         return "%.1fM" % (n / 1e6)
     return "%dk" % round(n / 1000)
+
+
+def usage_extra_row(usage):
+    """Cost / pace / model-mix detail row, or None when every group is absent. Pure.
+
+    The single definition of this row (D-05): tui_usage_rows and Monitor.usage_rows both
+    append this same string unchanged, so the two surfaces cannot drift, and the dollar
+    formatting lives here -- and only here -- for the same reason. Reads every field with
+    .get: this also runs against a dict that arrived over a socket. The pace cell only
+    ever appears whole -- label plus both percentages -- because a lone percentage or a
+    lone label reads as more precise than the data actually is.
+    """
+    if not usage:
+        return None
+    cells = []
+    if usage.get("cost_usd") is not None:
+        cells.append("$%.2f" % usage["cost_usd"])
+    if usage.get("cost_per_hour") is not None:
+        cells.append("$%d/hr" % round(usage["cost_per_hour"]))
+    label = usage.get("pace_label")
+    used, elapsed = usage.get("pace_used_pct"), usage.get("pace_elapsed_pct")
+    if label is not None and used is not None and elapsed is not None:
+        cells.append("pace: %d%%/%d%% %s" % (round(used), round(elapsed), label))
+    if usage.get("model_mix") is not None:
+        cells.append(usage["model_mix"])
+    return "  ".join(cells) or None
 
 
 def fmt_countdown(secs):
@@ -954,6 +1042,13 @@ def tui_usage_rows(usage, now):
         if usage.get("seven_day_reset") is not None:
             wrow.append(fmt_countdown_wk(usage["seven_day_reset"] - now))
         rows.append("  ".join(wrow))
+    # Extras land in one trailing row (D-05: core.usage_extra_row is the one definition).
+    # It carries no cap, so draw_usage's per-row gauge/projection zip runs off the end of
+    # `caps` and renders it plain -- which is exactly right: there is nothing here to
+    # band-colour or project.
+    extra = usage_extra_row(usage)
+    if extra is not None:
+        rows.append(extra)
     return rows
 
 

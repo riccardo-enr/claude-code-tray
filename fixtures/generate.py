@@ -213,6 +213,35 @@ F["heatmap-wrong-shape"] = {
     "expect": {"heatmap": "malformed"},
 }
 
+F["cost-pace-model-mix"] = {
+    "note": "The happy path for the cost/pace/model-mix extras: every new field present "
+            "and normalized exactly as claude_monitor.core.parse_usage would have built "
+            "them, including the condensed model_mix string.",
+    "wire": {"usage": {"used_percentage": 27.0, "resets_at_epoch": 1700000000,
+                       "burn_rate_per_min": 3, "cost_usd": 113.9296,
+                       "cost_per_hour": 143.31, "pace_used_pct": 27.0,
+                       "pace_elapsed_pct": 16.0, "pace_label": "slow down",
+                       "model_mix": "opus 72% sonnet 28%"}},
+    "expect": {"usage": {"used_percentage": 27.0, "cost_usd": 113.9296,
+                         "cost_per_hour": 143.31, "pace_used_pct": 27.0,
+                         "pace_elapsed_pct": 16.0, "pace_label": "slow down",
+                         "model_mix": "opus 72% sonnet 28%"}},
+}
+
+F["cost-pace-junk-degrades-only-itself"] = {
+    "note": "Same D-04 posture as the weekly block, extended to the extras: junk in "
+            "cost_usd, pace_elapsed_pct, pace_label or model_mix costs only that field, "
+            "never the 5h numbers that ride alongside them.",
+    "wire": {"usage": {"used_percentage": 9.0, "resets_at_epoch": 1700000000,
+                       "burn_rate_per_min": 3, "cost_usd": "lots",
+                       "pace_elapsed_pct": True, "pace_label": {"junk": True},
+                       "model_mix": []}},
+    "expect": {"usage": {"used_percentage": 9.0, "resets_at_epoch": 1700000000,
+                         "burn_rate_per_min": 3, "cost_usd": None,
+                         "pace_elapsed_pct": None, "pace_label": None,
+                         "model_mix": None}},
+}
+
 for name, body in F.items():
     doc = {"name": name, "note": body["note"],
            "wire": json.dumps(body["wire"], ensure_ascii=False),

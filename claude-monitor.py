@@ -337,6 +337,11 @@ class Monitor:
             rows.append("week: %d%% used" % round(u["seven_day_pct"]))
             if u.get("seven_day_reset") is not None:
                 rows.append(core.fmt_countdown_wk(u["seven_day_reset"] - time.time()))
+        # One additional insensitive row, the same string tui_usage_rows appends (D-05):
+        # core.usage_extra_row is the only formatter.
+        extra = core.usage_extra_row(u)
+        if extra is not None:
+            rows.append(extra)
         return rows
 
     def trend_rows(self):
