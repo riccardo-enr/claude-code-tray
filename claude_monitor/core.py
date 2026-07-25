@@ -563,15 +563,15 @@ def local_bounds(now):
     return int(day_start.timestamp()), int(week_start.timestamp())
 
 
-def trend_sparkline(records, now):
-    """24-char block sparkline of TOKENS burned per clock hour.
+def hourly_tokens(records, now):
+    """24 buckets of TOKENS burned per clock hour; None for an hour with no samples.
 
-    Each column is what trend_spent sums, bucketed by hour: `burn` (tok/min) times the
+    Each bucket is what trend_spent sums, split by hour: `burn` (tok/min) times the
     interval back to the previous sample. `burn` is a trailing rate estimate, so it is
     attributed to the interval ENDING at its own sample -- which is also the hour the
     sample is bucketed into. An interval wider than GAP_MAX is a daemon outage, not
-    idle time, and contributes nothing. Column 0 is 23 clock hours ago and column 23 is
-    the current clock hour; populated zero-usage hours render at floor.
+    idle time, and contributes nothing. Bucket 0 is 23 clock hours ago and bucket 23 is
+    the current clock hour.
     """
     current_hour = int(
         datetime.datetime.fromtimestamp(now)
@@ -596,21 +596,42 @@ def trend_sparkline(records, now):
         bucket = 23 - int((current_hour - rec_hour) // 3600)
         if 0 <= bucket <= 23:
             buckets[bucket] = (buckets[bucket] or 0.0) + tokens
-    vals = [value for value in buckets if value is not None]
-    if not vals:
+    return buckets
+
+
+def trend_sparkline(records, now):
+    """24-char block sparkline of hourly_tokens, scaled 0..peak.
+
+    The floor is 0, not the quietest hour: the y-axis label the TUI draws beside this
+    (trend_scale) reads "0 to <peak>", so a column's height must be proportional to its
+    tokens. Scaling from min..max instead would make the quietest sampled hour render
+    identically to a genuinely idle one and put the axis at a value nobody can see.
+    A sampled zero-token hour renders at floor; an unsampled hour stays a gap.
+    """
+    buckets = hourly_tokens(records, now)
+    hi = max((value for value in buckets if value is not None), default=None)
+    if hi is None:
         return SPARK_GAP * 24
-    lo, hi = min(vals), max(vals)
-    span = hi - lo
     out = []
     for value in buckets:
         if value is None:
             out.append(SPARK_GAP)
-        elif span == 0:
-            out.append(SPARK_GLYPHS[0])  # flat window -> floor, and no ZeroDivisionError
+        elif hi == 0:
+            out.append(SPARK_GLYPHS[0])  # nothing burned all day -> floor, no ZeroDivision
         else:
-            idx = round((value - lo) / span * (len(SPARK_GLYPHS) - 1))
-            out.append(SPARK_GLYPHS[idx])
+            out.append(SPARK_GLYPHS[round(value / hi * (len(SPARK_GLYPHS) - 1))])
     return "".join(out)
+
+
+def trend_scale(records, now):
+    """Top-of-graph y-axis label: tokens burned in the graph's tallest hour, or None.
+
+    Formatted here, not in the TUI, so the axis and the "spent"/"per hour" rows cannot
+    drift apart in units or rounding (D-05: the daemon owns every rendered string).
+    """
+    records = [rec for rec in history_numeric(records) if history_keep(rec, now, 1)]
+    hi = max((v for v in hourly_tokens(records, now) if v is not None), default=None)
+    return None if hi is None else fmt_tokens(round(hi))
 
 
 # Glyph -> level index, the exact inverse of the SPARK_GLYPHS mapping trend_sparkline
@@ -1010,31 +1031,57 @@ def query_snapshot(path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
         s.close()
 
 
-def focus_tmux_cmds(pane, tmux):
-    """The tmux argv sequence that puts `pane` in front of the user's eyes. Pure.
-
-    `switch-client` is the one that matters. `select-window` only changes the current
-    window of the pane's OWN tmux session; it never moves the client the user is
-    attached to. With one tmux session per terminal window, focusing a session in the
-    other one therefore did nothing visible, and the WM_CLASS raise that followed
-    surfaced whichever window it felt like -- the "tray opens the wrong Claude" bug.
-    `switch-client -t <pane>` moves the attached client to the target session, window
-    and pane in one step. `select-window` / `select-pane` trail it as a no-op on modern
-    tmux and as the fallback on versions whose `switch-client -t` honours only the
-    session part of the target.
+def tmux_cmd(tmux, *args):
+    """argv for one tmux command aimed at the server that owns a session record. Pure.
 
     The server is addressed with `-S <socket>` (the first field of the session's TMUX
-    value) rather than by exporting TMUX. Exporting it would name a current session, and
-    tmux would then resolve the default client to one already attached THERE -- which is
-    exactly the client that does not need moving.
+    value) rather than by exporting TMUX. Exporting it would also name a current
+    session, which changes how tmux resolves defaults; `-S` says only "this server".
+    An empty `tmux` (no record, e.g. a session that never reported one) falls through
+    to the ambient server, which is the best guess available.
     """
     base = ["tmux"]
     if tmux:
         base += ["-S", tmux.split(",")[0]]
-    return [
-        base + [verb, "-t", pane]
-        for verb in ("switch-client", "select-window", "select-pane")
-    ]
+    return base + list(args)
+
+
+def focus_tmux_cmds(pane, tmux):
+    """The tmux argv sequence that makes `pane` current WITHIN ITS OWN SESSION. Pure.
+
+    Deliberately no `switch-client`. Moving the attached client would haul the target
+    session into whichever terminal window the user is standing in -- which, with one
+    session per workspace (personal on 1, work on 2), drops work windows into the
+    personal workspace. Sessions stay where they live; it is the desktop that travels
+    to them, via the window raise in Monitor.focus.
+    """
+    return [tmux_cmd(tmux, verb, "-t", pane) for verb in ("select-window", "select-pane")]
+
+
+def pick_window(listing, wm_class, session):
+    """X window id hosting `session`, from `wmctrl -lx` output. Pure. "" when unsure.
+
+    Every window of a modern terminal is served by one process, so PID and WM_CLASS
+    are identical across them and neither can say which window holds which tmux
+    client. The title is the one per-window channel a terminal exposes, and tmux
+    writes it per client when `set-titles` is on -- the default `set-titles-string`
+    leads with `#S`, so a `<session>:` prefix identifies the window exactly.
+
+    `wmctrl -lx` columns are id, desktop, WM_CLASS, hostname, then the title with its
+    own spaces intact, hence the 4-way split. Matching requires BOTH the class and the
+    title prefix: a browser tab titled "0: something" must not win. Returns "" when no
+    window matches, which the caller treats as "fall back to the blind class raise"
+    rather than as an error -- `set-titles off` is a legitimate state, it just costs
+    precision.
+    """
+    for line in listing.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) < 5:
+            continue
+        wid, _desktop, cls, _host, title = parts
+        if wm_class in cls and title.startswith(session + ":"):
+            return wid
+    return ""
 
 
 def request_focus(session, path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):

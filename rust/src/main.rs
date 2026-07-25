@@ -789,12 +789,32 @@ rows 0..L from the bottom, and each cell takes the band colour of its own height
 stays blank, which is what keeps an unsampled hour visually distinct from an
 hour of genuinely zero usage.
 */
-fn trend_graph_lines(trends: &[String]) -> Vec<Line<'static>> {
+fn trend_graph_lines(trends: &[String], scale: Option<&str>) -> Vec<Line<'static>> {
     let levels = spark_levels(trends.first().map(String::as_str).unwrap_or(""));
     let mut lines = Vec::with_capacity(TREND_ROWS + trends.len());
 
+    /* Y-axis gutter: the daemon's peak-hour label at the top, 0 at the bottom, since
+    the sparkline is scaled 0..peak. Without a label the gutter collapses to nothing
+    rather than reserving blank columns. The text rows below are indented to match, so
+    the graph and the numbers under it share a left edge. */
+    let axis_width = scale.map(|s| s.chars().count() + 1).unwrap_or(0);
+    let dim = Style::default().add_modifier(Modifier::DIM);
+    let gutter = |row: usize| -> Option<Span<'static>> {
+        let label = match (scale, row) {
+            (Some(top), r) if r == TREND_ROWS - 1 => top.to_string(),
+            (Some(_), 0) => "0".to_string(),
+            (Some(_), _) => String::new(),
+            (None, _) => return None,
+        };
+        Some(Span::styled(
+            format!("{:>width$} ", label, width = axis_width.saturating_sub(1)),
+            dim,
+        ))
+    };
+
     for r in (0..TREND_ROWS).rev() {
-        let spans: Vec<Span> = levels
+        let mut spans: Vec<Span> = gutter(r).into_iter().collect();
+        spans.extend(levels
             .iter()
             .map(|lv| match lv {
                 Some(l) if *l >= r => Span::styled(
@@ -804,12 +824,13 @@ fn trend_graph_lines(trends: &[String]) -> Vec<Line<'static>> {
                 ),
                 _ => Span::raw(" "),
             })
-            .collect();
+            .collect::<Vec<Span>>());
         lines.push(Line::from(spans));
     }
-    /* The remaining core-formatted rows, verbatim. */
+    /* The remaining core-formatted rows, verbatim, indented under the graph. */
+    let indent = " ".repeat(axis_width);
     for row in trends.iter().skip(1) {
-        lines.push(Line::from(row.clone()));
+        lines.push(Line::from(format!("{}{}", indent, row)));
     }
     lines
 }
@@ -875,7 +896,10 @@ fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
         return;
     };
 
-    let graph = trend_graph_lines(trends);
+    let graph = trend_graph_lines(
+        trends,
+        app.snapshot.as_ref().and_then(|s| s.trend_scale.as_deref()),
+    );
     let heatmap = snapshot_heatmap(app);
 
     /* Side by side when the heatmap fits; graph alone when it does not, so a
@@ -1051,7 +1075,11 @@ fn dump_once(source: Source) -> io::Result<()> {
         }
     }
 
-    println!("trends:   {}", snapshot.trends.state_name());
+    println!(
+        "trends:   {} (y-axis 0..{})",
+        snapshot.trends.state_name(),
+        snapshot.trend_scale.as_deref().unwrap_or("unlabelled")
+    );
     if let Section::Present(rows) = &snapshot.trends {
         for row in rows {
             println!("  {}", row);
@@ -1234,6 +1262,37 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_trend_graph_labels_its_y_axis_only_when_the_daemon_sends_a_scale() {
+        /* The sparkline is scaled 0..peak, so the gutter reads peak at the top and 0
+        at the bottom. Without a scale it must collapse entirely -- a blank gutter
+        would shift the graph for no information. */
+        let trends = vec!["\u{2581}\u{2588}".to_string(), "today 1M/hr".to_string()];
+        let text = |line: &Line| {
+            line.spans.iter().map(|s| s.content.as_ref()).collect::<String>()
+        };
+
+        let labelled = trend_graph_lines(&trends, Some("33.9M"));
+        assert!(text(&labelled[0]).starts_with("33.9M "), "peak label missing from the top row");
+        assert!(
+            text(&labelled[TREND_ROWS - 1]).starts_with("    0 "),
+            "floor label missing from the bottom row"
+        );
+        assert_eq!(
+            text(&labelled[TREND_ROWS]),
+            "      today 1M/hr",
+            "text rows must be indented under the graph, not under the gutter"
+        );
+
+        let plain = trend_graph_lines(&trends, None);
+        assert_eq!(plain.len(), labelled.len(), "the gutter changed the row count");
+        assert_eq!(text(&plain[TREND_ROWS]), "today 1M/hr");
+        /* One cell per sparkline column and nothing else: a blank gutter would show
+        up here as extra leading cells (the top row's own columns can be blank). */
+        assert_eq!(text(&plain[0]).chars().count(), 2, "an absent scale still reserved a gutter");
+        assert_eq!(text(&labelled[0]).chars().count(), 2 + 6);
     }
 
     fn sessions_app(wire: &str) -> App {

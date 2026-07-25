@@ -250,6 +250,10 @@ pub struct Snapshot {
     daemon-sourced text reaching a terminal, and "the daemon built it" is not
     the same as "it is safe". */
     pub trends: Section<Vec<String>>,
+    /* Top of the trend graph's y-axis, pre-formatted by the daemon (e.g. "33.9M").
+    Optional rather than a Section: a missing axis label costs a label, not a
+    panel, so there is no degraded state worth distinguishing from absent. */
+    pub trend_scale: Option<String>,
     pub heatmap: Section<Heatmap>,
     pub sessions: Section<Sessions>,
 }
@@ -280,6 +284,7 @@ impl Snapshot {
         Ok(Snapshot {
             usage: normalize_usage(obj.get("usage")),
             trends: normalize_trends(obj.get("trends")),
+            trend_scale: normalize_trend_scale(obj.get("trend_scale")),
             heatmap: normalize_heatmap(obj.get("heatmap")),
             sessions: normalize_sessions(obj.get("sessions")),
         })
@@ -446,6 +451,23 @@ fn normalize_trends(raw: Option<&Value>) -> Section<Vec<String>> {
         }
     }
     Section::Present(rows)
+}
+
+/* Daemon-built, but still crossing the trust boundary into a terminal, and bounded
+so a runaway label cannot push the graph off-screen. Any non-string -- including a
+raw number, which would be a daemon bug -- degrades to no label. */
+fn normalize_trend_scale(raw: Option<&Value>) -> Option<String> {
+    match raw {
+        Some(Value::String(s)) => {
+            let cleaned = sanitize_display_bounded(s, MAX_LABEL_CHARS);
+            if cleaned.is_empty() {
+                None
+            } else {
+                Some(cleaned)
+            }
+        }
+        _ => None,
+    }
 }
 
 fn normalize_heatmap(raw: Option<&Value>) -> Section<Heatmap> {
@@ -759,6 +781,22 @@ mod tests {
         let s = snap(json!({"trends": ["peak \u{1b}]52;c;x\u{7}hour"]}));
         let rows = s.trends.present().unwrap();
         assert!(!rows[0].contains('\u{1b}'));
+    }
+
+    #[test]
+    fn the_trend_scale_label_is_optional_sanitized_and_bounded() {
+        assert_eq!(snap(json!({"trend_scale": "33.9M"})).trend_scale.as_deref(), Some("33.9M"));
+        /* Absent, null, and a non-string (a daemon bug) all mean "no axis label",
+        never a malformed panel. */
+        assert!(snap(json!({})).trend_scale.is_none());
+        assert!(snap(json!({"trend_scale": null})).trend_scale.is_none());
+        assert!(snap(json!({"trend_scale": 33.9})).trend_scale.is_none());
+        let hostile = snap(json!({"trend_scale": "3\u{1b}]52;c;x\u{7}M"})).trend_scale.unwrap();
+        assert!(!hostile.contains('\u{1b}'));
+        let long = snap(json!({"trend_scale": "9".repeat(MAX_LABEL_CHARS + 50)}))
+            .trend_scale
+            .unwrap();
+        assert!(long.chars().count() <= MAX_LABEL_CHARS);
     }
 
     #[test]

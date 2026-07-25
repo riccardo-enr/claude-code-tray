@@ -56,6 +56,7 @@ from .core import (
     parse_config,
     parse_history,
     parse_usage,
+    pick_window,
     project,
     _safe_cell,
     read_line,
@@ -70,7 +71,9 @@ from .core import (
     session_stale,
     spark_levels,
     statusline_text,
+    hourly_tokens,
     trend_burn,
+    trend_scale,
     trend_spent,
     trend_peak_hour,
     trend_sparkline,
@@ -480,7 +483,10 @@ def demo():
     ]
     spark = trend_sparkline(recs_sp, now_sp)
     assert len(spark) == 24
-    assert spark[0] == SPARK_GLYPHS[0]
+    # Scaled 0..peak, not min..max: 100 tokens against a 900-token peak sits just off
+    # the floor. Under min..max scaling the quietest sampled hour was always the floor,
+    # which made it indistinguishable from an idle one and left the axis unlabelable.
+    assert spark[0] == SPARK_GLYPHS[1]
     assert spark[23] == SPARK_GLYPHS[-1]
     assert spark[12] == SPARK_GAP  # interior empty hour stays a gap
     assert trend_sparkline([], now_sp) == SPARK_GAP * 24
@@ -567,6 +573,13 @@ def demo():
     # period. trend_spent's own asserts above pin the arithmetic.
     assert len(rows_spent) == 4 and rows_spent[2].startswith("spent today ")
     assert fmt_tokens(2.1e9) == "2.1G"
+    # The y-axis label is the graph's own peak, formatted by the daemon (D-05) so the
+    # axis cannot drift from the rows under it. No history in the last 24h -> no label.
+    assert trend_scale(spent_bt, now_bt) == fmt_tokens(
+        round(max(v for v in hourly_tokens(spent_bt, now_bt) if v is not None))
+    )
+    assert trend_scale([], now_bt) is None
+    assert trend_scale([{"t": now_bt - 5 * 86400, "pct": 1.0, "burn": 99.0}], now_bt) is None
 
     # --- dashboard logic ---
     # Math.min/max applied via .apply(null, arr) throw "Maximum call stack size
@@ -933,6 +946,7 @@ def demo():
             self.usage = {"used_percentage": 42}
             self.heatmap = [[None] * 24 for _ in range(7)]
             self.trends = ["line1"]
+            self.trend_scale = "33.9M"
             self.focused = []
 
         def focus(self, pane, tmux, title, term):
@@ -953,10 +967,11 @@ def demo():
     _thread.join(timeout=5)
     _client_sock.close()
     _snapshot = json.loads(_resp.decode("utf-8"))
-    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends"}
+    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_scale"}
     assert _snapshot["heatmap"] == _mon.heatmap
     assert _snapshot["usage"] == _mon.usage
     assert _snapshot["trends"] == _mon.trends
+    assert _snapshot["trend_scale"] == _mon.trend_scale
     assert _snapshot["sessions"] == build_session_snapshot(list(_mon.sessions.values()))
     assert _snapshot["sessions"][0]["term"] == ""
 
@@ -1073,25 +1088,41 @@ def demo():
     assert TUI_SOCK_TIMEOUT < TUI_FETCH_INTERVAL
     assert TUI_TICK_INTERVAL < TUI_FETCH_INTERVAL  # D-09: re-render faster than we refetch
 
-    # --- focus argv: the attached client must actually move ---
-    # switch-client first, or focusing a pane in another tmux session moves nothing the
-    # user can see and the tray appears to open the wrong Claude.
+    # --- focus argv: sessions never move between windows ---
+    # NO switch-client. It would haul the target session into the window the user is
+    # standing in, dropping a work session into the personal workspace -- the desktop
+    # travels to the session (pick_window + wmctrl -i -a), never the other way round.
     _cmds = focus_tmux_cmds("%5", "/tmp/tmux-1000/default,4242,1")
-    assert [c[-3] for c in _cmds] == [
-        "switch-client",
-        "select-window",
-        "select-pane",
-    ], _cmds
-    # -S addresses the server without naming a current session (an exported TMUX would
-    # make tmux pick a client already attached to the target -- the wrong one to move).
+    assert [c[-3] for c in _cmds] == ["select-window", "select-pane"], _cmds
+    assert all("switch-client" not in c for c in _cmds), _cmds
+    # -S addresses the server without also naming a current session.
     assert all(c[:3] == ["tmux", "-S", "/tmp/tmux-1000/default"] for c in _cmds), _cmds
     assert all(c[-2:] == ["-t", "%5"] for c in _cmds), _cmds
     # No TMUX on the session record -> no -S, talk to the ambient server.
     assert focus_tmux_cmds("%1", "") == [
-        ["tmux", "switch-client", "-t", "%1"],
         ["tmux", "select-window", "-t", "%1"],
         ["tmux", "select-pane", "-t", "%1"],
     ]
+
+    # --- pick_window: which terminal window hosts a tmux session ---
+    # Both windows share one PID and one WM_CLASS (one process serves them all), so the
+    # `#S:` title prefix is the only thing that tells them apart. Desktop column differs
+    # -- that is the whole point: wmctrl -i -a on the right id switches workspace.
+    _wm_listing = "\n".join(
+        [
+            "0x03000004  1 ghostty.com.mitchellh.ghostty  host 0:1:nvim - \"claude\"",
+            "0x030001cc  0 ghostty.com.mitchellh.ghostty  host 1:0:zsh - \"work\"",
+            "0x01600016  0 Navigator.zen                  host 1: a browser tab",
+            "malformed line",
+        ]
+    )
+    assert pick_window(_wm_listing, "com.mitchellh.ghostty", "1") == "0x030001cc"
+    assert pick_window(_wm_listing, "com.mitchellh.ghostty", "0") == "0x03000004"
+    # A non-terminal window whose title happens to start with the session name loses:
+    # the class must match too, or a browser tab would steal the raise.
+    assert pick_window(_wm_listing, "com.mitchellh.ghostty", "2") == ""
+    # set-titles off -> titles are launch commands -> no match -> caller raises blind.
+    assert pick_window("0x03000004  1 ghostty.com.mitchellh.ghostty  host tmux", "com.mitchellh.ghostty", "0") == ""
 
     # --- tui focus client ---
     with tempfile.TemporaryDirectory() as _focus_dir:
@@ -1204,7 +1235,7 @@ def demo():
     _slv = spark_levels(spark)
     assert len(_slv) == 24
     assert all(x is None or (isinstance(x, int) and 0 <= x <= 7) for x in _slv)
-    assert _slv[0] == 0 and _slv[23] == 7 and _slv[12] is None  # matches the spark asserts above
+    assert _slv[0] == 1 and _slv[23] == 7 and _slv[12] is None  # matches the spark asserts above
 
     # --- tui trend text (TUI-02) ---
     assert trend_text(None) == "trends: collecting history..."

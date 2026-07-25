@@ -70,6 +70,7 @@ class Monitor:
         self.usage = None  # latest parse_usage() dict, or None if unavailable
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
         self.trends = None  # cached trend row strings, or None (collecting state)
+        self.trend_scale = None  # cached graph y-axis top label, or None
         self.heatmap = None  # cached 7x24 usage-rise grid, or None until history is read
         self.dash_ready = False  # gates the menu item until the first dashboard write
 
@@ -120,20 +121,21 @@ class Monitor:
                 )
             return
         if pane:
-            # switch-client is what actually moves the user's attached client; see
-            # core.focus_tmux_cmds for why select-window alone focused the wrong session.
+            # Make the pane current inside its OWN session only. The session is never
+            # moved between windows: one session per workspace is how work stays out of
+            # the personal workspace, so the desktop travels to the session instead.
             for argv in core.focus_tmux_cmds(pane, tmux):
                 subprocess.run(argv, stderr=subprocess.DEVNULL)
-        # Raising by WM_CLASS while our terminal is already up front can surface the OTHER
-        # window of the same terminal and undo the switch above.
-        # ponytail: with the terminal unfocused (a tray click from the top bar) we still
-        # raise blind -- Ghostty serves every window from one process, so neither PID nor
-        # WM_CLASS says which X window hosts which tmux client. Upgrade path: tmux
-        # `set-titles on` plus title-based `wmctrl -a`.
-        if not terminal_focused():
-            subprocess.run(
-                ["wmctrl", "-x", "-a", GHOSTTY_CLASS], stderr=subprocess.DEVNULL
-            )
+            wid = terminal_window_for(pane, tmux)
+            if wid:
+                # -i -a activates by id, which switches to that window's workspace.
+                subprocess.run(["wmctrl", "-i", "-a", wid], stderr=subprocess.DEVNULL)
+                return
+        # No id: `set-titles` is off, the session is attached nowhere, or this is a
+        # paneless target. Raising by class picks an arbitrary window of that terminal,
+        # which is only ever right when there is exactly one -- kept because a wrong
+        # window still beats nothing happening at all.
+        subprocess.run(["wmctrl", "-x", "-a", GHOSTTY_CLASS], stderr=subprocess.DEVNULL)
 
     # .resolve().as_uri() escapes spaces/special chars; string concat would not.
     def open_dashboard(self, *_):
@@ -380,6 +382,7 @@ class Monitor:
             return  # keep last-known trends; never crash the poll thread
         # ponytail: single list rebind, read-only in the Gtk redraw -- no lock.
         self.trends = core.build_trend_rows(records, now)
+        self.trend_scale = core.trend_scale(records, now)
         self.heatmap = core.heatmap_buckets(core.history_numeric(records))
 
     def write_dashboard(self, now):
@@ -540,6 +543,33 @@ def terminal_focused():
         return False
 
 
+def terminal_window_for(pane, tmux):
+    """Best-effort: the X window id of the terminal hosting this pane's tmux session.
+
+    Two shell-outs, both bounded: ask tmux which session owns the pane, then find the
+    window whose title carries that session name (see core.pick_window for why the
+    title is the only usable handle). Returns "" on any failure, which the caller reads
+    as "raise blind" -- this is a routing hint, never a hard dependency. Requires
+    `set -g set-titles on` in tmux; without it every title is the launch command and
+    nothing matches.
+    """
+    try:
+        session = subprocess.run(
+            core.tmux_cmd(tmux, "display-message", "-p", "-t", pane, "#S"),
+            capture_output=True,
+            text=True,
+            timeout=1,
+        ).stdout.strip()
+        if not session:
+            return ""
+        listing = subprocess.run(
+            ["wmctrl", "-lx"], capture_output=True, text=True, timeout=1
+        ).stdout
+        return core.pick_window(listing, GHOSTTY_CLASS, session)
+    except Exception:
+        return ""
+
+
 def pane_onscreen(pane, tmux):
     """Best-effort: is this tmux pane the one currently displayed? (never raises)."""
     if not pane:
@@ -616,6 +646,7 @@ def _handle_conn(mon, conn):
                         "sessions": sessions,
                         "usage": mon.usage,
                         "trends": mon.trends,
+                        "trend_scale": mon.trend_scale,
                     }
                     conn.sendall((json.dumps(snapshot) + "\n").encode("utf-8"))
                 continue
