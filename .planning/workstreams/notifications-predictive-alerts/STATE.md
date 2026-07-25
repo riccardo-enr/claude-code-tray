@@ -142,6 +142,7 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | 260724-hcm | Fill TUI right-side space with per-cap quota projections and a Mon-Sun usage heatmap; preserve degraded states and core formatting parity | 2026-07-24 | 14d5cf1 | Complete | [260724-hcm-tui-right-side-info-usage-projection-tre](./quick/260724-hcm-tui-right-side-info-usage-projection-tre/) |
 | 260724-wdy | Fix the projected time for weekly usage and show the day | 2026-07-24 | 73d6017 | Complete | [260724-wdy-weekly-projection-day](./quick/260724-wdy-weekly-projection-day/) |
 | 260725-klg | Surface cost, pace, and model-mix in a shared trailing usage detail row (tray menu, socket snapshot, Rust dashboard); one row-builder per language (D-05) | 2026-07-25 | 3bf5c6c | Complete | [260725-klg-add-cost-pace-and-model-mix-to-the-usage](./quick/260725-klg-add-cost-pace-and-model-mix-to-the-usage/) |
+| 260725-pl6 | tmux-powerline left-status segment "CC 40% 21m" (SEED-008): core.fmt_countdown_short + statusline_text, claude-status.py reading the daemon socket with a history fallback, no new polling. Click opens the TUI popup; click-to-close proven not implementable in tmux 3.2-3.6 | 2026-07-25 | 54c5c42 | Complete | [260725-pl6-tmux-powerline-usage-segment](./quick/260725-pl6-tmux-powerline-usage-segment/) |
 
 ## Deferred Items
 

@@ -1,11 +1,22 @@
 ---
 id: SEED-008
-status: dormant
+status: sprouted
+sprouted_into: quick/260725-pl6-tmux-powerline-usage-segment
 planted: 2026-07-25
+sprouted: 2026-07-25
 planted_during: unknown
 trigger_when: next terminal-workflow itch, or when scoping the milestone after SEED-007 (TUI dashboard) is considered
 scope: small
 ---
+
+> **Shipped 2026-07-25** as quick task `260725-pl6` (commit `54c5c42`). The segment
+> renders `CC 40% 21m` on the left status line. One research finding did NOT survive
+> contact: click-to-CLOSE the TUI popup is not implementable on any tmux from 3.2 to 3.6
+> -- `popup_key_cb()` drops every click outside the popup rect before the key tables are
+> consulted. Click-to-open works; `q` closes. See the quick task's SUMMARY.md.
+>
+> The native `statusLine` hook noted under Research Findings #4 remains unexplored and is
+> the one genuinely open follow-up here.
 
 # SEED-008: tmux/powerline statusline segment showing Claude Code usage (current usage against plan limit) on the left side of the prompt
 
