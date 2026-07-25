@@ -141,6 +141,7 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | 260724-thm | claude-tui inherits the terminal palette: self.theme = "ansi-dark" in on_mount, so the TUI renders in Ghostty/Catppuccin colors and follows terminal-theme changes (chose inherit over hardcoded catppuccin-mocha). Headless run_test + selfcheck + lint green | 2026-07-24 | 4c05121 | Complete | [260724-thm-tui-inherit-terminal-theme](./quick/260724-thm-tui-inherit-terminal-theme/) |
 | 260724-hcm | Fill TUI right-side space with per-cap quota projections and a Mon-Sun usage heatmap; preserve degraded states and core formatting parity | 2026-07-24 | 14d5cf1 | Complete | [260724-hcm-tui-right-side-info-usage-projection-tre](./quick/260724-hcm-tui-right-side-info-usage-projection-tre/) |
 | 260724-wdy | Fix the projected time for weekly usage and show the day | 2026-07-24 | 73d6017 | Complete | [260724-wdy-weekly-projection-day](./quick/260724-wdy-weekly-projection-day/) |
+| 260725-klg | Surface cost, pace, and model-mix in a shared trailing usage detail row (tray menu, socket snapshot, Rust dashboard); one row-builder per language (D-05) | 2026-07-25 | 3bf5c6c | Complete | [260725-klg-add-cost-pace-and-model-mix-to-the-usage](./quick/260725-klg-add-cost-pace-and-model-mix-to-the-usage/) |
 
 ## Deferred Items
 
