@@ -40,6 +40,7 @@ from .core import (
     fmt_countdown_wk,
     fmt_elapsed,
     fmt_tokens,
+    focus_tmux_cmds,
     gauge_fill,
     heatmap_active_span,
     heatmap_buckets,
@@ -1050,6 +1051,26 @@ def demo():
     # the fetch interval starts a new fetch while the previous recv is still blocked.
     assert TUI_SOCK_TIMEOUT < TUI_FETCH_INTERVAL
     assert TUI_TICK_INTERVAL < TUI_FETCH_INTERVAL  # D-09: re-render faster than we refetch
+
+    # --- focus argv: the attached client must actually move ---
+    # switch-client first, or focusing a pane in another tmux session moves nothing the
+    # user can see and the tray appears to open the wrong Claude.
+    _cmds = focus_tmux_cmds("%5", "/tmp/tmux-1000/default,4242,1")
+    assert [c[-3] for c in _cmds] == [
+        "switch-client",
+        "select-window",
+        "select-pane",
+    ], _cmds
+    # -S addresses the server without naming a current session (an exported TMUX would
+    # make tmux pick a client already attached to the target -- the wrong one to move).
+    assert all(c[:3] == ["tmux", "-S", "/tmp/tmux-1000/default"] for c in _cmds), _cmds
+    assert all(c[-2:] == ["-t", "%5"] for c in _cmds), _cmds
+    # No TMUX on the session record -> no -S, talk to the ambient server.
+    assert focus_tmux_cmds("%1", "") == [
+        ["tmux", "switch-client", "-t", "%1"],
+        ["tmux", "select-window", "-t", "%1"],
+        ["tmux", "select-pane", "-t", "%1"],
+    ]
 
     # --- tui focus client ---
     with tempfile.TemporaryDirectory() as _focus_dir:

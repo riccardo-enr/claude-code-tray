@@ -973,6 +973,33 @@ def query_snapshot(path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
         s.close()
 
 
+def focus_tmux_cmds(pane, tmux):
+    """The tmux argv sequence that puts `pane` in front of the user's eyes. Pure.
+
+    `switch-client` is the one that matters. `select-window` only changes the current
+    window of the pane's OWN tmux session; it never moves the client the user is
+    attached to. With one tmux session per terminal window, focusing a session in the
+    other one therefore did nothing visible, and the WM_CLASS raise that followed
+    surfaced whichever window it felt like -- the "tray opens the wrong Claude" bug.
+    `switch-client -t <pane>` moves the attached client to the target session, window
+    and pane in one step. `select-window` / `select-pane` trail it as a no-op on modern
+    tmux and as the fallback on versions whose `switch-client -t` honours only the
+    session part of the target.
+
+    The server is addressed with `-S <socket>` (the first field of the session's TMUX
+    value) rather than by exporting TMUX. Exporting it would name a current session, and
+    tmux would then resolve the default client to one already attached THERE -- which is
+    exactly the client that does not need moving.
+    """
+    base = ["tmux"]
+    if tmux:
+        base += ["-S", tmux.split(",")[0]]
+    return [
+        base + [verb, "-t", pane]
+        for verb in ("switch-client", "select-window", "select-pane")
+    ]
+
+
 def request_focus(session, path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
     """Ask the daemon to focus one session target. Raises on malformed input or I/O."""
     if not isinstance(session, dict):

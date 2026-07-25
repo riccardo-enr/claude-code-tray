@@ -120,18 +120,20 @@ class Monitor:
                 )
             return
         if pane:
-            env = dict(os.environ)
-            if tmux:
-                env["TMUX"] = tmux
+            # switch-client is what actually moves the user's attached client; see
+            # core.focus_tmux_cmds for why select-window alone focused the wrong session.
+            for argv in core.focus_tmux_cmds(pane, tmux):
+                subprocess.run(argv, stderr=subprocess.DEVNULL)
+        # Raising by WM_CLASS while our terminal is already up front can surface the OTHER
+        # window of the same terminal and undo the switch above.
+        # ponytail: with the terminal unfocused (a tray click from the top bar) we still
+        # raise blind -- Ghostty serves every window from one process, so neither PID nor
+        # WM_CLASS says which X window hosts which tmux client. Upgrade path: tmux
+        # `set-titles on` plus title-based `wmctrl -a`.
+        if not terminal_focused():
             subprocess.run(
-                ["tmux", "select-window", "-t", pane],
-                env=env,
-                stderr=subprocess.DEVNULL,
+                ["wmctrl", "-x", "-a", GHOSTTY_CLASS], stderr=subprocess.DEVNULL
             )
-            subprocess.run(
-                ["tmux", "select-pane", "-t", pane], env=env, stderr=subprocess.DEVNULL
-            )
-        subprocess.run(["wmctrl", "-x", "-a", GHOSTTY_CLASS], stderr=subprocess.DEVNULL)
 
     # .resolve().as_uri() escapes spaces/special chars; string concat would not.
     def open_dashboard(self, *_):
