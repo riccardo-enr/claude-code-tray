@@ -11,10 +11,10 @@ provides:
   - "build_trend_rows emits a 'spent today <n> | wk <n>' row"
   - "trend_sparkline columns are tokens burned per clock hour, not quota % added, scaled 0..peak"
   - "hourly_tokens(records, now) -- the 24 hourly buckets both the graph and its axis label read"
-  - "core.trend_scale + snapshot key trend_scale: pre-formatted y-axis top label, tokens + share of a 5h window"
+  - "core.trend_axis + snapshot key trend_axis: pre-formatted y-axis ticks, one per graph row, top row first"
   - "hourly_buckets(records, now, contribution) -- shared 24-bucket-by-clock-hour accumulator"
   - "hourly_pct(records, now) -- the same hours read as 5h-quota % consumed"
-  - "Rust Snapshot.trend_scale: Option<String>, drawn as a left gutter beside the graph"
+  - "Rust Snapshot.trend_axis: Option<Vec<String>>, drawn as a left gutter beside the graph"
   - "fmt_tokens has a G tier for counts past 1e9"
 affects: []
 
@@ -107,10 +107,26 @@ The bars stay scaled 0..peak rather than 0..100% of the window: a full window is
 what even the busiest hour burns, so a fixed 0..100 axis would flatten every real day
 into the bottom row.
 
+## Follow-up: ticks between the ends (commit 07b4610)
+
+One number at the top left every row between it and 0 unreadable. `trend_scale` (a
+bare string) became `trend_axis`: one pre-formatted tick per graph row, top row first,
+`""` where a row has no tick. Ticks land at the peak, the middle row and the floor.
+
+Each tick is computed from the row it sits on -- row r of `rows-1` stands for
+`r/(rows-1)` of the peak -- not by halving the top number, so the middle tick is true
+wherever it is placed and adding quartiles later costs one line in `ticked`. The daemon
+decides which rows are ticked; the renderer only right-aligns them into a gutter as
+wide as the widest tick.
+
+Anything but an array of strings -- an all-empty array, or the bare string this field
+used to be -- degrades to no axis rather than a half-drawn gutter.
+
 ## Panel now reads
 
 ```
 60.0M/18%                #
+34.3M/10%
       _/_        __/_/#/_//_/_
     0 ##########################
       today 22.8M/hr | wk 18.0M/hr
@@ -123,7 +139,9 @@ into the bottom row.
 - `just selfcheck` — exit 0
 - `just lint` — clean
 - `just rust-test` — 112 pass (new: trend_scale normalization, the gutter)
-- `claude-tui --once` — `trends: present (y-axis 0..60.0M/18%)`
+- `claude-tui --once` — `trends: present (y-axis 60.0M/18% .. 34.3M/10% .. 0)`
+- `just restart` + `just install` — both halves live (the binary is a COPY, so a
+  cargo build alone never reaches the installed `claude-tui`)
 - `just rust-lint` — clean
 - `just restart` — daemon relaunched on the new code; live snapshot carries
   `trend_scale: 60.0M`
