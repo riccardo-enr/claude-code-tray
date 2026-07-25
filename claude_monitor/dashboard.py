@@ -218,6 +218,13 @@ var DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
 function el(name,attrs){var e=document.createElementNS(NS,name);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
 function two(n){return(n<10?"0":"")+n;}
+// Math.min/max applied via .apply(null,arr) pass the whole array as call
+// arguments; past a JS-engine-specific argument-count ceiling (V8's is 65536) that
+// throws "Maximum call stack size exceeded". At the default 15s poll interval,
+// HISTORY_DAYS=30 alone can retain enough points to cross it. A manual reduce has
+// no such ceiling.
+function amin(a){var m=a[0];for(var i=1;i<a.length;i++)if(a[i]<m)m=a[i];return m;}
+function amax(a){var m=a[0];for(var i=1;i<a.length;i++)if(a[i]>m)m=a[i];return m;}
 function drawChart(svg,seriesList,marks,unit,yfloor,projs){
   var W=600,H=200,PL=42,PR=12,PT=12,PB=30,xs=[],ys=[];
   seriesList.forEach(function(s){s.pts.forEach(function(p){
@@ -229,8 +236,8 @@ function drawChart(svg,seriesList,marks,unit,yfloor,projs){
   (projs||[]).forEach(function(pr){
     if(pr.kind==="to"){xs.push(pr.t1);ys.push(pr.p1);}
   });
-  var xmin=Math.min.apply(null,xs),xmax=Math.max.apply(null,xs);
-  var ymax=Math.max.apply(null,ys);if(ymax<yfloor)ymax=yfloor;if(ymax<=0)ymax=1;
+  var xmin=amin(xs),xmax=amax(xs);
+  var ymax=amax(ys);if(ymax<yfloor)ymax=yfloor;if(ymax<=0)ymax=1;
   var xr=(xmax-xmin)||1,spanDays=xr/86400,i,yv,xv,gy,gx,t;
   function sx(x){return PL+(x-xmin)/xr*(W-PL-PR);}
   function sy(y){return H-PB-(y/ymax)*(H-PB-PT);}

@@ -382,8 +382,11 @@ def fetch_usage():
         cmd += ["--plan", PLAN]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=POLL_TIMEOUT)
-    except (subprocess.SubprocessError, OSError):
-        return None  # timeout, missing CLI, non-executable -> unavailable
+    except (subprocess.SubprocessError, OSError, ValueError):
+        # ValueError also catches UnicodeDecodeError: text=True decodes stdout/stderr
+        # with the locale encoding, and a byte sequence the CLI emits that is invalid
+        # in that encoding must degrade to "unavailable", not kill the poll thread.
+        return None  # timeout, missing CLI, non-executable, bad encoding -> unavailable
     return parse_usage(r.stdout)
 
 
@@ -1184,10 +1187,17 @@ def sess_rows(sessions, now):
     rows = []
     for s in sorted(sessions, key=lambda s: sess_rank(s.get("status", ""))):
         secs = sess_elapsed(s, now)
+        # "dir" present but null (or any non-string), not just missing, is what a
+        # malformed/legacy socket snapshot can send -- _safe_cell's char-by-char
+        # loop needs a string, so a bad type degrades to "" here rather than
+        # TypeError-ing on `for c in None`.
+        dir_val = s.get("dir", "")
+        if not isinstance(dir_val, str):
+            dir_val = ""
         rows.append(
             (
                 s.get("status", ""),
-                _safe_cell(s.get("dir", "")),
+                _safe_cell(dir_val),
                 "-" if secs is None else fmt_elapsed(secs),
             )
         )

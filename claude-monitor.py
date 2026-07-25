@@ -54,6 +54,11 @@ URGENCY_CRITICAL = 2  # no dismiss timer; sticks until clicked
 PRUNE_INTERVAL = 6 * 3600  # opportunistic-prune cadence (seconds)
 TREND_INTERVAL = 5 * 60  # trend recompute throttle in poll_loop (seconds)
 
+# D-12 parity with the Rust client's MAX_ROUTE_CHARS (rust/src/sanitize.rs): a
+# focus-routing value this long is rejected outright, never truncated -- a clipped
+# pane id would focus the wrong window, which is worse than not focusing at all.
+FOCUS_FIELD_MAX_CHARS = 256
+
 
 class Monitor:
     def __init__(self):
@@ -619,7 +624,13 @@ def _handle_conn(mon, conn):
                     msg.get("title", ""),
                     msg.get("term", ""),
                 ]
-                if all(isinstance(value, str) for value in target):
+                # fixtures/generate.py's focus-routing-value-over-bound fixture
+                # documents the rejection rule this enforces (D-12): an over-long
+                # routing value rejects the whole action rather than being truncated.
+                if all(
+                    isinstance(value, str) and len(value) <= FOCUS_FIELD_MAX_CHARS
+                    for value in target
+                ):
                     # This connection already has its own worker thread. focus() only
                     # shells out to tmux/wmctrl, so keep that blocking work off Gtk.
                     mon.focus(*target)

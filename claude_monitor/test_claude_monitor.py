@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 
+from . import core
 from .core import (
     DEFAULT_CONFIG,
     EXTRA_TEXT_MAX_CHARS,
@@ -78,7 +79,7 @@ from .core import (
     weekday_hhmm,
     with_gaps,
 )
-from .dashboard import render_dashboard
+from .dashboard import _DASH_JS, render_dashboard
 
 def demo():
     """Assert-based self-check for the pure usage logic (run via --selfcheck)."""
@@ -367,6 +368,21 @@ def demo():
         )
         is None
     )
+    # fetch_usage: a UnicodeDecodeError (ValueError subclass) escaping subprocess.run
+    # with text=True must degrade to None like every other subprocess/OS failure --
+    # not kill the poll thread (T-ppf... same "daemon poll thread can never die"
+    # contract fetch_usage's own docstring states).
+    _orig_run = core.subprocess.run
+
+    def _raise_udec(*_a, **_kw):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    core.subprocess.run = _raise_udec
+    try:
+        assert core.fetch_usage() is None
+    finally:
+        core.subprocess.run = _orig_run
+
     # --- formatting + label ---
     assert fmt_tokens(417000) == "417k"
     assert fmt_tokens(88000) == "88k"
@@ -531,6 +547,12 @@ def demo():
     assert build_trend_rows([], now_bt) is None
 
     # --- dashboard logic ---
+    # Math.min/max applied via .apply(null, arr) throw "Maximum call stack size
+    # exceeded" once `arr` crosses a JS-engine argument-count ceiling (~65536 on V8)
+    # -- reachable at the default 15s poll interval well within HISTORY_DAYS=30.
+    # amin/amax replace them with a manual reduce that has no such ceiling.
+    assert "Math.min.apply" not in _DASH_JS and "Math.max.apply" not in _DASH_JS
+    assert "function amin(" in _DASH_JS and "function amax(" in _DASH_JS
     emb = _embed_json({"x": "</" + "script><b>&"})
     assert "<" not in emb and ">" not in emb and "&" not in emb
     assert "evil" not in emb
@@ -931,6 +953,60 @@ def demo():
     assert not _focus_thread.is_alive()
     assert _mon.focused == [("%7", "/tmp/t", "proj", "ghostty")]
 
+    # An over-long routing value rejects the whole action (D-12 parity with the
+    # Rust client's MAX_ROUTE_CHARS) rather than focusing a clipped/wrong target.
+    _huge_server, _huge_client = socket.socketpair()
+    _huge_thread = threading.Thread(
+        target=_daemon._handle_conn, args=(_mon, _huge_server), daemon=True
+    )
+    _huge_thread.start()
+    _huge_client.sendall(
+        (
+            json.dumps(
+                {"action": "focus", "pane": "%" * 300, "tmux": "", "title": "", "term": ""}
+            )
+            + "\n"
+        ).encode("utf-8")
+    )
+    _huge_client.shutdown(socket.SHUT_WR)
+    _huge_thread.join(timeout=5)
+    _huge_client.close()
+    assert not _huge_thread.is_alive()
+    assert _mon.focused == [("%7", "/tmp/t", "proj", "ghostty")]  # unchanged
+
+    # --- claude-send.py: send_event must not leak the socket fd on failure ---
+    # Loaded by path like claude-monitor.py above: claude-send.py's hyphenated name
+    # is not importable as a package module.
+    _send_path = pathlib.Path(__file__).resolve().parent.parent / "claude-send.py"
+    _send_spec = importlib.util.spec_from_file_location("_claude_send_helper", _send_path)
+    _send = importlib.util.module_from_spec(_send_spec)
+    _send_spec.loader.exec_module(_send)
+
+    class _FailingSocket:
+        """A socket stand-in whose sendall raises, so send_event's finally-close
+        is the only thing that can ever close it -- exactly the fd-leak path
+        core.query_snapshot's docstring names claude-send.py:34-41 for.
+        """
+
+        def __init__(self):
+            self.closed = False
+
+        def settimeout(self, _t):
+            pass
+
+        def connect(self, _path):
+            pass
+
+        def sendall(self, _data):
+            raise OSError("broken pipe")
+
+        def close(self):
+            self.closed = True
+
+    _fsock = _FailingSocket()
+    _send.send_event({"event": "done"}, "/nonexistent", sock_factory=lambda *_a, **_kw: _fsock)
+    assert _fsock.closed, "socket leaked when sendall raised"
+
     # --- tui socket client (TUI-05) ---
     # read_line takes an ALREADY-CONNECTED socket, so a bare socketpair drives it; the
     # full query_snapshot is not exercisable here because it does its own connect(path).
@@ -1160,6 +1236,14 @@ def demo():
         {"dir": "odd-b", "status": "ghost"},
     ]
     assert [r[1] for r in sess_rows(_stable, _unow)] == ["first", "second", "odd-a", "odd-b"]
+    # "dir" present but null (or any wrong type), not just missing -- exactly what a
+    # malformed/legacy socket snapshot can send -- must degrade to "" rather than
+    # TypeError-ing inside _safe_cell's `for c in s` loop.
+    _null_dir = [
+        {"dir": None, "status": "done", "entered": _unow - 10, "frozen": 5},
+        {"dir": 42, "status": "waiting", "entered": _unow - 5, "frozen": 3},
+    ]
+    assert [r[1] for r in sess_rows(_null_dir, _unow)] == ["", ""]
     # purity: input list and its dicts untouched, and two calls return independent lists.
     _srows_before = [dict(s) for s in _srows_in]
     _srows_out = sess_rows(_srows_in, _unow)
