@@ -16,6 +16,7 @@ import time
 
 from . import core
 from .core import (
+    RISE_MAX,
     DEFAULT_CONFIG,
     EXTRA_TEXT_MAX_CHARS,
     GAP_MAX,
@@ -71,6 +72,7 @@ from .core import (
     session_stale,
     spark_levels,
     statusline_text,
+    hourly_pct,
     hourly_tokens,
     trend_burn,
     trend_scale,
@@ -580,6 +582,26 @@ def demo():
     )
     assert trend_scale([], now_bt) is None
     assert trend_scale([{"t": now_bt - 5 * 86400, "pct": 1.0, "burn": 99.0}], now_bt) is None
+    # Tokens alone are unanchored, so the label also carries what that hour cost as a
+    # share of one 5h window. 9 intervals x 300s x 60 tok/min = 2700 tokens, pct 10->19.
+    _hour = int(datetime.datetime(2024, 1, 2, 5).timestamp())
+    _one = [{"t": _hour + i * 300, "pct": 10.0 + i, "burn": 60.0} for i in range(10)]
+    assert trend_scale(_one, _hour + 3000) == "3k/9%"
+    # The percentage must come from the bucket the TALLEST BAR is in, not from a
+    # separately-argmaxed pct peak: hour 5 burns the most tokens, hour 6 eats the most
+    # quota, and the label describes hour 5.
+    _next = int(datetime.datetime(2024, 1, 2, 6).timestamp())
+    _two = _one + [{"t": _next + i * 300, "pct": 30.0 + 3 * i, "burn": 6.0} for i in range(10)]
+    assert trend_scale(_two, _next + 3000) == "3k/9%"
+    # hourly_pct keeps heatmap_buckets' semantics: a window roll (drop) and an
+    # implausible spike are both 0, so neither can inflate the share on the axis.
+    _rolled = [
+        {"t": _hour, "pct": 90.0, "burn": 0.0},
+        {"t": _hour + 300, "pct": 2.0, "burn": 0.0},  # 5h window rolled -> 0, not -88
+        {"t": _hour + 600, "pct": 5.0, "burn": 0.0},  # a real 3% rise
+        {"t": _hour + 900, "pct": 5.0 + RISE_MAX + 1, "burn": 0.0},  # spike -> 0
+    ]
+    assert hourly_pct(_rolled, _hour + 1200)[23] == 3.0
 
     # --- dashboard logic ---
     # Math.min/max applied via .apply(null, arr) throw "Maximum call stack size

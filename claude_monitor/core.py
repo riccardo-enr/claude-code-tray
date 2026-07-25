@@ -563,15 +563,14 @@ def local_bounds(now):
     return int(day_start.timestamp()), int(week_start.timestamp())
 
 
-def hourly_tokens(records, now):
-    """24 buckets of TOKENS burned per clock hour; None for an hour with no samples.
+def hourly_buckets(records, now, contribution):
+    """24 buckets by clock hour; None for an hour with no samples.
 
-    Each bucket is what trend_spent sums, split by hour: `burn` (tok/min) times the
-    interval back to the previous sample. `burn` is a trailing rate estimate, so it is
-    attributed to the interval ENDING at its own sample -- which is also the hour the
-    sample is bucketed into. An interval wider than GAP_MAX is a daemon outage, not
-    idle time, and contributes nothing. Bucket 0 is 23 clock hours ago and bucket 23 is
-    the current clock hour.
+    `contribution(prev, rec)` returns what the interval between two consecutive samples
+    adds, and is credited to the hour of `rec` -- the sample ENDING the interval. Bucket
+    0 is 23 clock hours ago and bucket 23 is the current clock hour. An hour that saw
+    samples but no usage is 0.0, never None: an idle hour and an unsampled one are
+    different facts and the renderers draw them differently.
     """
     current_hour = int(
         datetime.datetime.fromtimestamp(now)
@@ -581,12 +580,8 @@ def hourly_tokens(records, now):
     buckets = [None] * 24
     prev = None
     for rec in sorted(records, key=lambda r: r["t"]):
-        tokens = 0.0
-        if prev is not None:
-            dt = rec["t"] - prev
-            if 0 < dt <= GAP_MAX:
-                tokens = rec["burn"] * dt / 60.0
-        prev = rec["t"]
+        value = 0.0 if prev is None else contribution(prev, rec)
+        prev = rec
 
         rec_hour = int(
             datetime.datetime.fromtimestamp(rec["t"])
@@ -595,8 +590,39 @@ def hourly_tokens(records, now):
         )
         bucket = 23 - int((current_hour - rec_hour) // 3600)
         if 0 <= bucket <= 23:
-            buckets[bucket] = (buckets[bucket] or 0.0) + tokens
+            buckets[bucket] = (buckets[bucket] or 0.0) + value
     return buckets
+
+
+def hourly_tokens(records, now):
+    """24 buckets of TOKENS burned per clock hour -- what trend_spent sums, split by hour.
+
+    `burn` is a tok/min trailing estimate, so an interval is worth `burn` times its own
+    length and is credited to the sample ending it. An interval wider than GAP_MAX is a
+    daemon outage, not idle time, and contributes nothing.
+    """
+    def tokens(prev, rec):
+        dt = rec["t"] - prev["t"]
+        return rec["burn"] * dt / 60.0 if 0 < dt <= GAP_MAX else 0.0
+
+    return hourly_buckets(records, now, tokens)
+
+
+def hourly_pct(records, now):
+    """24 buckets of 5h-QUOTA PERCENT consumed per clock hour.
+
+    `pct` is cumulative inside the rolling 5h window, so only its per-sample RISE is
+    usage; a drop is a window roll or upstream jitter and is worth 0. Same reset, gap
+    and RISE_MAX spike semantics as heatmap_buckets -- this is the share-of-the-window
+    reading of the very same hours hourly_tokens measures in tokens.
+    """
+    def rise(prev, rec):
+        if not 0 < rec["t"] - prev["t"] <= GAP_MAX:
+            return 0.0
+        delta = rec["pct"] - prev["pct"]
+        return 0.0 if delta < 0 or delta > RISE_MAX else delta
+
+    return hourly_buckets(records, now, rise)
 
 
 def trend_sparkline(records, now):
@@ -624,14 +650,29 @@ def trend_sparkline(records, now):
 
 
 def trend_scale(records, now):
-    """Top-of-graph y-axis label: tokens burned in the graph's tallest hour, or None.
+    """Top-of-graph y-axis label, or None when the graph has no data.
 
-    Formatted here, not in the TUI, so the axis and the "spent"/"per hour" rows cannot
-    drift apart in units or rounding (D-05: the daemon owns every rendered string).
+    Reads "60.0M/24%": the tallest bar's tokens, and what that same hour cost as a share
+    of one full 5h window. The tokens alone are unanchored -- 60M means nothing without
+    knowing a window holds ~250M -- and a percentage alone loses the absolute number, so
+    the axis carries both. The percentage comes from the SAME bucket index, never from
+    the separately-argmaxed pct peak, so the label always describes the bar it labels.
+
+    Formatted here, not in the TUI, so the axis and the rows under it cannot drift apart
+    in units or rounding (D-05: the daemon owns every rendered string).
     """
     records = [rec for rec in history_numeric(records) if history_keep(rec, now, 1)]
-    hi = max((v for v in hourly_tokens(records, now) if v is not None), default=None)
-    return None if hi is None else fmt_tokens(round(hi))
+    tokens = hourly_tokens(records, now)
+    peak = max(
+        (i for i, v in enumerate(tokens) if v is not None),
+        key=lambda i: tokens[i],
+        default=None,
+    )
+    if peak is None:
+        return None
+    label = fmt_tokens(round(tokens[peak]))
+    share = hourly_pct(records, now)[peak]
+    return label if not share else "%s/%d%%" % (label, round(share))
 
 
 # Glyph -> level index, the exact inverse of the SPARK_GLYPHS mapping trend_sparkline
