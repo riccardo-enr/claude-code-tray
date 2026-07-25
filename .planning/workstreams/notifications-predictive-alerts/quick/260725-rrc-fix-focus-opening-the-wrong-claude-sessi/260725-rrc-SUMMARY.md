@@ -48,6 +48,21 @@ recomputes the row at keypress time (`rust/src/main.rs:284`).
 - Behavioural check (Enter on a session living in the other tmux session) is on
   the user.
 
+## Follow-up: Enter leaves the TUI (commit 1b0caa8)
+
+The daemon-side fix was correct but invisible from the popup: `just popup` runs
+`popup -E ... claude-tui`, so the overlay covers the very pane the focus moved to
+until the process exits. Enter is a picker, not a toggle -- `handle_key` now
+returns "quit" on an accepted focus, and `-E` dismisses the popup onto the target.
+
+`focus_selected()` returns bool; only `Source::Daemon` + `Ok(())` counts. Every
+refusal (nothing selected, no focusable target, daemon error, fixture replay)
+keeps the app up so the footer note stays readable -- exiting would take the
+explanation with it. Footer binding hint reads `enter focus+exit`.
+
+Rejected: a second key for focus-without-closing. One binding until someone
+actually runs `claude-tui` as a persistent monitor pane and misses it.
+
 ## Known limitation
 
 Recorded as a `ponytail:` comment in `focus()`: when the terminal is *not* focused
