@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 Phase: 11 of 14 (Rust Client Foundation)
 Plan: —
 Status: Ready to plan
-Last activity: 2026-07-25 - Completed quick task 260725-rrc: focus() switches the attached tmux client
+Last activity: 2026-07-25 - Completed quick task 260725-tsp: trends panel shows tokens spent
 
 ## Performance Metrics
 
@@ -145,6 +145,7 @@ Execution landmines — each one, if ignored, ships a silently broken feature. A
 | 260725-pl6 | tmux-powerline left-status segment "CC 40% 21m" (SEED-008): core.fmt_countdown_short + statusline_text, claude-status.py reading the daemon socket with a history fallback, no new polling. Click opens the TUI popup; click-to-close proven not implementable in tmux 3.2-3.6 | 2026-07-25 | 54c5c42 | Complete | [260725-pl6-tmux-powerline-usage-segment](./quick/260725-pl6-tmux-powerline-usage-segment/) |
 | 260725-ppf | Whole-repo bug scan and fix: 6 real bugs fixed across Python daemon (UnicodeDecodeError killing poll thread, TypeError on malformed session dir, JS chart RangeError past ~11 days history, unbounded focus-routing field length, claude-send.py socket fd leak) and Rust client (session id sanitized-before-keyed, causing selection collisions). Each fix carries a new/extended regression check; just selfcheck/lint/rust-test/rust-lint all green | 2026-07-25 | d73db91 | Complete | [260725-ppf-scan-the-whole-repo-for-bugs-and-fix-the](./quick/260725-ppf-scan-the-whole-repo-for-bugs-and-fix-the/) |
 | 260725-rrc | Fix focus() opening the wrong claude session: select-window never moves the attached tmux client, so focusing a pane in another tmux session changed nothing visible and the blind WM_CLASS raise surfaced an arbitrary Ghostty window. New pure core.focus_tmux_cmds leads with switch-client and addresses the server via -S; the raise is skipped when our terminal already has focus. Fixes TUI Enter, tray menu, and notification Focus in one place | 2026-07-25 | b8dd510 | Complete | [260725-rrc-fix-focus-opening-the-wrong-claude-sessi](./quick/260725-rrc-fix-focus-opening-the-wrong-claude-sessi/) |
+| 260725-tsp | Trends panel shows absolute tokens spent ("spent today 209.8M | wk 876.0M") next to the existing rates. tokens_used is None on every record since the --api switch, so trend_spent integrates burn (tok/min) over sub-GAP_MAX intervals -- a floor, never extrapolated across a daemon outage. fmt_tokens gained a G tier. Python-only; the Rust panel sizes to content | 2026-07-25 | 3d8d7c1 | Complete | [260725-tsp-show-tokens-spent-in-trends-panel](./quick/260725-tsp-show-tokens-spent-in-trends-panel/) |
 
 ## Deferred Items
 
