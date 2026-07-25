@@ -391,7 +391,9 @@ def fetch_usage():
 
 
 def fmt_tokens(n):
-    """Compact token count: 417000 -> '417k', 18936912 -> '18.9M'."""
+    """Compact token count: 417000 -> '417k', 18936912 -> '18.9M', 2.1e9 -> '2.1G'."""
+    if n >= 1e9:
+        return "%.1fG" % (n / 1e9)
     if n >= 1e6:
         return "%.1fM" % (n / 1e6)
     return "%dk" % round(n / 1000)
@@ -636,6 +638,28 @@ def trend_burn(records, start, end):
     return sum(vals) / len(vals) * 60
 
 
+def trend_spent(records, start, end):
+    """Tokens consumed over [start, end), or None when no interval is measurable.
+
+    Integrates `burn` (tok/min) over the gap between consecutive samples. It does NOT
+    read `tokens_used`: since the --api switch that field is None on every record, so
+    the cumulative-counter reading would silently report ~0 forever.
+
+    An interval wider than GAP_MAX is a data gap, not idle time, and is skipped --
+    the daemon was down, and the burn on either side says nothing about what happened
+    in between. So this is "tokens seen burned", a floor, never an extrapolation.
+    """
+    prev = None
+    total = None
+    for rec in sorted(records, key=lambda r: r["t"]):
+        if prev is not None and start <= rec["t"] < end:
+            dt = rec["t"] - prev[0]
+            if 0 < dt <= GAP_MAX:
+                total = (total or 0.0) + prev[1] * dt / 60.0
+        prev = (rec["t"], rec["burn"])
+    return total
+
+
 def trend_peak_hour(records):
     """(hour, tok/hr) for the busiest local hour-of-day, or None. Ties -> lowest hour."""
     if not records:
@@ -671,6 +695,16 @@ def build_trend_rows(records, now):
             fmt_tokens(round(week)) if week is not None else "-",
         )
     )
+    spent_today = trend_spent(records, day_start, now)
+    spent_week = trend_spent(records, week_start, now)
+    if spent_today is not None or spent_week is not None:
+        rows.append(
+            "spent today %s | wk %s"
+            % (
+                fmt_tokens(round(spent_today)) if spent_today is not None else "-",
+                fmt_tokens(round(spent_week)) if spent_week is not None else "-",
+            )
+        )
     peak = trend_peak_hour(records)
     if peak is not None:
         rows.append("peak hour: %02d:00 (%s/hr)" % (peak[0], fmt_tokens(round(peak[1]))))

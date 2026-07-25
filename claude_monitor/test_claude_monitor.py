@@ -71,6 +71,7 @@ from .core import (
     spark_levels,
     statusline_text,
     trend_burn,
+    trend_spent,
     trend_peak_hour,
     trend_sparkline,
     trend_text,
@@ -546,6 +547,29 @@ def demo():
     assert build_trend_rows(mixed_bt, now_bt) == rows_clean
     assert build_trend_rows(corrupt_bt, now_bt) is None
     assert build_trend_rows([], now_bt) is None
+    # trend_spent integrates burn (tok/min) over sub-GAP_MAX intervals only. Two 60s
+    # steps at 100 and 200 tok/min -> 100 + 200 = 300; the 9599s hole is a daemon
+    # outage, not idle time, so it contributes 0 rather than 200 * 9599/60.
+    spend_recs = [
+        {"t": 100, "burn": 100.0},
+        {"t": 160, "burn": 200.0},
+        {"t": 220, "burn": 300.0},
+        {"t": 9999, "burn": 400.0},  # spans a > GAP_MAX hole -> not counted
+    ]
+    assert trend_spent(spend_recs, 0, 1e10) == 300.0
+    assert trend_spent(spend_recs, 500, 600) is None  # no interval in window
+    assert trend_spent([{"t": 1, "burn": 5.0}], 0, 10) is None  # single sample
+    # 14 samples 300s apart: spans TREND_MIN_SPAN, every interval within GAP_MAX.
+    # 13 intervals * 60 tok/min * 5 min = 3900 -> "4k".
+    spent_bt = [
+        {"t": now_bt - i * 300, "pct": 10.0, "burn": 60.0} for i in reversed(range(14))
+    ]
+    rows_spent = build_trend_rows(spent_bt, now_bt)
+    # Row presence and position, not the totals: now_bt is real, so the 3900s span can
+    # straddle local midnight (or Monday 00:00) and book part of itself to the prior
+    # period. trend_spent's own asserts above pin the arithmetic.
+    assert len(rows_spent) == 4 and rows_spent[2].startswith("spent today ")
+    assert fmt_tokens(2.1e9) == "2.1G"
 
     # --- dashboard logic ---
     # Math.min/max applied via .apply(null, arr) throw "Maximum call stack size
