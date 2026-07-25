@@ -9,6 +9,7 @@ requires: []
 provides:
   - "trend_spent(records, start, end) integrates burn over sub-GAP_MAX intervals"
   - "build_trend_rows emits a 'spent today <n> | wk <n>' row"
+  - "trend_sparkline columns are tokens burned per clock hour, not quota % added"
   - "fmt_tokens has a G tier for counts past 1e9"
 affects: []
 
@@ -49,11 +50,28 @@ First implementation summed positive rises in `tokens_used`, mirroring how
 `tokens_used: None`, and the last non-None one predates it. `burn` is the only
 token signal still populated.
 
+## Follow-up: the graph itself (commit a21ad20)
+
+The text row alone was not what was asked for -- the 24-column graph should show the
+tokens. `trend_sparkline` plotted quota-% added per clock hour; it now buckets what
+`trend_spent` sums, so a column IS tokens burned in that hour.
+
+Both now attribute an interval to the sample ENDING it, because `burn` is a trailing
+rate estimate. Gap/floor semantics unchanged: > `GAP_MAX` contributes 0, an unsampled
+hour stays blank (`SPARK_GAP`), a sampled zero-usage hour renders at floor. The
+`pct`-specific `RISE_MAX` spike guard is no longer needed here (`burn` is not a
+cumulative counter) and stays in `heatmap_buckets` / `despike`, its other two callers.
+
+Alternatives rejected: a second graph below the first (+8 rows, squeezes the sessions
+list for a signal that tracks the first closely), and annotating the existing bars
+while leaving them meaning quota %.
+
 ## Panel now reads
 
 ```
-today 23.2M/hr | wk 18.0M/hr
-spent today 209.8M | wk 876.0M
+ _/////_ ...   _//___//_/////_/////_////_//_       <- columns = tokens/hour
+today 23.0M/hr | wk 18.0M/hr
+spent today 212.4M | wk 879.7M
 peak hour: 14:00 (33.9M/hr)
 ```
 
@@ -61,7 +79,7 @@ peak hour: 14:00 (33.9M/hr)
 
 - `just selfcheck` — exit 0
 - `just lint` — clean
-- `just restart` — daemon relaunched (pid 1267494) on the new code
+- `just restart` — daemon relaunched (pid 1540192) on the new code
 
 No Rust change: `draw_trends` renders whatever rows the daemon sends and
 `trends_panel_height` sizes to content.
