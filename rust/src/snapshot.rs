@@ -250,10 +250,11 @@ pub struct Snapshot {
     daemon-sourced text reaching a terminal, and "the daemon built it" is not
     the same as "it is safe". */
     pub trends: Section<Vec<String>>,
-    /* Top of the trend graph's y-axis, pre-formatted by the daemon (e.g. "33.9M").
-    Optional rather than a Section: a missing axis label costs a label, not a
-    panel, so there is no degraded state worth distinguishing from absent. */
-    pub trend_scale: Option<String>,
+    /* The trend graph's y-axis ticks, pre-formatted by the daemon, one per graph
+    row, TOP ROW FIRST; an untocked row is "". Optional rather than a Section: a
+    missing axis costs labels, not a panel, so there is no degraded state worth
+    distinguishing from absent. */
+    pub trend_axis: Option<Vec<String>>,
     pub heatmap: Section<Heatmap>,
     pub sessions: Section<Sessions>,
 }
@@ -284,7 +285,7 @@ impl Snapshot {
         Ok(Snapshot {
             usage: normalize_usage(obj.get("usage")),
             trends: normalize_trends(obj.get("trends")),
-            trend_scale: normalize_trend_scale(obj.get("trend_scale")),
+            trend_axis: normalize_trend_axis(obj.get("trend_axis")),
             heatmap: normalize_heatmap(obj.get("heatmap")),
             sessions: normalize_sessions(obj.get("sessions")),
         })
@@ -454,20 +455,19 @@ fn normalize_trends(raw: Option<&Value>) -> Section<Vec<String>> {
 }
 
 /* Daemon-built, but still crossing the trust boundary into a terminal, and bounded
-so a runaway label cannot push the graph off-screen. Any non-string -- including a
-raw number, which would be a daemon bug -- degrades to no label. */
-fn normalize_trend_scale(raw: Option<&Value>) -> Option<String> {
-    match raw {
-        Some(Value::String(s)) => {
-            let cleaned = sanitize_display_bounded(s, MAX_LABEL_CHARS);
-            if cleaned.is_empty() {
-                None
-            } else {
-                Some(cleaned)
-            }
-        }
-        _ => None,
+per tick so a runaway label cannot push the graph off-screen. Anything but an array
+of strings -- including a bare string, which was the pre-tick wire shape -- degrades
+to no axis at all rather than a half-drawn one. An all-empty array is no axis too. */
+fn normalize_trend_axis(raw: Option<&Value>) -> Option<Vec<String>> {
+    let arr = raw?.as_array()?;
+    let mut ticks = Vec::with_capacity(arr.len());
+    for item in arr {
+        ticks.push(sanitize_display_bounded(item.as_str()?, MAX_LABEL_CHARS));
     }
+    if ticks.iter().all(|t| t.is_empty()) {
+        return None;
+    }
+    Some(ticks)
 }
 
 fn normalize_heatmap(raw: Option<&Value>) -> Section<Heatmap> {
@@ -784,19 +784,27 @@ mod tests {
     }
 
     #[test]
-    fn the_trend_scale_label_is_optional_sanitized_and_bounded() {
-        assert_eq!(snap(json!({"trend_scale": "33.9M"})).trend_scale.as_deref(), Some("33.9M"));
-        /* Absent, null, and a non-string (a daemon bug) all mean "no axis label",
-        never a malformed panel. */
-        assert!(snap(json!({})).trend_scale.is_none());
-        assert!(snap(json!({"trend_scale": null})).trend_scale.is_none());
-        assert!(snap(json!({"trend_scale": 33.9})).trend_scale.is_none());
-        let hostile = snap(json!({"trend_scale": "3\u{1b}]52;c;x\u{7}M"})).trend_scale.unwrap();
-        assert!(!hostile.contains('\u{1b}'));
-        let long = snap(json!({"trend_scale": "9".repeat(MAX_LABEL_CHARS + 50)}))
-            .trend_scale
+    fn the_trend_axis_is_optional_sanitized_and_bounded_per_tick() {
+        let ticks = snap(json!({"trend_axis": ["60.0M/18%", "", "", "34.3M/10%", "", "", "", "0"]}))
+            .trend_axis
             .unwrap();
-        assert!(long.chars().count() <= MAX_LABEL_CHARS);
+        assert_eq!(ticks.len(), 8);
+        assert_eq!(ticks[0], "60.0M/18%");
+        assert_eq!(ticks[7], "0");
+        /* Absent, null, an all-empty axis, and any non-array-of-strings -- including
+        the bare string this field used to be -- all mean "no axis", never a malformed
+        panel and never a half-drawn gutter. */
+        assert!(snap(json!({})).trend_axis.is_none());
+        assert!(snap(json!({"trend_axis": null})).trend_axis.is_none());
+        assert!(snap(json!({"trend_axis": ["", "", ""]})).trend_axis.is_none());
+        assert!(snap(json!({"trend_axis": "60.0M"})).trend_axis.is_none());
+        assert!(snap(json!({"trend_axis": ["60.0M", 18]})).trend_axis.is_none());
+        let hostile = snap(json!({"trend_axis": ["3\u{1b}]52;c;x\u{7}M"]})).trend_axis.unwrap();
+        assert!(!hostile[0].contains('\u{1b}'));
+        let long = snap(json!({"trend_axis": ["9".repeat(MAX_LABEL_CHARS + 50)]}))
+            .trend_axis
+            .unwrap();
+        assert!(long[0].chars().count() <= MAX_LABEL_CHARS);
     }
 
     #[test]

@@ -629,7 +629,7 @@ def trend_sparkline(records, now):
     """24-char block sparkline of hourly_tokens, scaled 0..peak.
 
     The floor is 0, not the quietest hour: the y-axis label the TUI draws beside this
-    (trend_scale) reads "0 to <peak>", so a column's height must be proportional to its
+    (trend_axis) reads "0 to <peak>", so a column's height must be proportional to its
     tokens. Scaling from min..max instead would make the quietest sampled hour render
     identically to a genuinely idle one and put the axis at a value nobody can see.
     A sampled zero-token hour renders at floor; an unsampled hour stays a gap.
@@ -649,14 +649,21 @@ def trend_sparkline(records, now):
     return "".join(out)
 
 
-def trend_scale(records, now):
-    """Top-of-graph y-axis label, or None when the graph has no data.
+def trend_axis(records, now):
+    """Y-axis tick labels for the graph, one per row, TOP ROW FIRST. None without data.
 
-    Reads "60.0M/24%": the tallest bar's tokens, and what that same hour cost as a share
-    of one full 5h window. The tokens alone are unanchored -- 60M means nothing without
-    knowing a window holds ~250M -- and a percentage alone loses the absolute number, so
-    the axis carries both. The percentage comes from the SAME bucket index, never from
-    the separately-argmaxed pct peak, so the label always describes the bar it labels.
+    A label reads "60.0M/18%": tokens, and what that costs as a share of one full 5h
+    window. Tokens alone are unanchored -- 60M means nothing without knowing what a
+    window holds -- and a percentage alone loses the absolute number, so both ride
+    along. The share is read at the tallest bar's OWN bucket, never at a separately
+    argmaxed pct peak, or the top label would describe a different hour than the bar
+    it sits above.
+
+    The graph has len(SPARK_GLYPHS) rows and a bar reaching row r stands for r/(rows-1)
+    of the peak, so every tick is computed from the row it sits on rather than by
+    halving the number at the top -- the middle tick is then true wherever it is put.
+    Rows without a tick are "", which the TUI renders as gutter padding. The floor is a
+    bare "0": zero tokens is zero percent, and saying so twice is clutter.
 
     Formatted here, not in the TUI, so the axis and the rows under it cannot drift apart
     in units or rounding (D-05: the daemon owns every rendered string).
@@ -670,9 +677,21 @@ def trend_scale(records, now):
     )
     if peak is None:
         return None
-    label = fmt_tokens(round(tokens[peak]))
+    hi = tokens[peak]
     share = hourly_pct(records, now)[peak]
-    return label if not share else "%s/%d%%" % (label, round(share))
+    rows = len(SPARK_GLYPHS)
+    top = rows - 1
+    ticked = {top, rows // 2, 0}
+
+    def label(row):
+        if row not in ticked:
+            return ""
+        if row == 0:
+            return "0"
+        text = fmt_tokens(round(hi * row / top))
+        return text if not share else "%s/%d%%" % (text, round(share * row / top))
+
+    return [label(row) for row in reversed(range(rows))]
 
 
 # Glyph -> level index, the exact inverse of the SPARK_GLYPHS mapping trend_sparkline

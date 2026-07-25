@@ -75,7 +75,7 @@ from .core import (
     hourly_pct,
     hourly_tokens,
     trend_burn,
-    trend_scale,
+    trend_axis,
     trend_spent,
     trend_peak_hour,
     trend_sparkline,
@@ -575,24 +575,31 @@ def demo():
     # period. trend_spent's own asserts above pin the arithmetic.
     assert len(rows_spent) == 4 and rows_spent[2].startswith("spent today ")
     assert fmt_tokens(2.1e9) == "2.1G"
-    # The y-axis label is the graph's own peak, formatted by the daemon (D-05) so the
-    # axis cannot drift from the rows under it. No history in the last 24h -> no label.
-    assert trend_scale(spent_bt, now_bt) == fmt_tokens(
-        round(max(v for v in hourly_tokens(spent_bt, now_bt) if v is not None))
-    )
-    assert trend_scale([], now_bt) is None
-    assert trend_scale([{"t": now_bt - 5 * 86400, "pct": 1.0, "burn": 99.0}], now_bt) is None
-    # Tokens alone are unanchored, so the label also carries what that hour cost as a
+    # One tick per graph row, TOP ROW FIRST, "" where there is no tick. Formatted by the
+    # daemon (D-05) so the axis cannot drift from the rows under it.
+    assert trend_axis([], now_bt) is None
+    assert trend_axis([{"t": now_bt - 5 * 86400, "pct": 1.0, "burn": 99.0}], now_bt) is None
+    # Tokens alone are unanchored, so a tick also carries what that much costs as a
     # share of one 5h window. 9 intervals x 300s x 60 tok/min = 2700 tokens, pct 10->19.
     _hour = int(datetime.datetime(2024, 1, 2, 5).timestamp())
     _one = [{"t": _hour + i * 300, "pct": 10.0 + i, "burn": 60.0} for i in range(10)]
-    assert trend_scale(_one, _hour + 3000) == "3k/9%"
+    _buckets = hourly_tokens(_one, _hour + 3000)
+    assert _buckets[23] == 2700.0 and _buckets[22] is None  # sampled hour vs unsampled
+    _axis = trend_axis(_one, _hour + 3000)
+    assert len(_axis) == len(SPARK_GLYPHS)
+    assert _axis[0] == "3k/9%" and _axis[-1] == "0"
+    # The middle tick is the value of the ROW it sits on (4/7 of the peak), not half the
+    # number at the top -- a bar reaching that row really is worth this much.
+    assert _axis[len(SPARK_GLYPHS) - 1 - 4] == "%s/%d%%" % (
+        fmt_tokens(round(2700 * 4 / 7)), round(9 * 4 / 7)
+    )
+    assert [t for t in _axis if t] == [_axis[0], _axis[3], "0"]  # exactly three ticks
     # The percentage must come from the bucket the TALLEST BAR is in, not from a
     # separately-argmaxed pct peak: hour 5 burns the most tokens, hour 6 eats the most
-    # quota, and the label describes hour 5.
+    # quota, and the axis describes hour 5.
     _next = int(datetime.datetime(2024, 1, 2, 6).timestamp())
     _two = _one + [{"t": _next + i * 300, "pct": 30.0 + 3 * i, "burn": 6.0} for i in range(10)]
-    assert trend_scale(_two, _next + 3000) == "3k/9%"
+    assert trend_axis(_two, _next + 3000)[0] == "3k/9%"
     # hourly_pct keeps heatmap_buckets' semantics: a window roll (drop) and an
     # implausible spike are both 0, so neither can inflate the share on the axis.
     _rolled = [
@@ -968,7 +975,7 @@ def demo():
             self.usage = {"used_percentage": 42}
             self.heatmap = [[None] * 24 for _ in range(7)]
             self.trends = ["line1"]
-            self.trend_scale = "33.9M"
+            self.trend_axis = ["33.9M/12%", "", "", "", "", "", "", "0"]
             self.focused = []
 
         def focus(self, pane, tmux, title, term):
@@ -989,11 +996,11 @@ def demo():
     _thread.join(timeout=5)
     _client_sock.close()
     _snapshot = json.loads(_resp.decode("utf-8"))
-    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_scale"}
+    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_axis"}
     assert _snapshot["heatmap"] == _mon.heatmap
     assert _snapshot["usage"] == _mon.usage
     assert _snapshot["trends"] == _mon.trends
-    assert _snapshot["trend_scale"] == _mon.trend_scale
+    assert _snapshot["trend_axis"] == _mon.trend_axis
     assert _snapshot["sessions"] == build_session_snapshot(list(_mon.sessions.values()))
     assert _snapshot["sessions"][0]["term"] == ""
 

@@ -789,25 +789,31 @@ rows 0..L from the bottom, and each cell takes the band colour of its own height
 stays blank, which is what keeps an unsampled hour visually distinct from an
 hour of genuinely zero usage.
 */
-fn trend_graph_lines(trends: &[String], scale: Option<&str>) -> Vec<Line<'static>> {
+fn trend_graph_lines(trends: &[String], axis: Option<&[String]>) -> Vec<Line<'static>> {
     let levels = spark_levels(trends.first().map(String::as_str).unwrap_or(""));
     let mut lines = Vec::with_capacity(TREND_ROWS + trends.len());
 
-    /* Y-axis gutter: the daemon's peak-hour label at the top, 0 at the bottom, since
-    the sparkline is scaled 0..peak. Without a label the gutter collapses to nothing
-    rather than reserving blank columns. The text rows below are indented to match, so
-    the graph and the numbers under it share a left edge. */
-    let axis_width = scale.map(|s| s.chars().count() + 1).unwrap_or(0);
+    /* Y-axis gutter. The daemon sends one tick per graph row, top row first, and
+    decides which rows carry a number -- the renderer only right-aligns them, so the
+    ticks stay true to the rows they label. Gutter width is the widest tick, and with
+    no axis at all it collapses to nothing rather than reserving blank columns. The
+    text rows below are indented to match, so the graph and the numbers under it share
+    a left edge. */
+    let tick = |row: usize| -> &str {
+        /* Row 0 is the FLOOR here, but the daemon sends the top row first. */
+        axis
+            .and_then(|ticks| ticks.get(TREND_ROWS - 1 - row))
+            .map(String::as_str)
+            .unwrap_or("")
+    };
+    let axis_width = axis
+        .map(|ticks| ticks.iter().map(|t| t.chars().count()).max().unwrap_or(0) + 1)
+        .unwrap_or(0);
     let dim = Style::default().add_modifier(Modifier::DIM);
     let gutter = |row: usize| -> Option<Span<'static>> {
-        let label = match (scale, row) {
-            (Some(top), r) if r == TREND_ROWS - 1 => top.to_string(),
-            (Some(_), 0) => "0".to_string(),
-            (Some(_), _) => String::new(),
-            (None, _) => return None,
-        };
+        axis?;
         Some(Span::styled(
-            format!("{:>width$} ", label, width = axis_width.saturating_sub(1)),
+            format!("{:>width$} ", tick(row), width = axis_width.saturating_sub(1)),
             dim,
         ))
     };
@@ -898,7 +904,7 @@ fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
 
     let graph = trend_graph_lines(
         trends,
-        app.snapshot.as_ref().and_then(|s| s.trend_scale.as_deref()),
+        app.snapshot.as_ref().and_then(|s| s.trend_axis.as_deref()),
     );
     let heatmap = snapshot_heatmap(app);
 
@@ -1076,9 +1082,17 @@ fn dump_once(source: Source) -> io::Result<()> {
     }
 
     println!(
-        "trends:   {} (y-axis 0..{})",
+        "trends:   {} (y-axis {})",
         snapshot.trends.state_name(),
-        snapshot.trend_scale.as_deref().unwrap_or("unlabelled")
+        match &snapshot.trend_axis {
+            Some(ticks) => ticks
+                .iter()
+                .filter(|t| !t.is_empty())
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(" .. "),
+            None => "unlabelled".to_string(),
+        }
     );
     if let Section::Present(rows) = &snapshot.trends {
         for row in rows {
@@ -1265,24 +1279,34 @@ mod tests {
     }
 
     #[test]
-    fn the_trend_graph_labels_its_y_axis_only_when_the_daemon_sends_a_scale() {
-        /* The sparkline is scaled 0..peak, so the gutter reads peak at the top and 0
-        at the bottom. Without a scale it must collapse entirely -- a blank gutter
-        would shift the graph for no information. */
+    fn the_trend_graph_draws_every_tick_the_daemon_sends_at_its_own_row() {
+        /* The daemon owns which rows carry a number and what they say; the renderer
+        only right-aligns them into a gutter as wide as the widest tick. Ticks arrive
+        top row first, which is the reverse of the bottom-up draw order -- getting that
+        backwards would silently label the floor with the peak. */
         let trends = vec!["\u{2581}\u{2588}".to_string(), "today 1M/hr".to_string()];
+        let axis: Vec<String> = ["60.0M/18%", "", "", "34.3M/10%", "", "", "", "0"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let text = |line: &Line| {
             line.spans.iter().map(|s| s.content.as_ref()).collect::<String>()
         };
 
-        let labelled = trend_graph_lines(&trends, Some("33.9M"));
-        assert!(text(&labelled[0]).starts_with("33.9M "), "peak label missing from the top row");
+        let labelled = trend_graph_lines(&trends, Some(&axis));
+        assert!(text(&labelled[0]).starts_with("60.0M/18% "), "peak tick missing from the top row");
         assert!(
-            text(&labelled[TREND_ROWS - 1]).starts_with("    0 "),
-            "floor label missing from the bottom row"
+            text(&labelled[3]).starts_with("34.3M/10% "),
+            "a middle tick must land on its own row, not the top"
+        );
+        assert!(text(&labelled[1]).starts_with("          "), "an unticked row grew a label");
+        assert!(
+            text(&labelled[TREND_ROWS - 1]).starts_with("        0 "),
+            "floor tick missing from the bottom row"
         );
         assert_eq!(
             text(&labelled[TREND_ROWS]),
-            "      today 1M/hr",
+            "          today 1M/hr",
             "text rows must be indented under the graph, not under the gutter"
         );
 
@@ -1291,8 +1315,8 @@ mod tests {
         assert_eq!(text(&plain[TREND_ROWS]), "today 1M/hr");
         /* One cell per sparkline column and nothing else: a blank gutter would show
         up here as extra leading cells (the top row's own columns can be blank). */
-        assert_eq!(text(&plain[0]).chars().count(), 2, "an absent scale still reserved a gutter");
-        assert_eq!(text(&labelled[0]).chars().count(), 2 + 6);
+        assert_eq!(text(&plain[0]).chars().count(), 2, "an absent axis still reserved a gutter");
+        assert_eq!(text(&labelled[0]).chars().count(), 2 + 10);
     }
 
     fn sessions_app(wire: &str) -> App {
