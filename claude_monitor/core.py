@@ -564,12 +564,14 @@ def local_bounds(now):
 
 
 def trend_sparkline(records, now):
-    """24-char block sparkline of quota usage added per clock hour.
+    """24-char block sparkline of TOKENS burned per clock hour.
 
-    ``pct`` is cumulative inside the rolling 5h window, so its hourly mean produces a
-    misleading staircase. Sum only trustworthy per-sample rises instead, using the same
-    reset, gap and spike semantics as the usage heatmap. Column 0 is 23 clock hours ago
-    and column 23 is the current clock hour; populated zero-usage hours render at floor.
+    Each column is what trend_spent sums, bucketed by hour: `burn` (tok/min) times the
+    interval back to the previous sample. `burn` is a trailing rate estimate, so it is
+    attributed to the interval ENDING at its own sample -- which is also the hour the
+    sample is bucketed into. An interval wider than GAP_MAX is a daemon outage, not
+    idle time, and contributes nothing. Column 0 is 23 clock hours ago and column 23 is
+    the current clock hour; populated zero-usage hours render at floor.
     """
     current_hour = int(
         datetime.datetime.fromtimestamp(now)
@@ -579,12 +581,12 @@ def trend_sparkline(records, now):
     buckets = [None] * 24
     prev = None
     for rec in sorted(records, key=lambda r: r["t"]):
-        rise = 0.0
-        if prev is not None and 0 <= rec["t"] - prev[0] <= GAP_MAX:
-            rise = rec["pct"] - prev[1]
-            if rise < 0 or rise > RISE_MAX:
-                rise = 0.0
-        prev = (rec["t"], rec["pct"])
+        tokens = 0.0
+        if prev is not None:
+            dt = rec["t"] - prev
+            if 0 < dt <= GAP_MAX:
+                tokens = rec["burn"] * dt / 60.0
+        prev = rec["t"]
 
         rec_hour = int(
             datetime.datetime.fromtimestamp(rec["t"])
@@ -593,7 +595,7 @@ def trend_sparkline(records, now):
         )
         bucket = 23 - int((current_hour - rec_hour) // 3600)
         if 0 <= bucket <= 23:
-            buckets[bucket] = (buckets[bucket] or 0.0) + rise
+            buckets[bucket] = (buckets[bucket] or 0.0) + tokens
     vals = [value for value in buckets if value is not None]
     if not vals:
         return SPARK_GAP * 24
@@ -653,10 +655,11 @@ def trend_spent(records, start, end):
     total = None
     for rec in sorted(records, key=lambda r: r["t"]):
         if prev is not None and start <= rec["t"] < end:
-            dt = rec["t"] - prev[0]
+            dt = rec["t"] - prev
             if 0 < dt <= GAP_MAX:
-                total = (total or 0.0) + prev[1] * dt / 60.0
-        prev = (rec["t"], rec["burn"])
+                # burn is a trailing estimate: the interval ENDING at this sample
+                total = (total or 0.0) + rec["burn"] * dt / 60.0
+        prev = rec["t"]
     return total
 
 

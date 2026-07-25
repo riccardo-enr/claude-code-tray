@@ -473,10 +473,10 @@ def demo():
     current_hour = oldest_hour + 23 * 3600
     now_sp = current_hour + 300
     recs_sp = [
-        {"t": oldest_hour, "pct": 0.0},
-        {"t": oldest_hour + 60, "pct": 1.0},  # bucket 0: 1% used
-        {"t": current_hour, "pct": 1.0},  # data gap: no inferred usage
-        {"t": current_hour + 60, "pct": 10.0},  # bucket 23: 9% used
+        {"t": oldest_hour, "burn": 0.0},
+        {"t": oldest_hour + 60, "burn": 100.0},  # bucket 0: 100 tokens
+        {"t": current_hour, "burn": 500.0},  # data gap: no inferred usage
+        {"t": current_hour + 60, "burn": 900.0},  # bucket 23: 900 tokens
     ]
     spark = trend_sparkline(recs_sp, now_sp)
     assert len(spark) == 24
@@ -484,19 +484,15 @@ def demo():
     assert spark[23] == SPARK_GLYPHS[-1]
     assert spark[12] == SPARK_GAP  # interior empty hour stays a gap
     assert trend_sparkline([], now_sp) == SPARK_GAP * 24
-    # Equal usage in consecutive clock hours must render equal bars. The source pct is
-    # cumulative inside the rolling 5h window, so averaging pct itself would incorrectly
-    # render these hours as an ascending staircase.
+    # Equal usage in consecutive clock hours must render equal bars: a steady burn rate
+    # over three full hours is three identical columns, not a staircase.
     hour_start = int(datetime.datetime(2024, 1, 2, 1).timestamp())
-    hourly = [{"t": hour_start - 60, "pct": 0.0}]
-    pct = 0.0
+    hourly = [{"t": hour_start - 300, "burn": 200.0}]  # seeds a full 5-min interval
     for hour in range(3):
         for minute in range(0, 60, 5):
-            if minute:
-                pct += 1.0
             hourly.append({
                 "t": hour_start + hour * 3600 + minute * 60,
-                "pct": pct,
+                "burn": 200.0,
             })
     hourly_spark = trend_sparkline(hourly, hour_start + 3 * 3600 - 1)
     assert hourly_spark[21] == hourly_spark[22] == hourly_spark[23]
@@ -504,16 +500,16 @@ def demo():
     boundary = int(datetime.datetime(2024, 1, 2, 2).timestamp())
     boundary_spark = trend_sparkline(
         [
-            {"t": boundary + 49 * 60, "pct": 0.0},
-            {"t": boundary + 50 * 60, "pct": 5.0},
-            {"t": boundary + 55 * 60, "pct": 5.0},
-            {"t": boundary + 60 * 60, "pct": 5.0},
+            {"t": boundary + 49 * 60, "burn": 0.0},
+            {"t": boundary + 50 * 60, "burn": 500.0},
+            {"t": boundary + 55 * 60, "burn": 0.0},
+            {"t": boundary + 60 * 60, "burn": 0.0},
         ],
         boundary + 90 * 60,
     )
     assert boundary_spark[22] == SPARK_GLYPHS[-1]
     assert boundary_spark[23] == SPARK_GLYPHS[0]
-    flat = [{"t": now_sp - h * 3600, "pct": 42.0} for h in range(24)]
+    flat = [{"t": now_sp - h * 3600, "burn": 42.0} for h in range(24)]
     fspark = trend_sparkline(flat, now_sp)
     assert all(c == SPARK_GLYPHS[0] for c in fspark)
     burn_recs = [{"t": 100, "burn": 100.0}, {"t": 200, "burn": 200.0}]
@@ -547,16 +543,17 @@ def demo():
     assert build_trend_rows(mixed_bt, now_bt) == rows_clean
     assert build_trend_rows(corrupt_bt, now_bt) is None
     assert build_trend_rows([], now_bt) is None
-    # trend_spent integrates burn (tok/min) over sub-GAP_MAX intervals only. Two 60s
-    # steps at 100 and 200 tok/min -> 100 + 200 = 300; the 9599s hole is a daemon
-    # outage, not idle time, so it contributes 0 rather than 200 * 9599/60.
+    # trend_spent integrates burn (tok/min) over sub-GAP_MAX intervals only. burn is a
+    # trailing estimate, so each interval takes the burn of the sample ENDING it: two
+    # 60s steps at 200 and 300 tok/min -> 200 + 300 = 500. The 9599s hole is a daemon
+    # outage, not idle time, so it contributes 0 rather than 400 * 9599/60.
     spend_recs = [
         {"t": 100, "burn": 100.0},
         {"t": 160, "burn": 200.0},
         {"t": 220, "burn": 300.0},
         {"t": 9999, "burn": 400.0},  # spans a > GAP_MAX hole -> not counted
     ]
-    assert trend_spent(spend_recs, 0, 1e10) == 300.0
+    assert trend_spent(spend_recs, 0, 1e10) == 500.0
     assert trend_spent(spend_recs, 500, 600) is None  # no interval in window
     assert trend_spent([{"t": 1, "burn": 5.0}], 0, 10) is None  # single sample
     # 14 samples 300s apart: spans TREND_MIN_SPAN, every interval within GAP_MAX.
