@@ -139,9 +139,12 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 
 </details>
 
-## Phase Details
+## v2.0 Rust TUI (Phase Details)
 
-### Phase 10: TUI Polish (btop-style)
+> Phase 10 (v1.6) detail is archived in [`milestones/v1.6-ROADMAP.md`](./milestones/v1.6-ROADMAP.md).
+
+<details>
+<summary>✅ Phase 10: TUI Polish (btop-style) — SHIPPED 2026-07-24</summary>
 
 **Goal**: The v1.5 plain-text `claude-tui.py` becomes a btop-inspired terminal dashboard — threshold-colored, gauged, richer-graphed, styled sessions, bordered panels — showing the same data from the same snapshot socket, with `claude_monitor.core` still the single source of every formatted value.
 **Depends on**: Phase 9 (the v1.5 `claude-tui.py` this polishes; its `core` substrate and CSS-only App are the surface being reworked)
@@ -174,6 +177,8 @@ optional `tui` extra. Full detail: [archive](./milestones/v1.5-ROADMAP.md).
 - **Core-vs-TUI boundary is the central gray area, and it runs INSIDE each requirement, not between them.** Threshold-band decisions (TUI-06/09), gauge fill math (TUI-07), and any graph data expressible as plain values/strings (TUI-08) belong in `claude_monitor.core`, proven by `--selfcheck` on stock `/usr/bin/python3` (PEP 668 — must never import textual/rich). The visual application of color, gauge glyphs, borders, striping, and CSS stays in `claude-tui.py`. TUI-10 is almost entirely CSS with little-to-no core surface. Because the assertable half and the render-only half of TUI-06..TUI-09 live in one requirement each, this is a **plan-level split within this one phase** — mirroring v1.5's 09-01 (core substrate + `--selfcheck` asserts) then 09-02 (textual wiring) — NOT a phase boundary.
 - **D-05 parity holds:** `claude_monitor.core` stays the single source of truth for every formatted value, so the tray and TUI can never disagree; no new number/string formatter is introduced in `claude-tui.py`.
 - **No new data source, no new polling, no IPC/socket change, no new runtime dependency.** Same `{"query": "snapshot"}` verb; `textual` stays the only third-party dep, scoped to `claude-tui.py` via its PEP 723 block. Deferred: TUI click-to-focus, no-daemon standalone mode.
+
+</details>
 
 ### Phase 11: Rust Client Foundation
 
