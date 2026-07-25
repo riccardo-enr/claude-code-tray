@@ -225,22 +225,27 @@ impl App {
     }
 
     /*
-    Ask the daemon to focus the selected session.
+    Ask the daemon to focus the selected session. Returns true when the daemon
+    accepted the request, which is the caller's cue to leave.
 
     Nonfatal and action-scoped by contract: every outcome becomes a footer note,
     and none of them touches `snapshot`, `error` or the refresh cadence. A focus
     that fails because the pane is gone must not make the quota gauges look
     stale.
+
+    Only an accepted focus returns true. Every refusal -- nothing selected, no
+    focusable target, a daemon error, fixture replay -- keeps the app running so
+    its note stays on screen; exiting would take the explanation with it.
     */
-    fn focus_selected(&mut self) {
+    fn focus_selected(&mut self) -> bool {
         let Some(index) = self.selected_index() else {
             self.note("no session selected");
-            return;
+            return false;
         };
         let ordered = self.ordered_sessions();
         let Some(session) = ordered.get(index) else {
             self.note("no session selected");
-            return;
+            return false;
         };
         let target = session.focus.clone();
         let label = session.dir.clone();
@@ -248,17 +253,26 @@ impl App {
         if !target.focusable() {
             /* Same refusal as the Python client: no pane, and not Zed. */
             self.note(format!("{}: no focusable terminal target", label));
-            return;
+            return false;
         }
         match &self.source {
             Source::Daemon(client) => match client.focus(&target) {
-                Ok(()) => self.note(format!("focusing {}", label)),
+                Ok(()) => {
+                    self.note(format!("focusing {}", label));
+                    true
+                }
                 /* Context is payload-free by construction, so it is safe to show. */
-                Err(err) => self.note(format!("focus failed [{}]: {}", err.code, err.context)),
+                Err(err) => {
+                    self.note(format!("focus failed [{}]: {}", err.code, err.context));
+                    false
+                }
             },
             /* Replaying a fixture: say so rather than dialling a daemon that has
             nothing to do with the frame on screen. */
-            Source::Fixture(_) => self.note(format!("fixture mode: would focus {}", label)),
+            Source::Fixture(_) => {
+                self.note(format!("fixture mode: would focus {}", label));
+                false
+            }
         }
     }
 
@@ -404,7 +418,10 @@ fn handle_key(app: &mut App, code: KeyCode) -> bool {
         KeyCode::End => app.move_selection(isize::MAX / 2),
         KeyCode::PageUp => app.move_selection(-10),
         KeyCode::PageDown => app.move_selection(10),
-        KeyCode::Enter => app.focus_selected(),
+        /* Enter is a picker, not a toggle: the usual home is a tmux popup (`popup
+        -E`), which covers the very pane the focus just moved to until this process
+        exits. Leaving on a successful focus is what makes the jump visible. */
+        KeyCode::Enter => return !app.focus_selected(),
         _ => {}
     }
     true
@@ -576,7 +593,7 @@ fn footer_widget(app: &App) -> Paragraph<'static> {
             Span::styled(" up/down", dim),
             Span::styled(" select   ", dim),
             Span::styled("enter", dim),
-            Span::styled(" focus   ", dim),
+            Span::styled(" focus+exit   ", dim),
             Span::styled("q", dim),
             Span::styled(" quit", dim),
         ])),
@@ -1262,6 +1279,9 @@ mod tests {
         let mut app = sessions_app(THREE_SESSIONS);
         assert!(!handle_key(&mut app, KeyCode::Char('q')), "q must quit");
         assert!(handle_key(&mut app, KeyCode::Down));
+        /* Enter leaves only on an ACCEPTED focus. A fixture source never dials a
+        daemon, so the app must stay up with its note rather than vanishing --
+        same contract as a focus the daemon refuses. */
         assert!(handle_key(&mut app, KeyCode::Enter));
     }
 
