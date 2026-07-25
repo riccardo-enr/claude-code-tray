@@ -35,6 +35,7 @@ from .core import (
     build_trend_rows,
     despike,
     fmt_countdown,
+    fmt_countdown_short,
     fmt_countdown_wk,
     fmt_elapsed,
     fmt_tokens,
@@ -66,6 +67,7 @@ from .core import (
     sess_status_band,
     session_stale,
     spark_levels,
+    statusline_text,
     trend_burn,
     trend_peak_hour,
     trend_sparkline,
@@ -375,6 +377,28 @@ def demo():
     assert fmt_countdown_wk(352800) == "week resets in 4d 2h"
     assert fmt_countdown_wk(7380) == "week resets in 2h 3m"
     assert fmt_countdown_wk(0) == "week resets now"
+
+    # fmt_countdown_short: status-bar width, hours cell dropped under an hour.
+    assert fmt_countdown_short(7380) == "2h3m"
+    assert fmt_countdown_short(840) == "14m"
+    assert fmt_countdown_short(0) == "now"
+    assert fmt_countdown_short(-90) == "now"  # a past reset clamps, does not go negative
+    assert fmt_countdown_short(3600) == "1h0m"  # exactly an hour keeps the hours cell
+    assert fmt_countdown_short(59) == "0m"  # sub-minute is still a minutes cell, not ""
+
+    # statusline_text: the tmux segment string. now=1000 keeps the arithmetic readable.
+    assert statusline_text(62, 1000 + 8040, 1000) == "62% 2h14m"
+    assert statusline_text(91, 1000 + 2880, 1000) == "91% 48m !"  # red band adds the glyph
+    assert statusline_text(89.4, 1000 + 60, 1000) == "89% 1m"  # yellow band: colour only
+    assert statusline_text(90, 1000, 1000) == "90% now !"  # band edge is inclusive
+    # No percent -> None, so run_segment can hide the segment instead of printing a fake 0%.
+    assert statusline_text(None, 1000, 1000) is None
+    assert statusline_text("n/a", 1000, 1000) is None
+    # Missing/legacy reset degrades to a bare percent rather than a bogus countdown.
+    assert statusline_text(62, None, 1000) == "62%"
+    assert statusline_text(95, None, 1000) == "95% !"
+    # Purity: same inputs, same output, and nothing mutated between calls.
+    assert statusline_text(62, 9040, 1000) == statusline_text(62, 9040, 1000)
     assert round(473.5) == 474  # over-limit percent renders raw, never clamped
     assert build_label({"used_percentage": 47}, 2) == "47% 2!"
     assert build_label({"used_percentage": 83}, 2) == "83%! 2!"

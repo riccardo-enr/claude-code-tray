@@ -12,6 +12,19 @@ BIN="$HOME/.local/bin"
 mkdir -p "$HOOKS" "$AUTOSTART"
 ln -sf "$SRC/claude-monitor.py" "$HOOKS/claude-monitor.py"
 ln -sf "$SRC/claude-send.py"    "$HOOKS/claude-send.py"
+ln -sf "$SRC/claude-status.py"  "$HOOKS/claude-status.py"
+
+# --- tmux status-bar segment -------------------------------------------------
+#
+# Only installed when a tmux-powerline segments directory already exists: this is
+# an opt-in extra for people who run that plugin, and creating the directory here
+# would leave a stray segment in the config of everyone who does not.
+TPL_SEGMENTS="${XDG_CONFIG_HOME:-$HOME/.config}/tmux-powerline/segments"
+TMUX_SEGMENT_INSTALLED=""
+if [ -d "$TPL_SEGMENTS" ]; then
+  ln -sf "$SRC/tmux/claude_usage.sh" "$TPL_SEGMENTS/claude_usage.sh"
+  TMUX_SEGMENT_INSTALLED="yes"
+fi
 
 # --- terminal dashboard ------------------------------------------------------
 #
@@ -60,7 +73,11 @@ echo
 echo "Installed:"
 echo "  $HOOKS/claude-monitor.py"
 echo "  $HOOKS/claude-send.py"
+echo "  $HOOKS/claude-status.py"
 echo "  $AUTOSTART/claude-monitor.desktop"
+if [ -n "$TMUX_SEGMENT_INSTALLED" ]; then
+  echo "  $TPL_SEGMENTS/claude_usage.sh   (tmux-powerline segment)"
+fi
 if [ -n "$TUI_INSTALLED" ]; then
   echo "  $BIN/claude-tui      (terminal dashboard)"
 fi
@@ -76,6 +93,13 @@ if [ -n "$TUI_INSTALLED" ] && ! command -v claude-tui >/dev/null 2>&1; then
   echo
   echo "  NOTE: $BIN is not on your PATH, so 'claude-tui' will not resolve."
   echo "        Add it:  export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi
+
+if [ -n "$TMUX_SEGMENT_INSTALLED" ]; then
+  echo
+  echo "To show usage on the tmux status line, add this segment to your theme's"
+  echo "TMUX_POWERLINE_LEFT_STATUS_SEGMENTS array, then reload tmux:"
+  echo "      \"claude_usage 238 189\"   (background then foreground; keep the bg dark)"
 fi
 
 echo

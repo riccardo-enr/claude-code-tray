@@ -440,6 +440,22 @@ def fmt_countdown_wk(secs):
     return "week resets in %dh %dm" % (secs // 3600, (secs % 3600) // 60)
 
 
+def fmt_countdown_short(secs):
+    """Reset countdown squeezed for a status bar: 7380 -> '2h3m', 840 -> '14m', <=0 -> 'now'.
+
+    A third countdown formatter rather than a flag on fmt_countdown, for the same reason
+    fmt_countdown_wk is its own function: the prose forms carry a subject ("resets in ...")
+    that a caller supplies from context, and a tmux segment has neither the width for it nor
+    anywhere to put it. Drops the hours cell entirely under an hour, so the common
+    late-in-the-window case reads '14m' rather than '0h14m'.
+    """
+    secs = max(0, int(secs))
+    if secs <= 0:
+        return "now"
+    h, m = secs // 3600, (secs % 3600) // 60
+    return "%dh%dm" % (h, m) if h else "%dm" % m
+
+
 def build_label(usage, attention, threshold=USAGE_THRESHOLD):
     """Tray label: usage % leads, attention count follows ('47% 2!', '83%! 2!', '2!', '').
     `attention` counts sessions needing you. '!' fires when EITHER cap is above
@@ -1004,6 +1020,35 @@ def gauge_fill(pct, width):
     """
     pct = max(0.0, min(100.0, pct))
     return round(pct / 100 * width)
+
+
+def statusline_text(pct, reset, now):
+    """One tmux status segment's text: '62% 2h14m', or '91% 48m !' in the red band. Pure.
+
+    Returns None -- not "" and not "n/a" -- when there is no usage percent to show, because
+    tmux-powerline hides a segment whose run_segment writes nothing and exits non-zero. "No
+    data yet" and "0% used" must not render the same on a status bar.
+
+    The '!' fires on band()'s fixed 90% proximity-to-cap line, NOT on the mutable
+    USAGE_THRESHOLD that build_label's badge uses. The tray badge is the user's "warn me"
+    setting; a status segment is glanced at in passing and wants the same fixed meaning the
+    TUI's colour bands already carry, so that the glyph and the colour beside it cannot
+    disagree. Reset is optional: an older CLI without resets_at_epoch degrades to a bare
+    percent instead of printing a countdown it cannot compute.
+
+    ponytail: thresholds on level, not on project()'s projected exhaustion -- 60% used with
+    20 minutes of burn left is the case this misses. Swap in alert_due(project(...)) if it
+    bites; the seven_day cap is likewise deliberately not shown (5h is the one that stops
+    you mid-task).
+    """
+    if not _is_num(pct):
+        return None
+    cells = ["%d%%" % round(pct)]
+    if _is_num(reset):
+        cells.append(fmt_countdown_short(reset - now))
+    if band(pct) == "red":
+        cells.append("!")
+    return " ".join(cells)
 
 
 def tui_usage_rows(usage, now):
