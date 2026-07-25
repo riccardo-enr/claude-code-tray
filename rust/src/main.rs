@@ -51,7 +51,7 @@ use claude_tui::format::{
     band, fmt_elapsed, gauge_fill, heatmap_levels, project, sess_elapsed, sess_rank, spark_levels,
     tui_usage_rows, Band, Projection, WIN5, WIN7,
 };
-use claude_tui::{Client, ClientError, Section, Snapshot, Usage};
+use claude_tui::{Client, ClientError, Section, Session, Snapshot, Usage};
 
 /* Matches claude_monitor.core.TUI_FETCH_INTERVAL / TUI_TICK_INTERVAL. */
 const FETCH_INTERVAL: Duration = Duration::from_secs(2);
@@ -103,7 +103,25 @@ struct App {
     source: Source,
     snapshot: Option<Snapshot>,
     error: Option<ClientError>,
+    /*
+    The selected session, held as its stable key rather than a row index.
+
+    An index would silently point at a different session the moment a refresh
+    reorders the list -- and it reorders constantly, because rows are sorted by
+    status and a session's status is exactly what changes. Pressing Enter would
+    then focus whatever slid into that slot. Keying by identity means the
+    selection follows its session across refreshes, or disappears with it.
+    */
+    selected: Option<String>,
+    /* Transient feedback for the last focus attempt. A focus failure is
+    action-scoped: it belongs in the footer, and must never mark snapshot data
+    stale or disturb the refresh state. */
+    focus_note: Option<(String, Instant)>,
 }
+
+/* How long a focus note stays on screen before the footer returns to its
+bindings. Long enough to read, short enough not to become furniture. */
+const FOCUS_NOTE_TTL: Duration = Duration::from_secs(4);
 
 /*
 Where frames come from.
@@ -124,7 +142,7 @@ enum Source {
 
 impl App {
     fn new(source: Source) -> Self {
-        App { source, snapshot: None, error: None }
+        App { source, snapshot: None, error: None, selected: None, focus_note: None }
     }
 
     fn refresh(&mut self) {
@@ -140,12 +158,137 @@ impl App {
             /* The last good snapshot survives untouched. */
             Err(err) => self.error = Some(err),
         }
+        self.reconcile_selection();
     }
 
     /* A preserved-but-stale frame. Distinct from a cold start. */
     fn stale(&self) -> bool {
         self.error.is_some() && self.snapshot.is_some()
     }
+
+    /*
+    The sessions to draw, in display order.
+
+    Sorted by status rank with a stable sort, so two sessions sharing a status
+    stay in the daemon's order. Normalization deliberately does not sort --
+    ordering is presentation, and this is the only place that decides it, which
+    is what lets the key handler and the renderer agree on what row N is.
+    */
+    fn ordered_sessions(&self) -> Vec<&Session> {
+        let Some(Section::Present(sessions)) = self.snapshot.as_ref().map(|s| &s.sessions) else {
+            return Vec::new();
+        };
+        let mut ordered: Vec<&Session> = sessions.entries.iter().collect();
+        ordered.sort_by_key(|s| sess_rank(&s.status));
+        ordered
+    }
+
+    /*
+    Drop a selection whose session is gone, and select the first row when
+    nothing is selected yet.
+
+    A session ending should not leave the cursor pointing at nothing, and the
+    first frame should arrive with a usable selection rather than requiring an
+    arrow press to bootstrap one.
+    */
+    fn reconcile_selection(&mut self) {
+        let keys: Vec<String> = self.ordered_sessions().iter().map(|s| stable_key(s)).collect();
+        if keys.is_empty() {
+            self.selected = None;
+            return;
+        }
+        let still_present = self
+            .selected
+            .as_ref()
+            .is_some_and(|sel| keys.iter().any(|k| k == sel));
+        if !still_present {
+            self.selected = keys.first().cloned();
+        }
+    }
+
+    fn selected_index(&self) -> Option<usize> {
+        let selected = self.selected.as_ref()?;
+        self.ordered_sessions().iter().position(|s| &stable_key(s) == selected)
+    }
+
+    /* Move the selection by `delta` rows, clamped at both ends. Clamping rather
+    than wrapping: a held-down arrow key should come to rest at the edge, not
+    cycle past it. */
+    fn move_selection(&mut self, delta: isize) {
+        let ordered = self.ordered_sessions();
+        if ordered.is_empty() {
+            return;
+        }
+        let current = self.selected_index().unwrap_or(0) as isize;
+        let next = (current + delta).clamp(0, ordered.len() as isize - 1) as usize;
+        self.selected = ordered.get(next).map(|s| stable_key(s));
+    }
+
+    /*
+    Ask the daemon to focus the selected session.
+
+    Nonfatal and action-scoped by contract: every outcome becomes a footer note,
+    and none of them touches `snapshot`, `error` or the refresh cadence. A focus
+    that fails because the pane is gone must not make the quota gauges look
+    stale.
+    */
+    fn focus_selected(&mut self) {
+        let Some(index) = self.selected_index() else {
+            self.note("no session selected");
+            return;
+        };
+        let ordered = self.ordered_sessions();
+        let Some(session) = ordered.get(index) else {
+            self.note("no session selected");
+            return;
+        };
+        let target = session.focus.clone();
+        let label = session.dir.clone();
+
+        if !target.focusable() {
+            /* Same refusal as the Python client: no pane, and not Zed. */
+            self.note(format!("{}: no focusable terminal target", label));
+            return;
+        }
+        match &self.source {
+            Source::Daemon(client) => match client.focus(&target) {
+                Ok(()) => self.note(format!("focusing {}", label)),
+                /* Context is payload-free by construction, so it is safe to show. */
+                Err(err) => self.note(format!("focus failed [{}]: {}", err.code, err.context)),
+            },
+            /* Replaying a fixture: say so rather than dialling a daemon that has
+            nothing to do with the frame on screen. */
+            Source::Fixture(_) => self.note(format!("fixture mode: would focus {}", label)),
+        }
+    }
+
+    fn note(&mut self, text: impl Into<String>) {
+        self.focus_note = Some((text.into(), Instant::now()));
+    }
+
+    fn live_note(&self) -> Option<&str> {
+        match &self.focus_note {
+            Some((text, at)) if at.elapsed() < FOCUS_NOTE_TTL => Some(text.as_str()),
+            _ => None,
+        }
+    }
+}
+
+/*
+A stable identity for one session.
+
+Prefers the daemon's `id`. Falls back to the routing tuple when it is empty,
+mirroring how claude-tui.py builds its row keys -- two sessions in the same
+directory are still distinct if they are different panes.
+*/
+fn stable_key(session: &Session) -> String {
+    if !session.id.is_empty() {
+        return session.id.clone();
+    }
+    format!(
+        "{}\u{1f}{}\u{1f}{}\u{1f}{}",
+        session.focus.tmux, session.focus.pane, session.focus.term, session.dir
+    )
 }
 
 const USAGE_TEXT: &str = "\
@@ -229,9 +372,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, source: Source) -> io:
         re-render every second without busy-waiting between snapshots. */
         if event::poll(TICK_INTERVAL)? {
             if let Event::Key(key) = event::read()? {
-                /* `q` is the sole advertised binding, matching the oracle,
-                which disables the command palette for the same reason. */
-                if key.kind == KeyEventKind::Press && matches!(key.code, KeyCode::Char('q')) {
+                /* Release events are delivered on terminals with the kitty
+                keyboard protocol; acting on both would move two rows per
+                press. */
+                if key.kind == KeyEventKind::Press && !handle_key(&mut app, key.code) {
                     return Ok(());
                 }
             }
@@ -241,6 +385,29 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, source: Source) -> io:
             last_fetch = Instant::now();
         }
     }
+}
+
+/*
+Apply one keypress. Returns false to quit.
+
+`q` stays the sole exit binding -- no command palette, no theme toggle, matching
+the oracle, which switches the palette off for exactly that reason. Navigation
+is arrows plus j/k, and Enter activates, which is what the oracle's row-cursor
+DataTable does.
+*/
+fn handle_key(app: &mut App, code: KeyCode) -> bool {
+    match code {
+        KeyCode::Char('q') => return false,
+        KeyCode::Up | KeyCode::Char('k') => app.move_selection(-1),
+        KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
+        KeyCode::Home => app.move_selection(isize::MIN / 2),
+        KeyCode::End => app.move_selection(isize::MAX / 2),
+        KeyCode::PageUp => app.move_selection(-10),
+        KeyCode::PageDown => app.move_selection(10),
+        KeyCode::Enter => app.focus_selected(),
+        _ => {}
+    }
+    true
 }
 
 fn enter_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -343,7 +510,7 @@ fn draw(frame: &mut Frame, app: &App) {
     draw_usage(frame, areas[1], app, now);
     draw_trends(frame, areas[2], app);
     draw_sessions(frame, areas[3], app, now);
-    draw_footer(frame, areas[4]);
+    frame.render_widget(footer_widget(app), areas[4]);
 }
 
 fn draw_cold_start(frame: &mut Frame, app: &App) {
@@ -366,7 +533,7 @@ fn draw_cold_start(frame: &mut Frame, app: &App) {
         Paragraph::new(lines).alignment(Alignment::Center),
         areas[1],
     );
-    draw_footer(frame, areas[2]);
+    frame.render_widget(footer_widget(app), areas[2]);
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
@@ -396,11 +563,25 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
     );
 }
 
-fn draw_footer(frame: &mut Frame, area: Rect) {
-    frame.render_widget(
-        Paragraph::new(" q  quit").style(Style::default().add_modifier(Modifier::DIM)),
-        area,
-    );
+fn footer_widget(app: &App) -> Paragraph<'static> {
+    let dim = Style::default().add_modifier(Modifier::DIM);
+    /* A focus note takes the footer while it is live; the bindings return
+    afterwards. Feedback matters more than a reminder the user just used. */
+    match app.live_note() {
+        Some(note) => Paragraph::new(Line::from(Span::styled(
+            format!(" {}", note),
+            Style::default().fg(Color::Cyan),
+        ))),
+        None => Paragraph::new(Line::from(vec![
+            Span::styled(" up/down", dim),
+            Span::styled(" select   ", dim),
+            Span::styled("enter", dim),
+            Span::styled(" focus   ", dim),
+            Span::styled("q", dim),
+            Span::styled(" quit", dim),
+        ])),
+    }
+    .style(dim)
 }
 
 /* --- usage ------------------------------------------------------------- */
@@ -717,55 +898,101 @@ fn draw_sessions(frame: &mut Frame, area: Rect, app: &App, now: f64) {
     let block = panel("sessions");
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    let dim = Style::default().add_modifier(Modifier::DIM);
 
-    let sessions = match app.snapshot.as_ref().map(|s| &s.sessions) {
-        Some(Section::Present(s)) => s,
-        _ => {
-            frame.render_widget(
-                Paragraph::new(NO_SESSIONS).style(Style::default().add_modifier(Modifier::DIM)),
-                inner,
-            );
-            return;
-        }
-    };
-    if sessions.entries.is_empty() {
-        frame.render_widget(
-            Paragraph::new(NO_SESSIONS).style(Style::default().add_modifier(Modifier::DIM)),
-            inner,
-        );
+    let ordered = app.ordered_sessions();
+    if ordered.is_empty() {
+        let message = match app.snapshot.as_ref().map(|s| &s.sessions) {
+            /* An empty list is data: no sessions are running. A missing or
+            malformed section is not, and saying "no sessions" for it would be
+            a confident lie about a thing we do not know. */
+            Some(Section::Present(_)) => NO_SESSIONS,
+            Some(Section::Malformed(_)) => "sessions unreadable",
+            _ => "sessions unavailable",
+        };
+        frame.render_widget(Paragraph::new(message).style(dim), inner);
         return;
     }
 
-    /* Ordering is the renderer's job; normalization preserved daemon order, and
-    a stable sort keeps two sessions of the same status in that order. */
-    let mut ordered: Vec<_> = sessions.entries.iter().collect();
-    ordered.sort_by_key(|s| sess_rank(&s.status));
+    let rejected = match app.snapshot.as_ref().map(|s| &s.sessions) {
+        Some(Section::Present(s)) => s.rejected,
+        _ => 0,
+    };
 
-    let mut lines = Vec::with_capacity(ordered.len() + 1);
-    if sessions.rejected > 0 {
+    let mut lines: Vec<Line> = Vec::with_capacity(ordered.len() + 1);
+    if rejected > 0 {
         /* "3 sessions" and "3 sessions, 1 unreadable" are different states and
         the second must be visible. */
         lines.push(Line::from(Span::styled(
-            format!("  {} unreadable entries dropped", sessions.rejected),
+            format!("  {} unreadable entries dropped", rejected),
             Style::default().fg(Color::Yellow),
         )));
     }
-    for s in &ordered {
+
+    let selected = app.selected_index();
+    let dir_width = (inner.width as usize).saturating_sub(24).clamp(12, 60);
+
+    for (i, s) in ordered.iter().enumerate() {
+        let is_selected = selected == Some(i);
         let elapsed = sess_elapsed(&s.status, s.entered, s.frozen, now)
             .map(fmt_elapsed)
             .unwrap_or_else(|| "-".to_string());
+
+        /* The cursor is REVERSED rather than given a background colour. Reverse
+        swaps the terminal's own foreground and background, so the highlight is
+        legible on any theme -- a fixed background would be invisible on the
+        themes that happen to share it. */
+        let row_style = if is_selected {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default()
+        };
+        let marker = if is_selected { "> " } else { "  " };
+
         lines.push(Line::from(vec![
-            Span::styled(format!("{:<9}", s.status), status_style(&s.status)),
-            /* Already sanitized at the normalization boundary. */
-            Span::raw(format!("{:<40}", s.dir)),
+            Span::styled(marker, row_style),
+            Span::styled(format!("{:<9}", s.status), status_style(&s.status).patch(row_style)),
+            /* Already sanitized at the normalization boundary; truncated here
+            only so a long path cannot push the duration off the panel. */
             Span::styled(
-                format!("{:>9}", elapsed),
-                Style::default().add_modifier(Modifier::DIM),
+                format!("{:<width$}", truncate_cell(&s.dir, dir_width), width = dir_width),
+                row_style,
             ),
+            Span::styled(format!("{:>9}", elapsed), row_style.patch(dim)),
         ]));
     }
 
-    frame.render_widget(Paragraph::new(lines).style(body_style(app)), inner);
+    /*
+    Scroll so the cursor stays visible, derived rather than stored.
+
+    Keeping an independent scroll offset in App would mean two pieces of state
+    that can disagree -- the classic "cursor is selected but off-screen" bug.
+    Deriving the offset from the selection each frame makes that state
+    unrepresentable.
+    */
+    let height = inner.height as usize;
+    let offset = match selected {
+        Some(sel) => {
+            let row = sel + usize::from(rejected > 0);
+            row.saturating_sub(height.saturating_sub(1))
+        }
+        None => 0,
+    };
+
+    frame.render_widget(
+        Paragraph::new(lines).scroll((offset as u16, 0)).style(body_style(app)),
+        inner,
+    );
+}
+
+/* Bound one display cell, marking the cut. The value is already sanitized and
+globally bounded; this is the per-column fit. */
+fn truncate_cell(text: &str, width: usize) -> String {
+    if text.chars().count() <= width {
+        return text.to_string();
+    }
+    let keep = width.saturating_sub(3);
+    text.chars().take(keep).chain("...".chars()).collect()
 }
 
 /* --- non-TTY dump ------------------------------------------------------- */
@@ -990,6 +1217,164 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn sessions_app(wire: &str) -> App {
+        let mut app = App::new(Source::Fixture(wire.as_bytes().to_vec()));
+        app.refresh();
+        app
+    }
+
+    const THREE_SESSIONS: &str = r#"{"sessions":[
+        {"id":"a","dir":"~/alpha","status":"running","pane":"%1"},
+        {"id":"b","dir":"~/bravo","status":"waiting","pane":"%2"},
+        {"id":"c","dir":"~/charlie","status":"done","pane":"%3"}]}"#;
+
+    #[test]
+    fn the_first_row_is_selected_as_soon_as_sessions_arrive() {
+        /* Requiring an arrow press to bootstrap a selection would make Enter
+        do nothing on a freshly opened dashboard. */
+        let app = sessions_app(THREE_SESSIONS);
+        assert_eq!(app.selected_index(), Some(0));
+        /* Row 0 is the waiting session: display order is by status rank. */
+        assert_eq!(app.ordered_sessions()[0].dir, "~/bravo");
+    }
+
+    #[test]
+    fn arrows_move_the_selection_and_clamp_at_both_ends() {
+        let mut app = sessions_app(THREE_SESSIONS);
+        assert!(handle_key(&mut app, KeyCode::Down));
+        assert_eq!(app.selected_index(), Some(1));
+        assert!(handle_key(&mut app, KeyCode::Char('j')));
+        assert_eq!(app.selected_index(), Some(2));
+        /* Clamp, never wrap: a held arrow should rest at the edge. */
+        handle_key(&mut app, KeyCode::Down);
+        handle_key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_index(), Some(2));
+        for _ in 0..10 {
+            handle_key(&mut app, KeyCode::Up);
+        }
+        assert_eq!(app.selected_index(), Some(0));
+    }
+
+    #[test]
+    fn q_quits_and_navigation_keys_do_not() {
+        let mut app = sessions_app(THREE_SESSIONS);
+        assert!(!handle_key(&mut app, KeyCode::Char('q')), "q must quit");
+        assert!(handle_key(&mut app, KeyCode::Down));
+        assert!(handle_key(&mut app, KeyCode::Enter));
+    }
+
+    #[test]
+    fn the_selection_follows_its_session_when_a_refresh_reorders_the_list() {
+        /*
+        The reason selection is keyed by identity and not by row index. Here
+        the selected session changes status, which moves it from the last row
+        to the first. An index-based cursor would stay on row 2 and quietly
+        point at a different session -- so Enter would focus the wrong window.
+        */
+        let mut app = sessions_app(THREE_SESSIONS);
+        handle_key(&mut app, KeyCode::End);
+        assert_eq!(app.ordered_sessions()[app.selected_index().unwrap()].id, "c");
+
+        app.source = Source::Fixture(
+            br#"{"sessions":[
+                {"id":"a","dir":"~/alpha","status":"done","pane":"%1"},
+                {"id":"b","dir":"~/bravo","status":"done","pane":"%2"},
+                {"id":"c","dir":"~/charlie","status":"waiting","pane":"%3"}]}"#
+                .to_vec(),
+        );
+        app.refresh();
+        assert_eq!(app.selected_index(), Some(0), "selection did not follow the session");
+        assert_eq!(app.ordered_sessions()[0].id, "c", "still the same session");
+    }
+
+    #[test]
+    fn a_selection_whose_session_ended_falls_back_to_the_first_row() {
+        let mut app = sessions_app(THREE_SESSIONS);
+        handle_key(&mut app, KeyCode::End);
+        app.source = Source::Fixture(
+            br#"{"sessions":[{"id":"a","dir":"~/alpha","status":"running","pane":"%1"}]}"#.to_vec(),
+        );
+        app.refresh();
+        assert_eq!(app.selected_index(), Some(0));
+
+        /* And an empty list leaves nothing selected rather than a dangling key. */
+        app.source = Source::Fixture(br#"{"sessions":[]}"#.to_vec());
+        app.refresh();
+        assert_eq!(app.selected, None);
+        assert_eq!(app.selected_index(), None);
+    }
+
+    #[test]
+    fn enter_on_an_unfocusable_session_reports_instead_of_dialling() {
+        /* Same refusal as the Python client: no pane and not Zed. */
+        let mut app = sessions_app(
+            r#"{"sessions":[{"id":"a","dir":"~/x","status":"running","pane":"","term":"ghostty"}]}"#,
+        );
+        handle_key(&mut app, KeyCode::Enter);
+        let note = app.live_note().expect("a note explaining why nothing happened");
+        assert!(note.contains("no focusable"), "got {:?}", note);
+    }
+
+    #[test]
+    fn enter_with_no_sessions_is_a_no_op_not_a_panic() {
+        let mut app = sessions_app(r#"{"sessions":[]}"#);
+        assert!(handle_key(&mut app, KeyCode::Enter));
+        assert!(handle_key(&mut app, KeyCode::Down));
+        assert_eq!(app.selected, None);
+    }
+
+    #[test]
+    fn a_focus_attempt_never_disturbs_snapshot_state() {
+        /*
+        D-07 as a test: a focus failure is action-scoped. If it could mark the
+        frame stale, a dead pane would make the quota gauges dim for no reason.
+        */
+        let mut app = sessions_app(THREE_SESSIONS);
+        let before = app.snapshot.clone();
+        app.source = Source::Daemon(Box::new(Client::with_path("/nonexistent/focus-test.sock")));
+        handle_key(&mut app, KeyCode::Enter);
+        assert_eq!(app.snapshot, before, "focus mutated the snapshot");
+        assert!(app.error.is_none(), "focus failure leaked into the fetch error state");
+        assert!(!app.stale(), "focus failure marked the frame stale");
+        assert!(app.live_note().is_some(), "focus failure was silent");
+    }
+
+    #[test]
+    fn the_selected_row_is_visible_and_marked_on_screen() {
+        let mut app = sessions_app(THREE_SESSIONS);
+        handle_key(&mut app, KeyCode::Down);
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("test terminal");
+        terminal.draw(|frame| draw(frame, &app)).expect("draw");
+        let buffer = terminal.backend().buffer().clone();
+        let screen: String = buffer.content().iter().map(|c| c.symbol()).collect();
+        assert!(screen.contains("> "), "no cursor marker on screen");
+        /* REVERSED, not a fixed background: legible on any terminal theme. */
+        assert!(
+            buffer.content().iter().any(|c| c.modifier.contains(Modifier::REVERSED)),
+            "the selected row is not highlighted"
+        );
+    }
+
+    #[test]
+    fn the_footer_advertises_navigation_and_yields_to_a_focus_note() {
+        let mut app = sessions_app(THREE_SESSIONS);
+        let screen = |app: &App| {
+            let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("test terminal");
+            terminal.draw(|frame| draw(frame, app)).expect("draw");
+            terminal
+                .backend()
+                .buffer()
+                .content()
+                .iter()
+                .map(|c| c.symbol())
+                .collect::<String>()
+        };
+        let idle = screen(&app);
+        assert!(idle.contains("enter") && idle.contains("quit"), "bindings not advertised");
+        app.note("focusing ~/alpha");
+        assert!(screen(&app).contains("focusing"), "the focus note did not reach the footer");
     }
 
     #[test]

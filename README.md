@@ -6,11 +6,16 @@ shows:
 
 - **Per-session status** (`running` / `waiting` / `done`); on click it jumps to
   the tmux pane that fired the session and raises the terminal window.
-- **Token usage & quota** for the rolling 5-hour window — tokens used vs. limit
-  and percent, time until reset, and burn rate — read from the `claude-monitor`
-  usage CLI.
+- **Token usage & quota** for the rolling 5-hour *and* 7-day windows — tokens
+  used vs. limit and percent, time until reset, burn rate, and a projection of
+  where you will land at reset — read from the `claude-monitor` usage CLI.
 - **A `!` attention badge** whenever a session is waiting on you or has just
-  finished, plus a usage-percent badge that flags high usage.
+  finished, plus a usage-percent badge that flags high usage on either cap.
+- **Usage history and trends** — every poll is appended to a bounded JSONL
+  store, surfaced as an in-menu sparkline, a browsable HTML dashboard, and a
+  terminal dashboard.
+- **Desktop notifications** when a session needs you or a quota is about to run
+  out.
 
 Built for Ubuntu GNOME on X11 with tmux + Ghostty, but the terminal is
 configurable.
@@ -27,14 +32,22 @@ just push events at it over a unix socket.
 ```
 Claude Code hook ──(JSON over unix socket)──> claude-monitor.py ──> tray menu
   claude-send.py {running|waiting|done|end}        (long-lived)      click -> focus
+                                                        │
+                        {"query":"snapshot"} ───────────┤──> claude-tui.py   (Python TUI)
+                        one line out, one back          ├──> claude-tui      (Rust TUI)
+                                                        └──> dashboard.html  (browser)
 ```
 
 - `claude-monitor.py` — long-lived helper: draws the AppIndicator tray menu,
   tracks sessions by `session_id`, focuses on click, and polls the
   `claude-monitor` usage CLI on a background thread (so the multi-second CLI
-  call never blocks the UI).
+  call never blocks the UI). It is the only process that talks to the CLI or
+  touches the history store.
 - `claude-send.py` — tiny non-blocking hook sender; silent if the helper is
   down.
+- The daemon also answers a **read-only `{"query":"snapshot"}`** verb on the
+  same socket. Every other surface is a client of that one verb, which is why
+  they can never disagree about a number: none of them recompute anything.
 
 ### The icon badge
 
@@ -66,6 +79,65 @@ window limit; it is not clamped. If the CLI is missing, slow, or returns junk,
 these degrade to a single `usage unavailable` row while session status and
 click-to-focus keep working.
 
+## Dashboards
+
+Beyond the tray menu there are three views of the same snapshot.
+
+### Terminal (`just tui` / `just rust-tui`)
+
+Three stacked panels — usage, trends, sessions — driven off the snapshot verb at
+a 2s refresh, with a 1s local tick so countdowns and running-session timers move
+between fetches.
+
+```
+ claude-tui live                                              14:07:52
+╭ usage ────────────────────────────────────────────────────────────────╮
+│ ████████░░░░░░░░░░░░  5h   42%  417k / 880k  resets in 2h 3m       proj 61% @16:11 │
+│ ███░░░░░░░░░░░░░░░░░  7d   15%  week resets in 5d 22h              proj 99% @Fri 12:59 │
+╰───────────────────────────────────────────────────────────────────────╯
+╭ trends ───────────────────────────────────────────────────────────────╮
+│      ▄█                            00  03  06  09  12  15  18  21     │
+│     ▄██  ▄                     Mon ····················░▒····         │
+│  ▄▄▄███▄▄█▄                    Tue ··········░▒░░░▒▒░▒█·····          │
+│ today 13.8M/hr | wk 16.5M/hr   Wed ··········▒▒░░▒░░░▒▒·····          │
+│ peak hour: 14:00 (29.3M/hr)    ...                                    │
+╰───────────────────────────────────────────────────────────────────────╯
+╭ sessions ─────────────────────────────────────────────────────────────╮
+│ > waiting  i_mppi_uav                                        6m 25s   │
+│   running  claude-code-tray                                 14m 58s   │
+╰───────────────────────────────────────────────────────────────────────╯
+ up/down select   enter focus   q quit
+```
+
+| Key          | Action                                              |
+| ------------ | --------------------------------------------------- |
+| `up` / `k`   | Select the previous session                         |
+| `down` / `j` | Select the next session                             |
+| `home`/`end` | Jump to the first / last session                    |
+| `enter`      | Focus that session's pane and raise its window      |
+| `q`          | Quit                                                |
+
+The selection is keyed to the session, not the row, so it follows its session
+when a status change reorders the list — pressing `enter` always focuses what is
+highlighted, never whatever slid into that slot. Both TUIs render through the
+terminal's own 16 ANSI colours, so they inherit your terminal theme rather than
+imposing one.
+
+Two implementations share the daemon and the number formatting:
+
+- **`just tui`** — `claude-tui.py`, the Python/Textual original. Needs `uv`.
+- **`just rust-tui`** — a standalone Rust binary. Starts instantly, no Python at
+  runtime. Currently the newer of the two; `claude-tui.py` stays the reference
+  implementation and both are verified against a shared fixture corpus.
+
+### Browser (`just dashboard`)
+
+A self-contained `file://` page — inline CSS/JS, SVG charts, no external
+requests — regenerated on the poll tick from the history store. It holds what
+the tray menu cannot: usage over `24h / 7d / All`, a weekday-by-hour heatmap,
+projections, and window-reset markers so a sawtooth drop reads as "the window
+rolled" rather than "usage fell".
+
 ## Requirements
 
 - GNOME with the AppIndicator extension (`gnome-shell-extension-appindicator`,
@@ -79,6 +151,12 @@ click-to-focus keep working.
   click-to-focus degrades gracefully without them.
 - `xprop` (X11) — optional; used to detect when you are already looking at a
   session's pane so its `!` is suppressed / auto-cleared.
+
+Optional, per dashboard:
+
+- `uv` — only for the Python TUI (`just tui`), which needs `textual`.
+- A Rust toolchain (1.90+) — only to build the Rust TUI (`just rust-tui`). The
+  tray daemon itself never needs it.
 
 ## Install
 
@@ -102,14 +180,49 @@ command). It auto-starts on future logins via the installed
 
 Set these in the autostart `.desktop`'s `Exec=` line to make them persist.
 
-## Developement
+## Development
 
-This project is heavily vibe-coded — built interactively with Claude Code in a
-single session, then organized with the
-[Get Shit Done (GSD)](https://github.com/opengsd/gsd-core) framework. It works
-on my setup (Ubuntu GNOME / X11 / tmux / Ghostty) but hasn't been battle-tested
-elsewhere. No CI; the only test is the pure parse/format self-check
-(`python3 claude-monitor.py --selfcheck`). PRs and bug reports welcome.
+Use the `just` recipes — the deployed `~/.claude/hooks/claude-monitor.py` is a
+symlink into this repo, and Python does not hot-reload, so an edit is on disk
+while the running daemon still holds the old code.
+
+| Recipe                 | What it does                                          |
+| ---------------------- | ----------------------------------------------------- |
+| `just restart`         | Kill and relaunch the daemon — run after any change    |
+| `just check`           | Both verification gates (Python self-check + Rust)     |
+| `just selfcheck`       | Assert suite for the Python core                       |
+| `just rust-test`       | Rust suite: unit, fixture corpus, and render tests     |
+| `just rust-lint`       | `cargo clippy -D warnings`                             |
+| `just tui` / `rust-tui`| Open either terminal dashboard                         |
+| `just dashboard`       | Open the generated HTML page                           |
+
+Run them from inside the desktop session so the GUI daemon inherits `DISPLAY`
+and `DBUS_SESSION_BUS_ADDRESS`.
+
+### Debugging the TUIs
+
+A working daemon only ever produces healthy data, so the states most likely to
+render wrong — a malformed section, a rejected session, a directory name full of
+terminal escape sequences, a cold start — never appear on a working machine. The
+Rust TUI can replay any fixture through the real renderer instead:
+
+```sh
+just rust-states                                # every state, as plain text
+just rust-fixture partial-sections              # one state, in the TUI
+just rust-fixture hostile-terminal-controls --once
+```
+
+`fixtures/snapshot/` holds those inputs paired with the semantic state a correct
+client must produce. It is language-neutral on purpose: both TUIs are checked
+against the same files, so a disagreement between them fails a test rather than
+being something you have to notice on screen.
+
+### Caveats
+
+This project is heavily vibe-coded — built interactively with Claude Code, then
+organized with the [Get Shit Done (GSD)](https://github.com/opengsd/gsd-core)
+framework. It works on my setup (Ubuntu GNOME / X11 / tmux / Ghostty) but hasn't
+been battle-tested elsewhere, and there is no CI. PRs and bug reports welcome.
 
 ## License
 
