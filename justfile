@@ -37,10 +37,6 @@ status:
 selfcheck:
     python3 {{entry}} --selfcheck
 
-# Exercise Textual interactions in its optional uv environment.
-tui-selfcheck:
-    uv run --extra tui python -m claude_monitor.test_tui
-
 # Lint (ruff, scoped by pyproject.toml).
 lint:
     ruff check .
@@ -49,18 +45,30 @@ lint:
 dashboard:
     xdg-open "{{dash}}"
 
-# Open the terminal dashboard (needs a real TTY -- textual drives the terminal directly).
-tui:
-    ./claude-tui.py
+# --- terminal dashboard (Rust) --------------------------------------------
+# Talks to the same daemon socket as the tray. The Python TUI it replaced is in
+# archive/; see archive/README.md.
 
-# --- Rust TUI (v2.0, phase 11) --------------------------------------------
-# The Rust rewrite of the terminal dashboard. Talks to the SAME daemon socket as
-# claude-tui.py and never invokes it; the Python TUI stays the oracle. Not yet
-# installed as the default -- that is the phase 14 cutover.
-
-# Open the Rust terminal dashboard (needs a real TTY; release build for real speed).
+# Open the terminal dashboard from the build tree (needs a real TTY).
 rust-tui:
     cd rust && cargo run --release --quiet
+
+# Open the installed dashboard in a tmux popup (needs tmux 3.2+, inside tmux).
+popup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v tmux >/dev/null || { echo "tmux is not installed"; exit 1; }
+    tmux has-session 2>/dev/null || { echo "no tmux server running -- start tmux first"; exit 1; }
+    command -v claude-tui >/dev/null || {
+      echo "claude-tui is not on PATH -- run ./install.sh, and make sure ~/.local/bin is on PATH"
+      exit 1
+    }
+    # -E closes the popup when the command exits, so `q` dismisses it.
+    tmux popup -E -w 90% -h 85% -T " claude-tui " claude-tui
+
+# Build and install everything, including the Rust dashboard as the default.
+install:
+    ./install.sh
 
 # Run the Rust test suite -- the verification gate for the Rust client.
 rust-test:
@@ -70,10 +78,7 @@ rust-test:
 rust-lint:
     cd rust && cargo clippy --all-targets -- -D warnings
 
-# Render a fixture instead of the live daemon -- the only way to see failure
-# states (malformed sections, hostile paths, cold start) on a healthy machine.
-#   just rust-fixture partial-sections
-#   just rust-fixture hostile-terminal-controls --once
+# Render one fixture instead of the live daemon: `just rust-fixture partial-sections`.
 rust-fixture name *args:
     cd rust && cargo run --release --quiet -- --fixture ../fixtures/snapshot/{{name}}.json {{args}}
 

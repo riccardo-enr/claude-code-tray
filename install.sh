@@ -1,23 +1,48 @@
 #!/usr/bin/env bash
 # Install claude-code-tray: copy the helper + sender into ~/.claude/hooks,
-# register the autostart entry, and print the hook config to merge into
-# ~/.claude/settings.json.
+# build and install the terminal dashboard, register the autostart entry, and
+# print the hook config to merge into ~/.claude/settings.json.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 HOOKS="$HOME/.claude/hooks"
 AUTOSTART="$HOME/.config/autostart"
+BIN="$HOME/.local/bin"
 
 mkdir -p "$HOOKS" "$AUTOSTART"
 ln -sf "$SRC/claude-monitor.py" "$HOOKS/claude-monitor.py"
 ln -sf "$SRC/claude-send.py"    "$HOOKS/claude-send.py"
 
-# The terminal dashboard is typed by a human, so ~/.claude/hooks is the wrong home for
-# it. Symlink (never copy) so the deployed entry can never drift from the repo, and
-# guard on the directory existing -- an `if` block, not an `&&` chain, because
-# `set -euo pipefail` would abort the script on a false test.
-if [ -d "$HOME/.local/bin" ]; then
-  ln -sf "$SRC/claude-tui.py" "$HOME/.local/bin/claude-tui"
+# --- terminal dashboard ------------------------------------------------------
+#
+# `claude-tui` is a standalone Rust binary. The Python/Textual TUI it replaced is
+# in archive/ and is no longer installed; see archive/README.md.
+#
+# There is deliberately no fallback. A machine without cargo gets no dashboard
+# and is told why, rather than getting a different program under the same name --
+# "claude-tui" must mean one thing everywhere.
+#
+# The daemon install above is untouched by any of this. The dashboard is a client
+# of the daemon socket, so a missing dashboard costs you a view, never the tray.
+TUI_INSTALLED=""
+TUI_NOTE=""
+
+if [ ! -d "$BIN" ]; then
+  TUI_NOTE="$BIN does not exist -- skipping the terminal dashboard."
+elif ! command -v cargo >/dev/null 2>&1; then
+  TUI_NOTE="no cargo on PATH -- skipping the terminal dashboard."
+else
+  echo "Building the terminal dashboard (first build takes a minute)..."
+  # --locked so an install reproduces the committed dependency versions rather
+  # than silently resolving newer ones.
+  if cargo build --release --locked --manifest-path "$SRC/rust/Cargo.toml"; then
+    # Copied, not symlinked: a binary is a build artifact, and `cargo clean` must
+    # not uninstall the user's tool. Re-run this script after changing the source.
+    install -m 0755 "$SRC/rust/target/release/claude-tui" "$BIN/claude-tui"
+    TUI_INSTALLED="yes"
+  else
+    TUI_NOTE="the Rust build FAILED -- no dashboard was installed."
+  fi
 fi
 
 cat > "$AUTOSTART/claude-monitor.desktop" <<EOF
@@ -31,13 +56,28 @@ X-GNOME-Autostart-enabled=true
 NoDisplay=true
 EOF
 
+echo
 echo "Installed:"
 echo "  $HOOKS/claude-monitor.py"
 echo "  $HOOKS/claude-send.py"
 echo "  $AUTOSTART/claude-monitor.desktop"
-if [ -L "$HOME/.local/bin/claude-tui" ]; then
-  echo "  $HOME/.local/bin/claude-tui"
+if [ -n "$TUI_INSTALLED" ]; then
+  echo "  $BIN/claude-tui      (terminal dashboard)"
 fi
+
+if [ -n "$TUI_NOTE" ]; then
+  echo
+  echo "  NOTE: $TUI_NOTE"
+  echo "        The tray itself is installed and works. For the dashboard,"
+  echo "        install a Rust toolchain (https://rustup.rs) and re-run this script."
+fi
+
+if [ -n "$TUI_INSTALLED" ] && ! command -v claude-tui >/dev/null 2>&1; then
+  echo
+  echo "  NOTE: $BIN is not on your PATH, so 'claude-tui' will not resolve."
+  echo "        Add it:  export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi
+
 echo
 echo "Now merge these into the \"hooks\" object in ~/.claude/settings.json:"
 echo
@@ -45,3 +85,9 @@ cat "$SRC/settings.hooks.json"
 echo
 echo "Start it now without logging out:"
 echo "  setsid python3 $HOOKS/claude-monitor.py >/tmp/claude-monitor.log 2>&1 < /dev/null &"
+echo
+echo "Open the dashboard in a tmux popup (tmux 3.2+), from inside tmux:"
+echo "  tmux popup -E -w 90% -h 85% -T ' claude-tui ' claude-tui"
+echo
+echo "To bind it to prefix + u, add this to ~/.tmux.conf:"
+echo "  bind-key u popup -E -w 90% -h 85% -T ' claude-tui ' claude-tui"

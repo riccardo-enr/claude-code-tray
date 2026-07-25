@@ -33,9 +33,8 @@ just push events at it over a unix socket.
 Claude Code hook ──(JSON over unix socket)──> claude-monitor.py ──> tray menu
   claude-send.py {running|waiting|done|end}        (long-lived)      click -> focus
                                                         │
-                        {"query":"snapshot"} ───────────┤──> claude-tui.py   (Python TUI)
-                        one line out, one back          ├──> claude-tui      (Rust TUI)
-                                                        └──> dashboard.html  (browser)
+                        {"query":"snapshot"} ───────────┤──> claude-tui      (terminal)
+                        one line out, one back          └──> dashboard.html  (browser)
 ```
 
 - `claude-monitor.py` — long-lived helper: draws the AppIndicator tray menu,
@@ -83,7 +82,7 @@ click-to-focus keep working.
 
 Beyond the tray menu there are three views of the same snapshot.
 
-### Terminal (`just tui` / `just rust-tui`)
+### Terminal (`claude-tui`)
 
 Three stacked panels — usage, trends, sessions — driven off the snapshot verb at
 a 2s refresh, with a 1s local tick so countdowns and running-session timers move
@@ -119,16 +118,29 @@ between fetches.
 
 The selection is keyed to the session, not the row, so it follows its session
 when a status change reorders the list — pressing `enter` always focuses what is
-highlighted, never whatever slid into that slot. Both TUIs render through the
-terminal's own 16 ANSI colours, so they inherit your terminal theme rather than
+highlighted, never whatever slid into that slot. It renders through the
+terminal's own 16 ANSI colours, so it inherits your terminal theme rather than
 imposing one.
 
-Two implementations share the daemon and the number formatting:
+It is a standalone Rust binary: no Python, no `uv`, no Textual at runtime, and
+it starts instantly. The Python/Textual TUI it replaced is in
+[`archive/`](archive/README.md).
 
-- **`just tui`** — `claude-tui.py`, the Python/Textual original. Needs `uv`.
-- **`just rust-tui`** — a standalone Rust binary. Starts instantly, no Python at
-  runtime. Currently the newer of the two; `claude-tui.py` stays the reference
-  implementation and both are verified against a shared fixture corpus.
+#### In a tmux popup
+
+```sh
+just popup     # from inside tmux
+```
+
+or bind it to `prefix` + `u` in `~/.tmux.conf`:
+
+```tmux
+bind-key u popup -E -w 90% -h 85% -T ' claude-tui ' claude-tui
+```
+
+`-E` closes the popup when the command exits, so `q` dismisses it. Needs tmux
+3.2+. Because the popup runs the *installed* `claude-tui`, this is also the
+quickest check that `./install.sh` deployed what you expect.
 
 ### Browser (`just dashboard`)
 
@@ -154,9 +166,10 @@ rolled" rather than "usage fell".
 
 Optional, per dashboard:
 
-- `uv` — only for the Python TUI (`just tui`), which needs `textual`.
-- A Rust toolchain (1.90+) — only to build the Rust TUI (`just rust-tui`). The
-  tray daemon itself never needs it.
+- A Rust toolchain (1.90+) — to build `claude-tui`. Without it the tray still
+  installs and works; you just get no terminal dashboard. The daemon itself
+  never needs it.
+- `tmux` 3.2+ — for `just popup`.
 
 ## Install
 
@@ -164,10 +177,17 @@ Optional, per dashboard:
 ./install.sh
 ```
 
+This builds the terminal dashboard and installs `claude-tui` into
+`~/.local/bin`, symlinks the daemon and hook sender into `~/.claude/hooks`, and
+registers the autostart entry.
+
 Then merge `settings.hooks.json` into the `hooks` object of
 `~/.claude/settings.json`, and start the helper (the installer prints the exact
 command). It auto-starts on future logins via the installed
 `~/.config/autostart/claude-monitor.desktop`.
+
+Re-run `./install.sh` after changing the Rust source: the binary is copied, not
+symlinked, so that `cargo clean` cannot uninstall your tool.
 
 ## Config (env vars)
 
@@ -193,13 +213,15 @@ while the running daemon still holds the old code.
 | `just selfcheck`       | Assert suite for the Python core                       |
 | `just rust-test`       | Rust suite: unit, fixture corpus, and render tests     |
 | `just rust-lint`       | `cargo clippy -D warnings`                             |
-| `just tui` / `rust-tui`| Open either terminal dashboard                         |
+| `just install`         | Build and install everything, Rust dashboard as default|
+| `just rust-tui`        | Run the dashboard from the build tree                  |
+| `just popup`           | Open the installed dashboard in a tmux popup           |
 | `just dashboard`       | Open the generated HTML page                           |
 
 Run them from inside the desktop session so the GUI daemon inherits `DISPLAY`
 and `DBUS_SESSION_BUS_ADDRESS`.
 
-### Debugging the TUIs
+### Debugging the dashboard
 
 A working daemon only ever produces healthy data, so the states most likely to
 render wrong — a malformed section, a rejected session, a directory name full of
@@ -213,9 +235,8 @@ just rust-fixture hostile-terminal-controls --once
 ```
 
 `fixtures/snapshot/` holds those inputs paired with the semantic state a correct
-client must produce. It is language-neutral on purpose: both TUIs are checked
-against the same files, so a disagreement between them fails a test rather than
-being something you have to notice on screen.
+client must produce. The format is language-neutral, so the archived Python
+implementation can be checked against the same files if it is ever restored.
 
 ### Caveats
 

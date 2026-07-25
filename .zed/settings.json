@@ -1,0 +1,30 @@
+{
+  // claude-monitor.py is a gi.repository/PyGObject script whose modules are generated
+  // at runtime with no stubs. Force basedpyright to standard mode and silence the
+  // gi-dynamism diagnostics here, at the LSP level, so Zed applies them regardless of
+  // whether it discovers pyproject.toml's [tool.pyright] block. Mirrors that block.
+  // Global settings use ["basedpyright", "ruff", "..."] -- the "..." pulls in Zed's
+  // default pyright AND pylsp too, so three checkers diagnose every file. Their
+  // duplicate/uncofigured diagnostics (pylsp's pycodestyle E402 on the gi imports,
+  // pyright ignoring basedpyright settings) were the stray 4 errors + 3 warnings.
+  "languages": {
+    "Python": {
+      "language_servers": ["basedpyright", "ruff", "!pyright", "!pylsp"]
+    }
+  },
+  "lsp": {
+    "basedpyright": {
+      "settings": {
+        "basedpyright.analysis.typeCheckingMode": "standard",
+        "basedpyright.analysis.diagnosticSeverityOverrides": {
+          "reportMissingImports": "none",
+          "reportMissingModuleSource": "none",
+          "reportAttributeAccessIssue": "none",
+          "reportOptionalSubscript": "none",
+          "reportOptionalOperand": "none",
+          "reportOperatorIssue": "none"
+        }
+      }
+    }
+  }
+}
