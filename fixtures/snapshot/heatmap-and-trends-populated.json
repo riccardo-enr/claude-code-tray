@@ -1,0 +1,25 @@
+{
+  "name": "heatmap-and-trends-populated",
+  "note": "Both halves of the trends panel at once: a decoded sparkline graph and a populated heatmap beside it. The only fixture that exercises the side-by-side layout, and so the only one that can prove a narrow terminal drops the heatmap rather than wrapping it.",
+  "wire": "{\"trends\": [\"▁▃█▅ ▂▁▃█▅ ▂▁▃█▅ ▂▁▃█▅ ▂\", \"today 13.8M/hr | wk 16.5M/hr\", \"peak hour: 14:00 (29.3M/hr)\"], \"heatmap\": [[null, null, null, null, null, null, null, null, null, 0.4, 2.5, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, 8.0, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, 1.0, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 4.0, null, null, null]], \"usage\": {\"used_percentage\": 42.5, \"resets_at_epoch\": 1700000000, \"burn_rate_per_min\": 1200, \"seven_day_pct\": 15.0, \"seven_day_reset\": 1700500000}}",
+  "expect": {
+    "trends": {
+      "rows": [
+        "▁▃█▅ ▂▁▃█▅ ▂▁▃█▅ ▂▁▃█▅ ▂",
+        "today 13.8M/hr | wk 16.5M/hr",
+        "peak hour: 14:00 (29.3M/hr)"
+      ]
+    },
+    "heatmap": {
+      "rows": 7,
+      "cols": 24,
+      "cell_0_9": 0.4,
+      "cell_1_14": 8.0,
+      "cell_0_0": null
+    },
+    "usage": {
+      "used_percentage": 42.5,
+      "seven_day_pct": 15.0
+    }
+  }
+}

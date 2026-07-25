@@ -70,5 +70,21 @@ rust-test:
 rust-lint:
     cd rust && cargo clippy --all-targets -- -D warnings
 
+# Render a fixture instead of the live daemon -- the only way to see failure
+# states (malformed sections, hostile paths, cold start) on a healthy machine.
+#   just rust-fixture partial-sections
+#   just rust-fixture hostile-terminal-controls --once
+rust-fixture name *args:
+    cd rust && cargo run --release --quiet -- --fixture ../fixtures/snapshot/{{name}}.json {{args}}
+
+# Dump every fixture through the real renderer. Quick eyeball over all states.
+rust-states:
+    #!/usr/bin/env bash
+    for f in fixtures/snapshot/*.json; do
+      echo "### $(basename "$f" .json)"
+      ./rust/target/release/claude-tui --fixture "$f" --once
+      echo
+    done
+
 # Both verification gates in one shot.
 check: selfcheck rust-test

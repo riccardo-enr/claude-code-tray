@@ -15,6 +15,7 @@ name = "claude_tui"
 path = "src/lib.rs"
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 crossterm = "0.29.0"
 ratatui = "0.30.2"
 # The only runtime dependency. Normalization deliberately walks `serde_json::Value`
