@@ -126,6 +126,52 @@ def hook_session_event(event, background_tasks):
     return event
 
 
+# Tool names whose dispatch means "a subagent just started". Claude Code has named this
+# tool both `Task` and `Agent` across versions; both are accepted so the count does not
+# silently stop working after an upgrade.
+AGENT_TOOLS = ("Task", "Agent")
+
+
+def subagent_delta(event, tool_name):
+    """How this hook event changes the session's live-subagent count. Pure.
+
+    `+1` on a PreToolUse dispatching a subagent (which arrives as event "running",
+    since every PreToolUse maps to running -- see hook_session_event), `-1` on the
+    dedicated "subagent_stop" event, `0` for everything else. Subagent hooks carry the
+    PARENT session_id (verified in .planning/debug/resolved/subagent-shows-as-waiting.md),
+    so both ends of the count land on the right row.
+    """
+    if event == "subagent_stop":
+        return -1
+    if event == "running" and tool_name in AGENT_TOOLS:
+        return 1
+    return 0
+
+
+def apply_subagent_delta(count, delta):
+    """Fold `delta` into `count`, clamped at zero. Pure.
+
+    The clamp is the whole point: a `SubagentStop` whose matching start the daemon never
+    saw -- because the daemon was restarted mid-subagent -- would otherwise drive the
+    count negative and render as "(-1 agents)" forever.
+    """
+    return max(0, (count or 0) + delta)
+
+
+def session_row_label(directory, status, agents):
+    """The tray menu row for one session. Pure, ASCII only.
+
+    The count is an OVERLAY on the status, never a replacement for it: `waiting` still
+    has to read as "this session wants you" (it is what drives the badge, the
+    notification and the attention count), while the suffix answers the separate
+    question of whether anything is still grinding in the background.
+    """
+    row = "%s  [%s]" % (directory, status)
+    if agents:
+        return "%s  (%d agent%s)" % (row, agents, "" if agents == 1 else "s")
+    return row
+
+
 def sess_notify_baseline(live_status, reaped_status):
     """Resolve the `old` status Monitor.handle feeds sess_should_notify. Pure.
     A reaped-then-resurrected session reads its live status as None (Monitor._pop_stale
@@ -180,6 +226,9 @@ def build_session_snapshot(sessions):
             "pane": s.get("pane", ""),
             "tmux": s.get("tmux", ""),
             "term": s.get("term", ""),
+            # Live subagent count. The Rust TUI's parser ignores unknown keys, so this is
+            # additive for it; it exists so socket clients can show the same overlay.
+            "agents": s.get("agents", 0),
         }
         for s in sessions
     ]

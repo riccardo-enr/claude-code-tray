@@ -289,7 +289,9 @@ class Monitor:
             self.menu.append(mi)
         else:
             for s in self.sessions.values():
-                mi = Gtk.MenuItem.new_with_label("%s  [%s]" % (s["dir"], s["status"]))
+                mi = Gtk.MenuItem.new_with_label(
+                    core.session_row_label(s["dir"], s["status"], s.get("agents", 0))
+                )
                 mi.connect("activate", lambda _w, s=s: self.on_click(s))
                 self.menu.append(mi)
         for row in self.usage_rows():
@@ -431,6 +433,19 @@ class Monitor:
             self.rebuild_menu()
             return False
 
+        delta = core.subagent_delta(event, msg.get("tool_name", ""))
+        # "subagent_stop" is a COUNTER event, not a status: a subagent finishing says
+        # nothing about whether the parent is running, waiting or done, so it must never
+        # reach the status write below (which would render the row as "[subagent_stop]").
+        if event == "subagent_stop":
+            with self.sessions_lock:
+                s = self.sessions.get(sid)
+                if s is None:
+                    return False  # unknown session (daemon started mid-turn); nothing to count
+                s["agents"] = core.apply_subagent_delta(s.get("agents"), delta)
+            self.rebuild_menu()
+            return False
+
         cwd = msg.get("cwd") or "."
         d = os.path.basename(cwd.rstrip("/")) or cwd
         pane = msg.get("pane") or ""
@@ -458,6 +473,13 @@ class Monitor:
                 cwd=cwd,
                 term=term,
                 acked=bool(msg.get("_onscreen")),
+            )
+            # A genuine `done` means the turn ended with no background work left
+            # (hook_session_event already remapped done-with-background_tasks to running),
+            # so any count still standing is leaked -- a subagent killed without firing
+            # SubagentStop. Clearing here is the self-heal for that ceiling.
+            s["agents"] = 0 if event == "done" else core.apply_subagent_delta(
+                s.get("agents"), delta
             )
             # Stamp the time-in-state clock ONLY on a real transition, reusing the SAME
             # `old` sess_should_notify reads below. An unconditional stamp would reset the

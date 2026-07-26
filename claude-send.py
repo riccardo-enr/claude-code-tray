@@ -5,7 +5,7 @@ Reads the hook JSON on stdin, tags it with the tmux pane/socket from the
 environment, and fires it at the monitor's unix socket. Non-blocking and
 silent if the monitor is not running -- must never hold up a hook.
 
-Usage (as a hook command):  claude-send.py {running|waiting|done|end}
+Usage (as a hook command):  claude-send.py {running|waiting|done|end|subagent_stop}
 """
 
 import json
@@ -53,6 +53,9 @@ if __name__ == "__main__":
         "tmux": os.environ.get("TMUX", ""),
         "term": os.environ.get("TERM_PROGRAM", ""),  # "zed" -> raise the Zed window, not tmux
         "background_tasks": data.get("background_tasks", []),
+        # PreToolUse only: lets the daemon tell a subagent dispatch from any other tool
+        # call, both of which arrive as the same "running" event.
+        "tool_name": data.get("tool_name", ""),
     }
 
     send_event(msg, sock)

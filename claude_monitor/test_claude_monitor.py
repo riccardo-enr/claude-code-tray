@@ -65,6 +65,9 @@ from .core import (
     reset_marks,
     sess_elapsed,
     sess_notify_baseline,
+    session_row_label,
+    subagent_delta,
+    apply_subagent_delta,
     sess_rank,
     sess_rows,
     sess_should_notify,
@@ -818,8 +821,8 @@ def demo():
     ]
     _snap_out = build_session_snapshot(_snap_in)
     assert _snap_out == [
-        {"id": "sid-a", "dir": "proj-a", "status": "running", "entered": 100.0, "frozen": None, "pane": "%1", "tmux": "/tmp/x", "term": "ghostty"},
-        {"id": "", "dir": "proj-b", "status": "done", "entered": 90.0, "frozen": 12.5, "pane": "", "tmux": "", "term": ""},
+        {"id": "sid-a", "dir": "proj-a", "status": "running", "entered": 100.0, "frozen": None, "pane": "%1", "tmux": "/tmp/x", "term": "ghostty", "agents": 0},
+        {"id": "", "dir": "proj-b", "status": "done", "entered": 90.0, "frozen": 12.5, "pane": "", "tmux": "", "term": "", "agents": 0},
     ]
     assert build_session_snapshot([]) == []
     # purity: calling twice yields independent lists, input untouched.
@@ -869,11 +872,51 @@ def demo():
         "UserPromptSubmit": "running",
         "PreToolUse": "running",  # the mid-turn un-latch; without it `waiting` sticks
         "Notification": "waiting",
+        "SubagentStop": "subagent_stop",  # closes the subagent count opened by PreToolUse
         "Stop": "done",
         "SessionEnd": "end",
     }, _sent
-    # and the daemon must accept every status the template can send.
-    assert all(hook_session_event(v, []) == v for v in _sent.values() if v != "done")
+    # and the daemon must accept every status the template can send. "subagent_stop" is
+    # excluded on purpose: it is a counter event intercepted in Monitor.handle before the
+    # status write, never a status (a row must never read "[subagent_stop]").
+    assert all(
+        hook_session_event(v, []) == v
+        for v in _sent.values()
+        if v not in ("done", "subagent_stop")
+    )
+
+    # --- live-subagent count (overlay on status, not a replacement for it) ---
+    # Every PreToolUse arrives as "running"; only a subagent dispatch counts.
+    assert subagent_delta("running", "Task") == 1
+    assert subagent_delta("running", "Agent") == 1  # both names seen across CC versions
+    assert subagent_delta("running", "Bash") == 0
+    assert subagent_delta("running", "") == 0
+    assert subagent_delta("subagent_stop", "") == -1
+    # a status event is never a counter event, whatever tool_name rides along
+    assert subagent_delta("waiting", "Task") == 0
+    assert subagent_delta("done", "Task") == 0
+
+    # Clamped at zero: a SubagentStop whose start the daemon never saw (restarted
+    # mid-subagent) must not render as "(-1 agents)" forever.
+    assert apply_subagent_delta(0, -1) == 0
+    assert apply_subagent_delta(None, 1) == 1  # first ever count on a fresh session dict
+    assert apply_subagent_delta(2, 1) == 3
+    assert apply_subagent_delta(1, -1) == 0
+
+    # The overlay preserves the status verbatim -- `waiting` still reads as "wants you",
+    # which is what drives the badge, the notification and the attention count.
+    assert session_row_label("hkust", "waiting", 0) == "hkust  [waiting]"
+    assert session_row_label("hkust", "waiting", 2) == "hkust  [waiting]  (2 agents)"
+    assert session_row_label("hkust", "running", 1) == "hkust  [running]  (1 agent)"
+    assert "[" in session_row_label("hkust", "waiting", 2)  # status never replaced
+    assert session_row_label("d", "running", 0).isascii()
+    assert session_row_label("d", "running", 3).isascii()
+
+    # and the count reaches socket clients alongside the status.
+    _snap = build_session_snapshot([{"id": "x", "status": "waiting", "agents": 2}])
+    assert _snap[0]["agents"] == 2
+    assert _snap[0]["status"] == "waiting"  # unchanged by the overlay
+    assert build_session_snapshot([{"id": "x"}])[0]["agents"] == 0  # absent -> 0
 
     # --- session_stale reap decision (G-07-2 self-heal) ---
     NOW = 2_000_000  # synthetic epoch, never time.time()
