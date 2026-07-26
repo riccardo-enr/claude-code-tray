@@ -848,6 +848,33 @@ def demo():
     assert hook_session_event("done", None) == "done"
     assert hook_session_event("waiting", [{"id": "agent-1"}]) == "waiting"
 
+    # --- hook registration contract (settings.hooks.json template) ---
+    # Status only ever changes on an INBOUND event, so a status is escapable only if
+    # some registered hook maps out of it. `waiting` is set by Notification -- which
+    # fires MID-TURN for a permission prompt or AskUserQuestion -- and answering such a
+    # prompt does NOT fire UserPromptSubmit (that is only for a fresh prompt typed at the
+    # main input). So without a hook that fires DURING a turn, `waiting` latched until
+    # Stop while the agent kept working; a multi-minute subagent shown as "waiting" was
+    # the visible symptom. PreToolUse is that un-latch: any tool dispatch means working.
+    # Guarded here so the registration cannot be dropped again -- no assertion on the
+    # matcher, since narrowing it is a documented cost/coverage tradeoff (see README).
+    _tmpl = pathlib.Path(__file__).resolve().parent.parent / "settings.hooks.json"
+    _sent = {
+        event: entry["hooks"][0]["command"].rsplit(" ", 1)[1]
+        for event, entries in json.loads(_tmpl.read_text())["hooks"].items()
+        for entry in entries
+        if "claude-send.py" in entry["hooks"][0]["command"]
+    }
+    assert _sent == {
+        "UserPromptSubmit": "running",
+        "PreToolUse": "running",  # the mid-turn un-latch; without it `waiting` sticks
+        "Notification": "waiting",
+        "Stop": "done",
+        "SessionEnd": "end",
+    }, _sent
+    # and the daemon must accept every status the template can send.
+    assert all(hook_session_event(v, []) == v for v in _sent.values() if v != "done")
+
     # --- session_stale reap decision (G-07-2 self-heal) ---
     NOW = 2_000_000  # synthetic epoch, never time.time()
     MAX_AGE = 3600

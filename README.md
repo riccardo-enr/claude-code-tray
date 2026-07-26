@@ -191,6 +191,29 @@ Then merge `settings.hooks.json` into the `hooks` object of
 command). It auto-starts on future logins via the installed
 `~/.config/autostart/claude-monitor.desktop`.
 
+The hooks map to statuses like this:
+
+| Hook               | Status    | Why                                                          |
+| ------------------ | --------- | ------------------------------------------------------------ |
+| `UserPromptSubmit` | `running` | you sent a new prompt                                        |
+| `PreToolUse`       | `running` | a tool is being dispatched, so the agent is working           |
+| `Notification`     | `waiting` | a permission prompt or `AskUserQuestion` needs you           |
+| `Stop`             | `done`    | the turn finished                                            |
+| `SessionEnd`       | (removed) | the session ended                                            |
+
+`PreToolUse` is registered for **every** tool, deliberately. Answering an
+in-turn prompt (a permission dialog or `AskUserQuestion`) does **not** fire
+`UserPromptSubmit` — that only fires for a fresh prompt typed at the main
+input — so without a hook that fires mid-turn, `waiting` would latch for the
+whole rest of the turn while the agent kept working. A long subagent is the
+most visible case: the tray would say `waiting` for minutes while a `Task` ran.
+Tool calls made *inside* a subagent carry the parent's `session_id`, so they
+keep refreshing the parent row for the subagent's full duration.
+
+The cost is ~50 ms per tool call (`PreToolUse` hooks block the call). If that
+ever matters, narrow the matcher to `Task|Agent|Bash|Edit|Write|MultiEdit` —
+it loses coverage of read-only-only continuations but keeps the common cases.
+
 Re-run `./install.sh` after changing the Rust source: the binary is copied, not
 symlinked, so that `cargo clean` cannot uninstall your tool.
 

@@ -6,6 +6,9 @@
     "Notification": [
       { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-send.py\" waiting" } ] }
     ],
+    "PreToolUse": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-send.py\" running" } ] }
+    ],
     "Stop": [
       { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/claude-send.py\" done" } ] }
     ],
