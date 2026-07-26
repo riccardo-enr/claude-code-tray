@@ -200,6 +200,7 @@ The hooks map to statuses like this:
 | `Notification`     | `waiting` | a permission prompt or `AskUserQuestion` needs you           |
 | `Stop`             | `done`    | the turn finished                                            |
 | `SessionEnd`       | (removed) | the session ended                                            |
+| `SubagentStop`     | (counter) | a subagent finished — adjusts the count, never the status    |
 
 `PreToolUse` is registered for **every** tool, deliberately. Answering an
 in-turn prompt (a permission dialog or `AskUserQuestion`) does **not** fire
@@ -209,6 +210,29 @@ whole rest of the turn while the agent kept working. A long subagent is the
 most visible case: the tray would say `waiting` for minutes while a `Task` ran.
 Tool calls made *inside* a subagent carry the parent's `session_id`, so they
 keep refreshing the parent row for the subagent's full duration.
+
+### Live subagent count
+
+`status` is a single latch, so it can say `running` **or** `waiting` but never
+"waiting on you, and two subagents are still grinding". A `Notification`
+arriving mid-subagent flips the row to `waiting` and the subagent's next tool
+call flips it back — the row flaps, and neither value is the whole truth.
+
+So the count is tracked separately and rendered as an *overlay* on the status:
+
+```
+hkust-fuel-ipp-ros2  [waiting]  (2 agents)
+```
+
+`PreToolUse` with a `tool_name` of `Task`/`Agent` increments it; `SubagentStop`
+decrements it. Both carry the **parent** `session_id`, so both ends land on the
+right row. `waiting` keeps its exact meaning — it is what drives the `!` badge,
+the notification and the attention count — and the suffix answers the separate
+question of whether anything is still running in the background.
+
+The count is clamped at zero and cleared on a genuine `done`, so a subagent
+killed without firing `SubagentStop` (or one in flight when the daemon
+restarts) cannot leak a permanent phantom count.
 
 The cost is ~50 ms per tool call (`PreToolUse` hooks block the call). If that
 ever matters, narrow the matcher to `Task|Agent|Bash|Edit|Write|MultiEdit` —
