@@ -42,7 +42,8 @@ The wire contract being consumed is fixed and lives in
                   burn_rate_per_min, seven_day_pct, seven_day_reset,
                   cost_usd, cost_per_hour, pace_used_pct, pace_elapsed_pct,
                   pace_label, model_mix} | null,
-     "trends":   [string] | null}
+     "trends":   [string] | null,
+     "cum_trend": [string] | null}
 */
 
 use std::fmt;
@@ -255,6 +256,11 @@ pub struct Snapshot {
     missing axis costs labels, not a panel, so there is no degraded state worth
     distinguishing from absent. */
     pub trend_axis: Option<Vec<String>>,
+    /* Cumulative usage within the CURRENT rolling 5h quota window, produced by
+    `claude_monitor.core.build_cum_trend`. A second, independent graph from
+    `trends` -- normalized through the identical array-of-strings path because
+    the wire shape is identical (Section<Vec<String>>, same as `trends`). */
+    pub cum_trend: Section<Vec<String>>,
     pub heatmap: Section<Heatmap>,
     pub sessions: Section<Sessions>,
 }
@@ -286,6 +292,7 @@ impl Snapshot {
             usage: normalize_usage(obj.get("usage")),
             trends: normalize_trends(obj.get("trends")),
             trend_axis: normalize_trend_axis(obj.get("trend_axis")),
+            cum_trend: normalize_trends(obj.get("cum_trend")),
             heatmap: normalize_heatmap(obj.get("heatmap")),
             sessions: normalize_sessions(obj.get("sessions")),
         })

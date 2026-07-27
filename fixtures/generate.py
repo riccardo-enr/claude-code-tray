@@ -51,9 +51,11 @@ F["cold-start-null-sections"] = {
     "note": "What the daemon actually sends before its first usage poll. Null is "
             "legitimate absence, never malformation -- conflating the two would show a "
             "malformed-data warning at every startup.",
-    "wire": {"usage": None, "trends": None, "heatmap": None, "sessions": []},
+    "wire": {"usage": None, "trends": None, "heatmap": None, "sessions": [],
+             "cum_trend": None},
     "expect": {"usage": "absent", "trends": "absent", "heatmap": "absent",
-               "sessions": {"rejected": 0, "entries": []}},
+               "sessions": {"rejected": 0, "entries": []},
+               "cum_trend": "absent"},
 }
 
 F["missing-optional-fields"] = {
@@ -72,9 +74,11 @@ F["partial-sections"] = {
                        "burn_rate_per_min": 5},
              "heatmap": "not a grid",
              "trends": [42],
+             "cum_trend": [42],
              "sessions": [{"id": "a", "dir": "~/x", "status": "done", "pane": "%1"}]},
     "expect": {"usage": {"used_percentage": 91.0}, "heatmap": "malformed",
                "trends": "malformed",
+               "cum_trend": "malformed",
                "sessions": {"rejected": 0, "entries": [{"id": "a", "status": "done"}]}},
 }
 
@@ -161,6 +165,16 @@ F["hostile-controls-in-trend-rows"] = {
             "string' is not the same as 'this string is safe'.",
     "wire": {"trends": ["peak " + ESC + "]52;c;x" + BEL + "hour", ESC + "[31mred"]},
     "expect": {"trends": {"rows": ["peak ?hour", "?red"]}},
+}
+
+F["cum-trend-populated"] = {
+    "note": "cum_trend crosses the same trust boundary as trends via the shared "
+            "normalize function: a populated sparkline survives verbatim, and a row "
+            "carrying an OSC-52 clipboard-write control sequence + BEL comes back "
+            "with its control characters replaced.",
+    "wire": {"cum_trend": ["▁▂▃█",
+                           "peak " + ESC + "]52;c;x" + BEL + "hour"]},
+    "expect": {"cum_trend": {"rows": ["▁▂▃█", "peak ?hour"]}},
 }
 
 F["markup-like-text-preserved"] = {

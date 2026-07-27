@@ -43,6 +43,7 @@ Otherwise each section key carries either a state name -- `"absent"` or
 |------------|--------------------------------------------------------------------|
 | `usage`    | any subset of the seven usage fields; `null` asserts explicit absence |
 | `trends`   | `{"rows": ["..."]}` -- the sanitized row strings                    |
+| `cum_trend`| `{"rows": ["..."]}` -- cumulative-window sparkline, same shape as `trends` |
 | `heatmap`  | `{"rows": 7, "cols": 24}`                                           |
 | `sessions` | `{"rejected": N, "entries": [{...}]}`                               |
 

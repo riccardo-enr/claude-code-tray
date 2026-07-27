@@ -140,7 +140,8 @@ fn check(fixture: &Fixture) -> Result<(), String> {
     for (key, expected) in fixture.expect.as_object().ok_or("`expect` is not an object")? {
         match key.as_str() {
             "usage" => check_usage(&snapshot, expected)?,
-            "trends" => check_trends(&snapshot, expected)?,
+            "trends" => check_trends(&snapshot.trends, expected, "trends")?,
+            "cum_trend" => check_trends(&snapshot.cum_trend, expected, "cum_trend")?,
             "heatmap" => check_heatmap(&snapshot, expected)?,
             "sessions" => check_sessions(&snapshot, expected)?,
             other => return Err(format!("unknown expectation key {:?}", other)),
@@ -232,24 +233,24 @@ fn check_usage(snapshot: &Snapshot, expected: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn check_trends(snapshot: &Snapshot, expected: &Value) -> Result<(), String> {
-    if !check_state(&snapshot.trends, expected, "trends")? {
+fn check_trends(section: &Section<Vec<String>>, expected: &Value, name: &str) -> Result<(), String> {
+    if !check_state(section, expected, name)? {
         return Ok(());
     }
-    let rows = snapshot.trends.present().ok_or("trends: not present")?;
+    let rows = section.present().ok_or_else(|| format!("{}: not present", name))?;
     let want = expected
         .get("rows")
         .and_then(|v| v.as_array())
-        .ok_or("trends: expectation needs a `rows` array")?;
+        .ok_or_else(|| format!("{}: expectation needs a `rows` array", name))?;
 
     if rows.len() != want.len() {
-        return Err(format!("trends: expected {} rows, got {}", want.len(), rows.len()));
+        return Err(format!("{}: expected {} rows, got {}", name, want.len(), rows.len()));
     }
     for (i, expected_row) in want.iter().enumerate() {
-        let expected_row = expected_row.as_str().ok_or("trends: rows must be strings")?;
+        let expected_row = expected_row.as_str().ok_or_else(|| format!("{}: rows must be strings", name))?;
         let got = rows.get(i).map(String::as_str).unwrap_or_default();
         if got != expected_row {
-            return Err(format!("trends[{}]: expected {:?}, got {:?}", i, expected_row, got));
+            return Err(format!("{}[{}]: expected {:?}, got {:?}", name, i, expected_row, got));
         }
     }
     Ok(())

@@ -1,13 +1,14 @@
 {
   "name": "partial-sections",
   "note": "D-02, the central contract: a malformed heatmap must not blank the quota gauges or the sessions table.",
-  "wire": "{\"usage\": {\"used_percentage\": 91.0, \"resets_at_epoch\": 1700000000, \"burn_rate_per_min\": 5}, \"heatmap\": \"not a grid\", \"trends\": [42], \"sessions\": [{\"id\": \"a\", \"dir\": \"~/x\", \"status\": \"done\", \"pane\": \"%1\"}]}",
+  "wire": "{\"usage\": {\"used_percentage\": 91.0, \"resets_at_epoch\": 1700000000, \"burn_rate_per_min\": 5}, \"heatmap\": \"not a grid\", \"trends\": [42], \"cum_trend\": [42], \"sessions\": [{\"id\": \"a\", \"dir\": \"~/x\", \"status\": \"done\", \"pane\": \"%1\"}]}",
   "expect": {
     "usage": {
       "used_percentage": 91.0
     },
     "heatmap": "malformed",
     "trends": "malformed",
+    "cum_trend": "malformed",
     "sessions": {
       "rejected": 0,
       "entries": [

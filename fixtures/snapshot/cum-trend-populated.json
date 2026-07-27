@@ -1,0 +1,13 @@
+{
+  "name": "cum-trend-populated",
+  "note": "cum_trend crosses the same trust boundary as trends via the shared normalize function: a populated sparkline survives verbatim, and a row carrying an OSC-52 clipboard-write control sequence + BEL comes back with its control characters replaced.",
+  "wire": "{\"cum_trend\": [\"▁▂▃█\", \"peak \\u001b]52;c;x\\u0007hour\"]}",
+  "expect": {
+    "cum_trend": {
+      "rows": [
+        "▁▂▃█",
+        "peak ?hour"
+      ]
+    }
+  }
+}
