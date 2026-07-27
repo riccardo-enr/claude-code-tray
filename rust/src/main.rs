@@ -909,6 +909,25 @@ stays on screen. Keep the LAST `budget` characters instead -- the newest
 columns -- dropping the FIRST ones. Only row 0 is glyph columns; any further
 rows are the already-short text line(s) and pass through untouched.
 
+`build_cum_trend` buckets the WHOLE window, `[reset - WIN5, reset)` -- window
+START to window END/reset, not "oldest sampled" to "now". Since `reset` is
+always in the future relative to "now" (the window has not finished), every
+bucket index past `(now - start) // CUM_TREND_INTERVAL` is a genuine,
+not-yet-sampled FUTURE bucket and renders as `SPARK_GAP` (a literal space) by
+design -- so an unsampled bucket reads distinctly from a genuinely-idle-but-
+sampled one (which renders at the floor glyph, not a gap). That trailing
+blank run is real, but it is never the "newest data" a raw last-N-characters
+clip assumes it is: true for the ORIGINAL hourly bar chart (its last index IS
+the current hour, no future buckets exist at all), false here. A raw
+whole-string clip (the pre-fix code) could keep nothing but that trailing
+blank run, rendering a genuinely climbing series as a totally empty graph --
+confirmed live (300-char row, ~124 real chars + 176 literal spaces,
+graph_width 136, pre-fix output 132 chars all spaces). The fix: find the end
+of the REAL (non-blank) prefix first, clip WITHIN that prefix only, and drop
+the trailing blank run unconditionally -- even when the whole real prefix
+already fits `budget`, so the display never spends width on blank future
+space it could give to real data instead.
+
 `trend_graph_lines` itself stays unmodified (still shared with the untouched
 hourly chart), so the axis-gutter width it will reserve is recomputed here
 with the IDENTICAL formula that function uses internally -- duplicated
@@ -922,10 +941,10 @@ fn clip_to_newest(rows: &[String], axis: Option<&[String]>, panel_width: u16) ->
     let budget = (panel_width as usize).saturating_sub(gutter);
     let mut out: Vec<String> = rows.to_vec();
     if let Some(first) = out.first_mut() {
-        let len = first.chars().count();
-        if len > budget {
-            *first = first.chars().skip(len - budget).collect();
-        }
+        let chars: Vec<char> = first.chars().collect();
+        let real_len = chars.iter().rposition(|&c| c != ' ').map(|i| i + 1).unwrap_or(0);
+        let start = real_len.saturating_sub(budget);
+        *first = chars[start..real_len].iter().collect();
     }
     out
 }
@@ -1488,6 +1507,33 @@ mod tests {
             "expected 1-4 filled level-7 cells (newest columns kept) in row {}, got {}: {:?}",
             top_row, filled, rows[top_row]
         );
+    }
+
+    #[test]
+    fn clip_to_newest_drops_the_trailing_future_blank_run_not_the_real_data() {
+        /* Shaped like the real bug: a real-data prefix shorter than the total
+        string, followed by a trailing run of spaces extending to the full
+        length -- mirrors build_cum_trend's window-through-reset array, where
+        every bucket past "now" is a genuine not-yet-sampled FUTURE bucket
+        rendered as a literal space. */
+        let real = "0123456789";
+        let sparkline = format!("{}{}", real, " ".repeat(20));
+        assert_eq!(sparkline.chars().count(), 30, "transcription error in the fixture string");
+
+        /* Case 1: budget(15) > real_len(10), budget(15) < total_len(30) --
+        exactly the live bug's own relationship. The pre-fix code returns all
+        spaces here; the fix must return the whole real prefix, trailing
+        blanks dropped. */
+        let clipped = clip_to_newest(std::slice::from_ref(&sparkline), None, 15);
+        let first = &clipped[0];
+        assert_ne!(first.chars().next(), Some(' '), "clip returned blank tail instead of real data");
+        assert_eq!(first.chars().last(), Some('9'), "clip did not keep the real prefix's own last character");
+        assert_eq!(first, real, "fits-within-budget case must return the whole real prefix, unpadded");
+
+        /* Case 2: budget(6) < real_len(10) -- slicing within the real prefix,
+        keeping its newest (rightmost) columns. */
+        let clipped_narrow = clip_to_newest(&[sparkline], None, 6);
+        assert_eq!(clipped_narrow[0], "456789");
     }
 
     fn sessions_app(wire: &str) -> App {

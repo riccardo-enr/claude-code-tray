@@ -192,19 +192,30 @@ _CUM_CLIMB = (
 )
 assert len(_CUM_CLIMB) == 60
 
+# Trailing not-yet-sampled region: build_cum_trend's array spans the WHOLE
+# window through reset, not just up to "now", so every bucket past "now" is a
+# genuine future bucket rendered as a literal SPARK_GAP space.
+_CUM_FUTURE_BLANK = " " * 60
+_CUM_SPARKLINE = _CUM_CLIMB + _CUM_FUTURE_BLANK
+
 F["cum-trend-clipped-keeps-newest"] = {
-    "note": "Permanent regression asset for BOTH the visual autoscale check and the "
-            "width-clip check: a 60-column sparkline climbing from level 0 to level 7 "
-            "in 8-column blocks (level 7 reachable only by its last 4 columns); at a "
-            "narrow `just rust-fixture cum-trend-clipped-keeps-newest` terminal width "
-            "the top row must still show filled cells, proving the clip kept the "
-            "newest (rightmost) columns, not the oldest (leftmost).",
+    "note": "Permanent regression asset for the visual autoscale check, the "
+            "width-clip check, and the 260727-nlo trailing-blank-run check: a "
+            "60-column sparkline climbing from level 0 to level 7 in 8-column "
+            "blocks (level 7 reachable only by its last 4 columns), followed by 60 "
+            "trailing blank (unsampled-future) columns modeling build_cum_trend's "
+            "actual window-through-reset shape. At a `just rust-fixture "
+            "cum-trend-clipped-keeps-newest` terminal width narrower than the "
+            "60-column real climb, the top row must still show filled cells from "
+            "the REAL data -- proving the clip found the real prefix and kept its "
+            "newest columns, not the blank future run and not the oldest real "
+            "columns either.",
     "wire": {"trends": ["▁█", "today 1M/hr"],
              "trend_axis": ["1M/8%", "", "", "500k/4%", "", "", "", "0"],
-             "cum_trend": [_CUM_CLIMB, "now 28%  resets in 3h 34m"],
+             "cum_trend": [_CUM_SPARKLINE, "now 28%  resets in 3h 34m"],
              "cum_trend_axis": ["28%", "", "", "16%", "", "", "", "0"]},
     "expect": {"trends": {"rows": ["▁█", "today 1M/hr"]},
-               "cum_trend": {"rows": [_CUM_CLIMB, "now 28%  resets in 3h 34m"]},
+               "cum_trend": {"rows": [_CUM_SPARKLINE, "now 28%  resets in 3h 34m"]},
                "cum_trend_axis": {"ticks": ["28%", "", "", "16%", "", "", "", "0"]}},
 }
 
