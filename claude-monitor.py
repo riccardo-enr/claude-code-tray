@@ -52,7 +52,7 @@ URGENCY_NORMAL = 1  # 4s banner, then GNOME's notification list
 URGENCY_CRITICAL = 2  # no dismiss timer; sticks until clicked
 
 PRUNE_INTERVAL = 6 * 3600  # opportunistic-prune cadence (seconds)
-TREND_INTERVAL = 5 * 60  # trend recompute throttle in poll_loop (seconds)
+TREND_INTERVAL = 60  # trend recompute throttle in poll_loop (seconds); 1 minute
 
 # D-12 parity with the Rust client's MAX_ROUTE_CHARS (rust/src/sanitize.rs): a
 # focus-routing value this long is rejected outright, never truncated -- a clipped
@@ -72,6 +72,7 @@ class Monitor:
         self.trends = None  # cached trend row strings, or None (collecting state)
         self.trend_axis = None  # cached graph y-axis tick labels (top row first), or None
         self.cum_trend = None  # cached cumulative-window-usage sparkline, or None (collecting state)
+        self.cum_trend_axis = None  # cached fixed y-axis for cum_trend, or None (collecting state)
         self.heatmap = None  # cached 7x24 usage-rise grid, or None until history is read
         self.dash_ready = False  # gates the menu item until the first dashboard write
 
@@ -387,6 +388,7 @@ class Monitor:
         self.trends = core.build_trend_rows(records, now)
         self.trend_axis = core.trend_axis(records, now)
         self.cum_trend = core.build_cum_trend(records, now)
+        self.cum_trend_axis = core.CUM_TREND_AXIS if self.cum_trend else None
         self.heatmap = core.heatmap_buckets(core.history_numeric(records))
 
     def write_dashboard(self, now):
@@ -672,6 +674,7 @@ def _handle_conn(mon, conn):
                         "trends": mon.trends,
                         "trend_axis": mon.trend_axis,
                         "cum_trend": mon.cum_trend,
+                        "cum_trend_axis": mon.cum_trend_axis,
                     }
                     conn.sendall((json.dumps(snapshot) + "\n").encode("utf-8"))
                 continue

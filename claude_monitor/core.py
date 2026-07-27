@@ -1001,10 +1001,19 @@ GAP_MAX = 300  # seconds; a hole wider than this is a data gap, not a trend
 # rise by `burn` * elapsed instead of a constant.
 RISE_MAX = 25.0
 
-# ponytail: fixed 15-minute sampling interval for the cumulative-window sparkline
-# (WIN5 // CUM_TREND_INTERVAL == 20 columns), deliberately not a config knob -- upgrade
+# ponytail: fixed 5-minute sampling interval for the cumulative-window sparkline
+# (WIN5 // CUM_TREND_INTERVAL == 60 columns), deliberately not a config knob -- upgrade
 # path is a config surface if a different interval is ever wanted, YAGNI until then.
-CUM_TREND_INTERVAL = 900  # seconds; 15 minutes
+CUM_TREND_INTERVAL = 300  # seconds; 5 minutes
+
+# Fixed y-axis for the cum_trend graph, TOP ROW FIRST -- mirrors trend_axis's own tick
+# convention (rows = len(SPARK_GLYPHS) == 8, ticked = {top, rows // 2, 0} = {7, 4, 0})
+# but as a plain constant, not a function: the ceiling here is a FIXED 100 (a %-of-window
+# bar always means the same thing), never a locally observed peak, so there is nothing
+# to recompute at render time. 57% is round(100 * 4 / 7), the honest value for row 4 --
+# "50%" would mislabel which row is drawn where, exactly the mislabeling trend_axis's own
+# docstring says it avoids.
+CUM_TREND_AXIS = ["100%", "", "", "57%", "", "", "", "0"]
 
 
 def with_gaps(series, max_gap=GAP_MAX):
@@ -1046,10 +1055,13 @@ def despike(series, max_rise=RISE_MAX):
 
 
 def build_cum_trend(records, now):
-    """One-element Section<Vec<String>> row: cumulative usage within the CURRENT
-    rolling 5h quota window, bucketed every CUM_TREND_INTERVAL seconds. None while
-    there is nothing to draw yet (collecting state), same convention build_trend_rows
-    and trend_axis already use.
+    """Two-element Section<Vec<String>> row: [sparkline, text]. The sparkline plots
+    cumulative usage within the CURRENT rolling 5h quota window, bucketed every
+    CUM_TREND_INTERVAL seconds; the text row reads "now NN%  resets in Xh Ym" (or
+    "resets now") from the newest record's own pct/reset via fmt_countdown, the same
+    pattern tui_usage_rows' own `fmt_countdown(reset - now)` call already uses. None
+    while there is nothing to draw yet (collecting state), same convention
+    build_trend_rows and trend_axis already use.
 
     Scaled against a FIXED 0..100% ceiling, unlike trend_sparkline's peak-relative
     scale: a %-of-window bar has to mean the same thing every time it is drawn to be
@@ -1080,7 +1092,9 @@ def build_cum_trend(records, now):
         else SPARK_GLYPHS[round(max(0.0, min(100.0, v)) / 100.0 * top)]
         for v in buckets
     ]
-    return ["".join(chars)]
+    pct = max(0.0, min(100.0, newest["pct"]))
+    text = "now %d%%  %s" % (round(pct), fmt_countdown(newest["reset"] - now))
+    return ["".join(chars), text]
 
 
 def usage7_series(records):

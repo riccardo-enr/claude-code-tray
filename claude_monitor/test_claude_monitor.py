@@ -36,6 +36,7 @@ from .core import (
     build_cum_trend,
     build_session_snapshot,
     build_trend_rows,
+    CUM_TREND_AXIS,
     CUM_TREND_INTERVAL,
     despike,
     fmt_countdown,
@@ -624,16 +625,21 @@ def demo():
     _cum_recs = [
         {"t": _cstart - 100, "pct": 99.0, "burn": 1.0, "reset": _cr},  # before window -> no bucket
         {"t": _cstart + 100, "pct": 10.0, "burn": 1.0, "reset": _cr},  # bucket 0
-        {"t": _cstart + 900 * 5 + 100, "pct": 30.0, "burn": 1.0, "reset": _cr},  # bucket 5, newest sample (rise 20, kept)
-        {"t": _cstart + 900 * 10 + 100, "pct": 30.0 + RISE_MAX + 1, "burn": 1.0, "reset": _cr},  # rise 26 -> spike
+        {"t": _cstart + CUM_TREND_INTERVAL * 5 + 100, "pct": 30.0, "burn": 1.0, "reset": _cr},  # bucket 5, newest kept sample (rise 20, kept)
+        {"t": _cstart + CUM_TREND_INTERVAL * 10 + 100, "pct": 30.0 + RISE_MAX + 1, "burn": 1.0, "reset": _cr},  # rise 26 -> spike, newest record overall
     ]
     _cum = build_cum_trend(_cum_recs, now_bt)
-    assert _cum is not None and len(_cum) == 1
+    assert _cum is not None and len(_cum) == 2
     assert len(_cum[0]) == WIN5 // CUM_TREND_INTERVAL
     assert _cum[0][0] == SPARK_GLYPHS[round(10.0 / 100.0 * (len(SPARK_GLYPHS) - 1))]
     assert _cum[0][5] == SPARK_GLYPHS[round(30.0 / 100.0 * (len(SPARK_GLYPHS) - 1))]
     assert _cum[0][10] == SPARK_GAP  # spike > RISE_MAX above ref 30 -> despiked, stays a gap
     assert _cum[0][2] == SPARK_GAP  # untouched bucket in between
+    # Text row reads the newest record's own raw pct (the spike), independent of
+    # despike() dropping that same bucket from the sparkline above.
+    assert _cum[1] == "now %d%%  %s" % (round(30.0 + RISE_MAX + 1), fmt_countdown(_cr - now_bt))
+    assert CUM_TREND_AXIS == ["100%", "", "", "57%", "", "", "", "0"]
+    assert len(CUM_TREND_AXIS) == len(SPARK_GLYPHS)
 
     # --- dashboard logic ---
     # Math.min/max applied via .apply(null, arr) throw "Maximum call stack size
@@ -1069,6 +1075,7 @@ def demo():
             self.trends = ["line1"]
             self.trend_axis = ["33.9M/12%", "", "", "", "", "", "", "0"]
             self.cum_trend = ["cum1"]
+            self.cum_trend_axis = ["100%", "", "", "57%", "", "", "", "0"]
             self.focused = []
 
         def focus(self, pane, tmux, title, term):
@@ -1089,12 +1096,13 @@ def demo():
     _thread.join(timeout=5)
     _client_sock.close()
     _snapshot = json.loads(_resp.decode("utf-8"))
-    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_axis", "cum_trend"}
+    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_axis", "cum_trend", "cum_trend_axis"}
     assert _snapshot["heatmap"] == _mon.heatmap
     assert _snapshot["usage"] == _mon.usage
     assert _snapshot["trends"] == _mon.trends
     assert _snapshot["trend_axis"] == _mon.trend_axis
     assert _snapshot["cum_trend"] == _mon.cum_trend
+    assert _snapshot["cum_trend_axis"] == _mon.cum_trend_axis
     assert _snapshot["sessions"] == build_session_snapshot(list(_mon.sessions.values()))
     assert _snapshot["sessions"][0]["term"] == ""
 
