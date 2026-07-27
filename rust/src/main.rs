@@ -928,7 +928,10 @@ fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
             "window usage (0-100%)",
             Style::default().add_modifier(Modifier::DIM),
         )));
-        graph.extend(trend_graph_lines(cum, None));
+        graph.extend(trend_graph_lines(
+            cum,
+            app.snapshot.as_ref().and_then(|s| s.cum_trend_axis.as_deref()),
+        ));
     }
     let heatmap = snapshot_heatmap(app);
 

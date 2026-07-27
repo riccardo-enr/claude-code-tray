@@ -52,10 +52,10 @@ F["cold-start-null-sections"] = {
             "legitimate absence, never malformation -- conflating the two would show a "
             "malformed-data warning at every startup.",
     "wire": {"usage": None, "trends": None, "heatmap": None, "sessions": [],
-             "cum_trend": None},
+             "cum_trend": None, "cum_trend_axis": None},
     "expect": {"usage": "absent", "trends": "absent", "heatmap": "absent",
                "sessions": {"rejected": 0, "entries": []},
-               "cum_trend": "absent"},
+               "cum_trend": "absent", "cum_trend_axis": "absent"},
 }
 
 F["missing-optional-fields"] = {
@@ -171,10 +171,14 @@ F["cum-trend-populated"] = {
     "note": "cum_trend crosses the same trust boundary as trends via the shared "
             "normalize function: a populated sparkline survives verbatim, and a row "
             "carrying an OSC-52 clipboard-write control sequence + BEL comes back "
-            "with its control characters replaced.",
+            "with its control characters replaced. Also covers the fixed axis riding "
+            "alongside a populated cum_trend, normalizing to the same 8-tick list "
+            "Python's CUM_TREND_AXIS produces.",
     "wire": {"cum_trend": ["▁▂▃█",
-                           "peak " + ESC + "]52;c;x" + BEL + "hour"]},
-    "expect": {"cum_trend": {"rows": ["▁▂▃█", "peak ?hour"]}},
+                           "peak " + ESC + "]52;c;x" + BEL + "hour"],
+             "cum_trend_axis": ["100%", "", "", "57%", "", "", "", "0"]},
+    "expect": {"cum_trend": {"rows": ["▁▂▃█", "peak ?hour"]},
+               "cum_trend_axis": {"ticks": ["100%", "", "", "57%", "", "", "", "0"]}},
 }
 
 F["markup-like-text-preserved"] = {

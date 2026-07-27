@@ -43,7 +43,8 @@ The wire contract being consumed is fixed and lives in
                   cost_usd, cost_per_hour, pace_used_pct, pace_elapsed_pct,
                   pace_label, model_mix} | null,
      "trends":   [string] | null,
-     "cum_trend": [string] | null}
+     "cum_trend": [string] | null,
+     "cum_trend_axis": [string] | null}
 */
 
 use std::fmt;
@@ -261,6 +262,10 @@ pub struct Snapshot {
     `trends` -- normalized through the identical array-of-strings path because
     the wire shape is identical (Section<Vec<String>>, same as `trends`). */
     pub cum_trend: Section<Vec<String>>,
+    /* The cum_trend graph's fixed y-axis, mirroring trend_axis exactly (same
+    Option<Vec<String>>, same normalize_trend_axis path). A missing axis costs
+    labels on the SECOND graph only, never the graph itself. */
+    pub cum_trend_axis: Option<Vec<String>>,
     pub heatmap: Section<Heatmap>,
     pub sessions: Section<Sessions>,
 }
@@ -293,6 +298,7 @@ impl Snapshot {
             trends: normalize_trends(obj.get("trends")),
             trend_axis: normalize_trend_axis(obj.get("trend_axis")),
             cum_trend: normalize_trends(obj.get("cum_trend")),
+            cum_trend_axis: normalize_trend_axis(obj.get("cum_trend_axis")),
             heatmap: normalize_heatmap(obj.get("heatmap")),
             sessions: normalize_sessions(obj.get("sessions")),
         })

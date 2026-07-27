@@ -44,6 +44,7 @@ Otherwise each section key carries either a state name -- `"absent"` or
 | `usage`    | any subset of the seven usage fields; `null` asserts explicit absence |
 | `trends`   | `{"rows": ["..."]}` -- the sanitized row strings                    |
 | `cum_trend`| `{"rows": ["..."]}` -- cumulative-window sparkline, same shape as `trends` |
+| `cum_trend_axis` | `{"ticks": ["..."]}` -- fixed y-axis ticks (100%/57%/0), or "absent"; mirrors `trend_axis`'s shape but constant |
 | `heatmap`  | `{"rows": 7, "cols": 24}`                                           |
 | `sessions` | `{"rejected": N, "entries": [{...}]}`                               |
 
