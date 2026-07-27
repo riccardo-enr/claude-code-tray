@@ -33,8 +33,10 @@ from .core import (
     alert_should_fire,
     band,
     build_label,
+    build_cum_trend,
     build_session_snapshot,
     build_trend_rows,
+    CUM_TREND_INTERVAL,
     despike,
     fmt_countdown,
     fmt_countdown_short,
@@ -613,6 +615,26 @@ def demo():
     ]
     assert hourly_pct(_rolled, _hour + 1200)[23] == 3.0
 
+    # --- cumulative window trend ---
+    assert build_cum_trend([], now_bt) is None
+    _no_reset = [{"t": now_bt, "pct": 10.0, "burn": 1.0, "reset": None}]
+    assert build_cum_trend(_no_reset, now_bt) is None  # no numeric reset -> collecting
+    _cr = 100000  # reset epoch
+    _cstart = _cr - WIN5
+    _cum_recs = [
+        {"t": _cstart - 100, "pct": 99.0, "burn": 1.0, "reset": _cr},  # before window -> no bucket
+        {"t": _cstart + 100, "pct": 10.0, "burn": 1.0, "reset": _cr},  # bucket 0
+        {"t": _cstart + 900 * 5 + 100, "pct": 30.0, "burn": 1.0, "reset": _cr},  # bucket 5, newest sample (rise 20, kept)
+        {"t": _cstart + 900 * 10 + 100, "pct": 30.0 + RISE_MAX + 1, "burn": 1.0, "reset": _cr},  # rise 26 -> spike
+    ]
+    _cum = build_cum_trend(_cum_recs, now_bt)
+    assert _cum is not None and len(_cum) == 1
+    assert len(_cum[0]) == WIN5 // CUM_TREND_INTERVAL
+    assert _cum[0][0] == SPARK_GLYPHS[round(10.0 / 100.0 * (len(SPARK_GLYPHS) - 1))]
+    assert _cum[0][5] == SPARK_GLYPHS[round(30.0 / 100.0 * (len(SPARK_GLYPHS) - 1))]
+    assert _cum[0][10] == SPARK_GAP  # spike > RISE_MAX above ref 30 -> despiked, stays a gap
+    assert _cum[0][2] == SPARK_GAP  # untouched bucket in between
+
     # --- dashboard logic ---
     # Math.min/max applied via .apply(null, arr) throw "Maximum call stack size
     # exceeded" once `arr` crosses a JS-engine argument-count ceiling (~65536 on V8)
@@ -1046,6 +1068,7 @@ def demo():
             self.heatmap = [[None] * 24 for _ in range(7)]
             self.trends = ["line1"]
             self.trend_axis = ["33.9M/12%", "", "", "", "", "", "", "0"]
+            self.cum_trend = ["cum1"]
             self.focused = []
 
         def focus(self, pane, tmux, title, term):
@@ -1066,11 +1089,12 @@ def demo():
     _thread.join(timeout=5)
     _client_sock.close()
     _snapshot = json.loads(_resp.decode("utf-8"))
-    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_axis"}
+    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_axis", "cum_trend"}
     assert _snapshot["heatmap"] == _mon.heatmap
     assert _snapshot["usage"] == _mon.usage
     assert _snapshot["trends"] == _mon.trends
     assert _snapshot["trend_axis"] == _mon.trend_axis
+    assert _snapshot["cum_trend"] == _mon.cum_trend
     assert _snapshot["sessions"] == build_session_snapshot(list(_mon.sessions.values()))
     assert _snapshot["sessions"][0]["term"] == ""
 

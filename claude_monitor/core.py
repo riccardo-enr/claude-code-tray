@@ -1001,6 +1001,11 @@ GAP_MAX = 300  # seconds; a hole wider than this is a data gap, not a trend
 # rise by `burn` * elapsed instead of a constant.
 RISE_MAX = 25.0
 
+# ponytail: fixed 15-minute sampling interval for the cumulative-window sparkline
+# (WIN5 // CUM_TREND_INTERVAL == 20 columns), deliberately not a config knob -- upgrade
+# path is a config surface if a different interval is ever wanted, YAGNI until then.
+CUM_TREND_INTERVAL = 900  # seconds; 15 minutes
+
 
 def with_gaps(series, max_gap=GAP_MAX):
     """Insert [t, None] pen-up breaks where samples are >max_gap apart, so the renderer
@@ -1038,6 +1043,44 @@ def despike(series, max_rise=RISE_MAX):
         out.append([t, v])
         ref = v
     return out
+
+
+def build_cum_trend(records, now):
+    """One-element Section<Vec<String>> row: cumulative usage within the CURRENT
+    rolling 5h quota window, bucketed every CUM_TREND_INTERVAL seconds. None while
+    there is nothing to draw yet (collecting state), same convention build_trend_rows
+    and trend_axis already use.
+
+    Scaled against a FIXED 0..100% ceiling, unlike trend_sparkline's peak-relative
+    scale: a %-of-window bar has to mean the same thing every time it is drawn to be
+    comparable window over window, whereas trend_sparkline's own-peak scale is
+    deliberately NOT comparable across days.
+    """
+    records = history_numeric(records)
+    if not records:
+        return None
+    newest = max(records, key=lambda r: r["t"])
+    if not _is_num(newest.get("reset")):
+        return None
+    start = newest["reset"] - WIN5
+    columns = WIN5 // CUM_TREND_INTERVAL
+    # Same despike() call dashboard.py's HTML line chart already makes for the
+    # identical [[t, pct], ...] shape -- reused verbatim, no second sanitizer.
+    series = despike([[r["t"], r["pct"]] for r in records if r["t"] >= start])
+    if not series:
+        return None
+    buckets = [None] * columns
+    for t, pct in series:
+        idx = int((t - start) // CUM_TREND_INTERVAL)
+        if 0 <= idx < columns:
+            buckets[idx] = pct  # last write per bucket: series is time-ordered
+    top = len(SPARK_GLYPHS) - 1
+    chars = [
+        SPARK_GAP if v is None
+        else SPARK_GLYPHS[round(max(0.0, min(100.0, v)) / 100.0 * top)]
+        for v in buckets
+    ]
+    return ["".join(chars)]
 
 
 def usage7_series(records):
