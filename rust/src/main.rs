@@ -761,6 +761,16 @@ fn snapshot_trends(app: &App) -> Option<&Vec<String>> {
     }
 }
 
+/* Same read as snapshot_trends, for the second, independent cumulative-window
+graph: only a non-empty Present section renders, everything else (absent,
+malformed, or a daemon too old to send it) is a silent no-op. */
+fn snapshot_cum_trend(app: &App) -> Option<&Vec<String>> {
+    match app.snapshot.as_ref().map(|s| &s.cum_trend) {
+        Some(Section::Present(rows)) if !rows.is_empty() => Some(rows),
+        _ => None,
+    }
+}
+
 fn snapshot_heatmap(app: &App) -> Option<Vec<Vec<Option<usize>>>> {
     match app.snapshot.as_ref().map(|s| &s.heatmap) {
         Some(Section::Present(h)) => heatmap_levels(&h.grid, HEAT_GLYPHS.len()),
@@ -774,7 +784,11 @@ fn trends_panel_height(app: &App) -> u16 {
     };
     /* The graph is TREND_ROWS tall with the remaining core-formatted rows
     below it; the heatmap is one hour-label row plus seven day rows. */
-    let left = TREND_ROWS + trends.len().saturating_sub(1);
+    let mut left = TREND_ROWS + trends.len().saturating_sub(1);
+    if let Some(cum) = snapshot_cum_trend(app) {
+        /* The leading 1 is the "window usage" label row separating the two graphs. */
+        left += 1 + TREND_ROWS + cum.len().saturating_sub(1);
+    }
     let right = if snapshot_heatmap(app).is_some() { 1 + HEAT_DAYS.len() } else { 0 };
     (left.max(right) as u16) + 2
 }
@@ -902,10 +916,20 @@ fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
         return;
     };
 
-    let graph = trend_graph_lines(
+    let mut graph = trend_graph_lines(
         trends,
         app.snapshot.as_ref().and_then(|s| s.trend_axis.as_deref()),
     );
+    /* Second, independent graph: cumulative usage within the current 5h window.
+    Additive only -- when absent, `graph` is exactly what it was before this
+    change, so the existing bar chart renders byte-identically. */
+    if let Some(cum) = snapshot_cum_trend(app) {
+        graph.push(Line::from(Span::styled(
+            "window usage (0-100%)",
+            Style::default().add_modifier(Modifier::DIM),
+        )));
+        graph.extend(trend_graph_lines(cum, None));
+    }
     let heatmap = snapshot_heatmap(app);
 
     /* Side by side when the heatmap fits; graph alone when it does not, so a
@@ -1317,6 +1341,84 @@ mod tests {
         up here as extra leading cells (the top row's own columns can be blank). */
         assert_eq!(text(&plain[0]).chars().count(), 2, "an absent axis still reserved a gutter");
         assert_eq!(text(&labelled[0]).chars().count(), 2 + 10);
+    }
+
+    fn buffer_text(app: &App, w: u16, h: u16) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("test terminal");
+        terminal.draw(|frame| draw(frame, app)).expect("draw");
+        terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect::<String>()
+    }
+
+    #[test]
+    fn cum_trend_adds_a_second_graph_below_the_hourly_bars() {
+        /* Both keys present: the original hourly bar chart's rows must render
+        byte-identically to the no-cum_trend case, and the new window-usage
+        graph must appear below it -- additive, never a replacement. */
+        let wire_with = r#"{"trends":["▁█","today 1M/hr"],"cum_trend":["▂▃"]}"#;
+        let app_with = sessions_app(wire_with);
+        let wire_without = r#"{"trends":["▁█","today 1M/hr"]}"#;
+        let app_without = sessions_app(wire_without);
+
+        let render_trends_rows = |app: &App| -> Vec<String> {
+            let width = 60u16;
+            let mut terminal = Terminal::new(TestBackend::new(width, 40)).expect("test terminal");
+            terminal
+                .draw(|frame| {
+                    let area = frame.area();
+                    draw_trends(frame, area, app);
+                })
+                .expect("draw");
+            terminal
+                .backend()
+                .buffer()
+                .content()
+                .chunks(width as usize)
+                .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
+                .collect()
+        };
+
+        let rows_with = render_trends_rows(&app_with);
+        let rows_without = render_trends_rows(&app_without);
+
+        /* Row 0 is the panel's top border; the original graph's content rows
+        start at row 1 and run for TREND_ROWS + trends.len() - 1 rows (trends
+        here has 2 entries: the sparkline plus "today 1M/hr"). */
+        let content_rows = TREND_ROWS + 2 - 1;
+        for i in 1..=content_rows {
+            assert_eq!(
+                rows_with[i], rows_without[i],
+                "row {} of the original bar chart changed when cum_trend was added", i
+            );
+        }
+        assert!(
+            rows_with[content_rows + 1].contains("window usage"),
+            "the new cum_trend graph label is missing"
+        );
+        assert!(
+            !rows_without[content_rows + 1].contains("window usage"),
+            "the label appeared even though cum_trend is absent"
+        );
+
+        assert!(
+            trends_panel_height(&app_with) > trends_panel_height(&app_without),
+            "a second graph must grow the panel, never shrink or leave it unchanged"
+        );
+    }
+
+    #[test]
+    fn cum_trend_absent_is_a_true_no_op_on_render_and_layout() {
+        /* Regression guard: the pre-existing formula and rendering must be exactly
+        what they were before this change whenever cum_trend never shows up. */
+        let wire_without = r#"{"trends":["▁█","today 1M/hr"]}"#;
+        let app_without = sessions_app(wire_without);
+        let text = buffer_text(&app_without, 60, 30);
+        assert!(!text.contains("window usage"), "cum_trend label leaked in with no cum_trend data");
+        let trends_len = 2; /* the two rows in wire_without's "trends" array */
+        assert_eq!(
+            trends_panel_height(&app_without),
+            (TREND_ROWS + trends_len - 1 + 2) as u16,
+            "absent cum_trend must be a true no-op on the pre-existing height formula"
+        );
     }
 
     fn sessions_app(wire: &str) -> App {
