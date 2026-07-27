@@ -21,7 +21,8 @@ must_haves:
     - "The cum_trend sparkline's own observed peak bucket renders at the TOP row (level 7 of 8), never clamped against a fixed 100% ceiling -- this REVERSES 260727-krn's original 'comparable window over window' design, which pinned even a 30% peak to level 2, indistinguishable from a quiet period. Confirmed empirically: a live daemon snapshot decoded to levels [0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,2,2,2] (max level 2 of 7) under the old fixed scale."
     - "cum_trend_axis(records, now) computes its ticks from the SAME bucket-derived peak build_cum_trend scales against (not the raw despiked series, which can include a sample whose bucket index falls outside the window and never actually renders) -- top/middle/floor ticks always describe the bars actually drawn above them, never a stale-sample value nothing draws."
     - "When the terminal is too narrow to show every column of the cum_trend sparkline, draw_trends keeps the LAST N characters (the newest, rightmost columns) and drops the FIRST ones (the oldest, leftmost) -- verified by an automated ratatui TestBackend render test AND by a live tmux-captured render of a wide synthetic fixture, both before-repro'd and after-fixed."
-    - "The original hourly bar chart (trend_sparkline, trend_axis, build_trend_rows, TREND_INTERVAL, CUM_TREND_INTERVAL) is byte-for-byte untouched -- only the cum_trend graph's own scaling function and its own render-time clipping change."
+    - "The original hourly bar chart (trend_sparkline, trend_axis, build_trend_rows, TREND_INTERVAL) is byte-for-byte untouched -- only the cum_trend graph's own scaling function, its bucket interval, and its own render-time clipping change."
+    - "CUM_TREND_INTERVAL drops from 300 to 60 (300 columns instead of 60), giving the user the finer-grained staircase they explicitly asked for -- safe only because clip-to-newest (this same task) always keeps the trailing/newest columns when 300 exceeds the panel's real width, so more points never means a corrupted or wrong-end-truncated view."
     - "No new dependency, no new poll, no new config knob."
   artifacts:
     - claude-monitor.py
@@ -62,20 +63,35 @@ cumulative-window-usage sparkline, added by 260727-krn and sped up/enriched by
    wider than the panel actually renders into, keep only the LAST N characters (the
    newest columns), dropping the OLDEST columns instead.
 
-Both bugs were confirmed directly, not just theorized: decoding a live daemon snapshot's
-cum_trend sparkline gave levels topping out at 2 of 7 (the plateau bug), and rendering a
-synthetic wide climbing sparkline through the real TUI at narrow tmux widths showed the
-graph's top (highest-level, newest) rows going blank first as the terminal narrows,
-while the bottom (oldest, left-anchored) rows stayed visible (the clip-wrong-end bug).
+3. **Too few points to read as a staircase.** The user asked directly for more points
+   so the climb reads as a staircase rather than a few wide blocks. `CUM_TREND_INTERVAL`
+   currently buckets every 5 minutes (60 columns). Change it to 60 seconds (300
+   columns, matching `TREND_INTERVAL`'s own 1-minute recompute cadence so a new column
+   is real, not interpolated). This is SAFE to do only because of fix #2 landing in the
+   SAME task: with clip-to-newest already keeping the trailing (newest) columns when a
+   sparkline is wider than the panel, going from 60 to 300 columns just means more of
+   the window's history extends off the left edge -- the visible tail always shows the
+   full climb at its finest available resolution, never a cut-off or corrupted view.
+   Shipping #3 without #2 first would have made the truncation bug in #2 worse, not
+   better -- do not treat the interval change as independent of the clip.
 
-Purpose: the graph currently cannot show a trend at all at normal usage levels, and can
-silently hide the most recent data at normal terminal widths -- both defeat the entire
-point of the feature.
+Both bugs (#1 and #2) were confirmed directly, not just theorized: decoding a live
+daemon snapshot's cum_trend sparkline gave levels topping out at 2 of 7 (the plateau
+bug), and rendering a synthetic wide climbing sparkline through the real TUI at narrow
+tmux widths showed the graph's top (highest-level, newest) rows going blank first as
+the terminal narrows, while the bottom (oldest, left-anchored) rows stayed visible (the
+clip-wrong-end bug).
+
+Purpose: the graph currently cannot show a trend at all at normal usage levels, can
+silently hide the most recent data at normal terminal widths, and was too coarse
+horizontally to read as a staircase even once the first two fixes land -- all three
+defeat the point of the feature.
 
 Output: `core.build_cum_trend` autoscales to its own peak; `core.CUM_TREND_AXIS` (a
 fixed constant) is replaced by `core.cum_trend_axis(records, now)` (a function, mirroring
-`trend_axis`); `draw_trends` clips the cum_trend sparkline to its newest columns before
-handing it to the unmodified `trend_graph_lines`.
+`trend_axis`); `CUM_TREND_INTERVAL` drops from 300 to 60 (300 columns instead of 60);
+`draw_trends` clips the cum_trend sparkline to its newest columns before handing it to
+the unmodified `trend_graph_lines`.
 </objective>
 
 <execution_context>
@@ -88,7 +104,7 @@ handing it to the unmodified `trend_graph_lines`.
 
 # Regions to read before editing (do NOT re-read a range already seen):
 @claude-monitor.py              # Monitor.__init__ cum_trend_axis cache field, comment only, ~line 75; compute_trends ~380-391 (the exact self.trend_axis = core.trend_axis(records, now) line to mirror is ~389, immediately above the line this task changes)
-@claude_monitor/core.py         # WIN5 ~238; SPARK_GLYPHS ~310; trend_sparkline ~677-698 (the own-peak scaling formula to mirror verbatim: hi = max of non-None buckets, hi is None -> gap-fill, hi == 0 -> floor-fill, else round(value/hi*(len(SPARK_GLYPHS)-1))); trend_axis ~701-743 (the tick convention to mirror: rows=len(SPARK_GLYPHS), top=rows-1, ticked={top, rows//2, 0}, label(row) blank unless ticked, row 0 is a bare "0"); despike ~1033-1054 (reuse verbatim, do not modify); CUM_TREND_INTERVAL comment+const ~1004-1007 (DO NOT TOUCH -- already correctly tuned by 260727-lns); CUM_TREND_AXIS comment+const ~1009-1016 (DELETE this whole block); build_cum_trend ~1057-1097 (rescale here)
+@claude_monitor/core.py         # WIN5 ~238; SPARK_GLYPHS ~310; trend_sparkline ~677-698 (the own-peak scaling formula to mirror verbatim: hi = max of non-None buckets, hi is None -> gap-fill, hi == 0 -> floor-fill, else round(value/hi*(len(SPARK_GLYPHS)-1))); trend_axis ~701-743 (the tick convention to mirror: rows=len(SPARK_GLYPHS), top=rows-1, ticked={top, rows//2, 0}, label(row) blank unless ticked, row 0 is a bare "0"); despike ~1033-1054 (reuse verbatim, do not modify); CUM_TREND_INTERVAL comment+const ~1004-1007 (CHANGE the value 300 -> 60 and its comment, per objective fix #3 -- this is the one exception to "cadence constants are read-only" in this task); CUM_TREND_AXIS comment+const ~1009-1016 (DELETE this whole block); build_cum_trend ~1057-1097 (rescale here)
 @claude_monitor/test_claude_monitor.py  # import list ~18-94 (CUM_TREND_AXIS at line 39); cumulative-window-trend assert block ~619-642
 @rust/src/main.rs               # HEATMAP_WIDTH const ~92; snapshot_cum_trend ~767-772; trend_graph_lines ~806-856 (do NOT modify -- shared with the untouched hourly chart; its internal axis_width gutter formula at ~823-825 is the exact formula clip_to_newest must reuse); draw_trends ~903-956 (restructure here); test module: buffer_text ~1349-1353, cum_trend_adds_a_second_graph_below_the_hourly_bars ~1356-1409 (hoist its local render_trends_rows closure to a shared fn), cum_trend_absent_is_a_true_no_op_on_render_and_layout ~1412-1425, sessions_app ~1427-1431
 @fixtures/generate.py           # F["cum-trend-populated"] ~170-182; write loop ~263-269
@@ -106,10 +122,13 @@ Reuse, do NOT reimplement:
   independently re-derived width calculation)
 - trend_graph_lines                                                            -> unmodified
 
-Do not touch: TREND_INTERVAL, CUM_TREND_INTERVAL, POLL_INTERVAL (refresh/bucket cadence is
-already correctly tuned by 260727-lns); trend_sparkline, trend_axis, build_trend_rows (the
-hourly chart's own scaling, read-only reference/template); trend_graph_lines (shared,
-untouched).
+Do not touch: TREND_INTERVAL, POLL_INTERVAL (refresh cadence is already correctly tuned by
+260727-lns); trend_sparkline, trend_axis, build_trend_rows (the hourly chart's own scaling,
+read-only reference/template); trend_graph_lines (shared, untouched).
+
+CUM_TREND_INTERVAL DOES change in this task (300 -> 60, one line) -- explicitly called out
+above in objective fix #3, safe only because it lands together with the clip-to-newest fix
+(#2) in this same task.
 </context>
 
 <tasks>
@@ -148,11 +167,20 @@ untouched).
   <action>
     In claude_monitor/core.py:
 
+    0. Change `CUM_TREND_INTERVAL = 300  # seconds; 5 minutes` to `CUM_TREND_INTERVAL =
+       60  # seconds; 1 minute`. Update its preceding comment: "(WIN5 //
+       CUM_TREND_INTERVAL == 60 columns)" becomes "== 300 columns", and note the
+       interval now matches `TREND_INTERVAL`'s own 1-minute recompute cadence so every
+       column is a real new sample, not an interpolated one. Add a one-line note that
+       this is safe only because `draw_trends`'s clip-to-newest fix (this same quick
+       task, Task 2) always keeps the trailing/newest columns when 300 exceeds the
+       panel's actual width -- the extra resolution shows up as history spilling off
+       the left edge, never as a corrupted or truncated-from-the-wrong-end view.
+
     1. Delete the `CUM_TREND_AXIS` comment block and constant entirely (the "Fixed
        y-axis for the cum_trend graph..." comment plus `CUM_TREND_AXIS = ["100%", "",
        "", "57%", "", "", "", "0"]`), leaving a single blank line before `def
-       with_gaps`. Do not touch the `CUM_TREND_INTERVAL` comment/constant immediately
-       above it.
+       with_gaps`.
 
     2. In `build_cum_trend`: rewrite the docstring's closing paragraph ("Scaled against
        a FIXED 0..100% ceiling, unlike trend_sparkline's peak-relative scale...") to
@@ -272,7 +300,10 @@ untouched).
   the top row instead of a fixed-100-relative low level; `cum_trend_axis` returns ticks
   derived from that same peak; the bucket-vs-series discriminator case proves an
   out-of-range sample cannot inflate either the sparkline or the axis past what actually
-  renders; `CUM_TREND_AXIS` no longer exists anywhere in the module.</done>
+  renders; `CUM_TREND_AXIS` no longer exists anywhere in the module; `CUM_TREND_INTERVAL
+  == 60` (300 columns) and `len(_cum[0]) == WIN5 // CUM_TREND_INTERVAL` still holds
+  symbolically (the existing assertion already derives from the constant, not a
+  hardcoded column count, so it passes unchanged).</done>
 </task>
 
 <task type="auto" tdd="true">
@@ -498,8 +529,8 @@ untouched).
   them (autoscaled to the same peak), never a fixed 100%/57%/0.
 - At a narrow terminal width, the cum_trend sparkline keeps its newest (rightmost)
   columns and drops its oldest (leftmost) ones, never the reverse.
-- The original hourly bar chart and its cadence constants (TREND_INTERVAL,
-  CUM_TREND_INTERVAL) are untouched.
+- CUM_TREND_INTERVAL is 60s (300 columns), giving a visibly finer staircase; the
+  original hourly bar chart and its own cadence constant (TREND_INTERVAL) are untouched.
 - No new dependency, no new poll, no new config surface.
 - The 260727-krn fixed-ceiling design reversal is explicitly disclosed in the
   SUMMARY and the STATE.md quick-task row.
