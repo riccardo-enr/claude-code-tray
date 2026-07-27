@@ -900,6 +900,36 @@ fn heatmap_lines(levels: &[Vec<Option<usize>>]) -> Vec<Line<'static>> {
     lines
 }
 
+/*
+The cum_trend sparkline (row 0) can be up to 300 characters wide; a `Paragraph`
+with no `.wrap()` drops whatever does not fit, and because columns run
+oldest-left / newest-right (`build_cum_trend` appends buckets in time order),
+an unclipped drop silently hides the most RECENT data while stale history
+stays on screen. Keep the LAST `budget` characters instead -- the newest
+columns -- dropping the FIRST ones. Only row 0 is glyph columns; any further
+rows are the already-short text line(s) and pass through untouched.
+
+`trend_graph_lines` itself stays unmodified (still shared with the untouched
+hourly chart), so the axis-gutter width it will reserve is recomputed here
+with the IDENTICAL formula that function uses internally -- duplicated
+deliberately rather than shared, to avoid coupling this call site to that
+function's internals.
+*/
+fn clip_to_newest(rows: &[String], axis: Option<&[String]>, panel_width: u16) -> Vec<String> {
+    let gutter = axis
+        .map(|ticks| ticks.iter().map(|t| t.chars().count()).max().unwrap_or(0) + 1)
+        .unwrap_or(0);
+    let budget = (panel_width as usize).saturating_sub(gutter);
+    let mut out: Vec<String> = rows.to_vec();
+    if let Some(first) = out.first_mut() {
+        let len = first.chars().count();
+        if len > budget {
+            *first = first.chars().skip(len - budget).collect();
+        }
+    }
+    out
+}
+
 fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
     let block = panel("trends");
     let inner = block.inner(area);
@@ -916,6 +946,17 @@ fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
         return;
     };
 
+    let heatmap = snapshot_heatmap(app);
+    let fits_beside_heatmap = heatmap.is_some() && inner.width > HEATMAP_WIDTH + 12;
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(10), Constraint::Length(HEATMAP_WIDTH)])
+        .split(inner);
+    /* The actual width the graph Paragraph below renders into -- not an
+    independently re-derived `inner.width - HEATMAP_WIDTH` that could drift
+    out of sync with the real split. */
+    let graph_width = if fits_beside_heatmap { columns[0].width } else { inner.width };
+
     let mut graph = trend_graph_lines(
         trends,
         app.snapshot.as_ref().and_then(|s| s.trend_axis.as_deref()),
@@ -925,33 +966,26 @@ fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
     change, so the existing bar chart renders byte-identically. */
     if let Some(cum) = snapshot_cum_trend(app) {
         graph.push(Line::from(Span::styled(
-            "window usage (0-100%)",
+            "window usage",
             Style::default().add_modifier(Modifier::DIM),
         )));
-        graph.extend(trend_graph_lines(
-            cum,
-            app.snapshot.as_ref().and_then(|s| s.cum_trend_axis.as_deref()),
-        ));
+        let cum_axis = app.snapshot.as_ref().and_then(|s| s.cum_trend_axis.as_deref());
+        graph.extend(trend_graph_lines(&clip_to_newest(cum, cum_axis, graph_width), cum_axis));
     }
-    let heatmap = snapshot_heatmap(app);
 
     /* Side by side when the heatmap fits; graph alone when it does not, so a
     narrow terminal loses the heatmap rather than wrapping it into noise. */
-    match heatmap {
-        Some(levels) if inner.width > HEATMAP_WIDTH + 12 => {
-            let columns = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Min(10), Constraint::Length(HEATMAP_WIDTH)])
-                .split(inner);
-            frame.render_widget(Paragraph::new(graph).style(style), columns[0]);
-            frame.render_widget(
-                Paragraph::new(Text::from(heatmap_lines(&levels)))
-                    .alignment(Alignment::Right)
-                    .style(style),
-                columns[1],
-            );
-        }
-        _ => frame.render_widget(Paragraph::new(graph).style(style), inner),
+    if fits_beside_heatmap {
+        let levels = heatmap.expect("fits_beside_heatmap implies heatmap.is_some()");
+        frame.render_widget(Paragraph::new(graph).style(style), columns[0]);
+        frame.render_widget(
+            Paragraph::new(Text::from(heatmap_lines(&levels)))
+                .alignment(Alignment::Right)
+                .style(style),
+            columns[1],
+        );
+    } else {
+        frame.render_widget(Paragraph::new(graph).style(style), inner);
     }
 }
 
@@ -1352,6 +1386,23 @@ mod tests {
         terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect::<String>()
     }
 
+    fn render_trends_rows(app: &App, width: u16) -> Vec<String> {
+        let mut terminal = Terminal::new(TestBackend::new(width, 40)).expect("test terminal");
+        terminal
+            .draw(|frame| {
+                let area = frame.area();
+                draw_trends(frame, area, app);
+            })
+            .expect("draw");
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .chunks(width as usize)
+            .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
+            .collect()
+    }
+
     #[test]
     fn cum_trend_adds_a_second_graph_below_the_hourly_bars() {
         /* Both keys present: the original hourly bar chart's rows must render
@@ -1362,26 +1413,8 @@ mod tests {
         let wire_without = r#"{"trends":["▁█","today 1M/hr"]}"#;
         let app_without = sessions_app(wire_without);
 
-        let render_trends_rows = |app: &App| -> Vec<String> {
-            let width = 60u16;
-            let mut terminal = Terminal::new(TestBackend::new(width, 40)).expect("test terminal");
-            terminal
-                .draw(|frame| {
-                    let area = frame.area();
-                    draw_trends(frame, area, app);
-                })
-                .expect("draw");
-            terminal
-                .backend()
-                .buffer()
-                .content()
-                .chunks(width as usize)
-                .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
-                .collect()
-        };
-
-        let rows_with = render_trends_rows(&app_with);
-        let rows_without = render_trends_rows(&app_without);
+        let rows_with = render_trends_rows(&app_with, 60);
+        let rows_without = render_trends_rows(&app_without, 60);
 
         /* Row 0 is the panel's top border; the original graph's content rows
         start at row 1 and run for TREND_ROWS + trends.len() - 1 rows (trends
@@ -1421,6 +1454,39 @@ mod tests {
             trends_panel_height(&app_without),
             (TREND_ROWS + trends_len - 1 + 2) as u16,
             "absent cum_trend must be a true no-op on the pre-existing height formula"
+        );
+    }
+
+    #[test]
+    fn cum_trend_sparkline_clipping_keeps_the_newest_columns_not_the_oldest() {
+        /* A 60-character sparkline climbing from level 0 to level 7 in 8-column
+        blocks (level 7 reachable ONLY by its last 4 characters), rendered at a
+        width narrower than the sparkline plus any axis gutter so clipping is
+        forced. If the clip kept the HEAD (the pre-fix right-truncating
+        behaviour) instead of the TAIL, the top row would show 0 filled cells --
+        the level-7 columns are exactly what right-truncation drops. */
+        let climb = "\u{2581}\u{2581}\u{2581}\u{2581}\u{2581}\u{2581}\u{2581}\u{2581}\u{2582}\u{2582}\u{2582}\u{2582}\u{2582}\u{2582}\u{2582}\u{2582}\u{2583}\u{2583}\u{2583}\u{2583}\u{2583}\u{2583}\u{2583}\u{2583}\u{2584}\u{2584}\u{2584}\u{2584}\u{2584}\u{2584}\u{2584}\u{2584}\u{2585}\u{2585}\u{2585}\u{2585}\u{2585}\u{2585}\u{2585}\u{2585}\u{2586}\u{2586}\u{2586}\u{2586}\u{2586}\u{2586}\u{2586}\u{2586}\u{2587}\u{2587}\u{2587}\u{2587}\u{2587}\u{2587}\u{2587}\u{2587}\u{2588}\u{2588}\u{2588}\u{2588}";
+        assert_eq!(climb.chars().count(), 60, "transcription error in the climbing fixture string");
+
+        let wire = format!(
+            r#"{{"trends":["▁█","today 1M/hr"],"cum_trend":["{}","now 28%  resets in 3h 34m"]}}"#,
+            climb
+        );
+        let app = sessions_app(&wire);
+        let rows = render_trends_rows(&app, 40);
+
+        /* Row 0: panel top border. Rows 1..=TREND_ROWS: hourly graph rows.
+        Next trends.len()-1 = 1 row: hourly text row (content_rows = TREND_ROWS
+        + trends.len() - 1). Next row: "window usage" label. The row after
+        THAT is the cum_trend graph's own TOP row (level 7, drawn first since
+        trend_graph_lines iterates (0..TREND_ROWS).rev()). */
+        let content_rows = TREND_ROWS + 2 - 1;
+        let top_row = content_rows + 2;
+        let filled = rows[top_row].matches('\u{2588}').count();
+        assert!(
+            (1..=4).contains(&filled),
+            "expected 1-4 filled level-7 cells (newest columns kept) in row {}, got {}: {:?}",
+            top_row, filled, rows[top_row]
         );
     }
 

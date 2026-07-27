@@ -171,14 +171,41 @@ F["cum-trend-populated"] = {
     "note": "cum_trend crosses the same trust boundary as trends via the shared "
             "normalize function: a populated sparkline survives verbatim, and a row "
             "carrying an OSC-52 clipboard-write control sequence + BEL comes back "
-            "with its control characters replaced. Also covers the fixed axis riding "
-            "alongside a populated cum_trend, normalizing to the same 8-tick list "
-            "Python's CUM_TREND_AXIS produces.",
+            "with its control characters replaced. Also covers cum_trend_axis riding "
+            "alongside a populated cum_trend, normalizing to whatever 8-tick list the "
+            "daemon sends -- now autoscaled to the window's own observed peak rather "
+            "than a fixed ceiling, so these exact values are illustrative, not pinned "
+            "to a constant.",
     "wire": {"cum_trend": ["▁▂▃█",
                            "peak " + ESC + "]52;c;x" + BEL + "hour"],
-             "cum_trend_axis": ["100%", "", "", "57%", "", "", "", "0"]},
+             "cum_trend_axis": ["35%", "", "", "20%", "", "", "", "0"]},
     "expect": {"cum_trend": {"rows": ["▁▂▃█", "peak ?hour"]},
-               "cum_trend_axis": {"ticks": ["100%", "", "", "57%", "", "", "", "0"]}},
+               "cum_trend_axis": {"ticks": ["35%", "", "", "20%", "", "", "", "0"]}},
+}
+
+# 60-column sparkline climbing from level 0 to level 7 in 8-column blocks (level 7
+# reachable only by its last 4 columns) -- the SAME string rust/src/main.rs's
+# cum_trend_sparkline_clipping_keeps_the_newest_columns_not_the_oldest test uses.
+_CUM_CLIMB = (
+    "▁" * 8 + "▂" * 8 + "▃" * 8 + "▄" * 8
+    + "▅" * 8 + "▆" * 8 + "▇" * 8 + "█" * 4
+)
+assert len(_CUM_CLIMB) == 60
+
+F["cum-trend-clipped-keeps-newest"] = {
+    "note": "Permanent regression asset for BOTH the visual autoscale check and the "
+            "width-clip check: a 60-column sparkline climbing from level 0 to level 7 "
+            "in 8-column blocks (level 7 reachable only by its last 4 columns); at a "
+            "narrow `just rust-fixture cum-trend-clipped-keeps-newest` terminal width "
+            "the top row must still show filled cells, proving the clip kept the "
+            "newest (rightmost) columns, not the oldest (leftmost).",
+    "wire": {"trends": ["▁█", "today 1M/hr"],
+             "trend_axis": ["1M/8%", "", "", "500k/4%", "", "", "", "0"],
+             "cum_trend": [_CUM_CLIMB, "now 28%  resets in 3h 34m"],
+             "cum_trend_axis": ["28%", "", "", "16%", "", "", "", "0"]},
+    "expect": {"trends": {"rows": ["▁█", "today 1M/hr"]},
+               "cum_trend": {"rows": [_CUM_CLIMB, "now 28%  resets in 3h 34m"]},
+               "cum_trend_axis": {"ticks": ["28%", "", "", "16%", "", "", "", "0"]}},
 }
 
 F["markup-like-text-preserved"] = {
