@@ -36,7 +36,7 @@ from .core import (
     build_cum_trend,
     build_session_snapshot,
     build_trend_rows,
-    CUM_TREND_AXIS,
+    cum_trend_axis,
     CUM_TREND_INTERVAL,
     despike,
     fmt_countdown,
@@ -618,28 +618,50 @@ def demo():
 
     # --- cumulative window trend ---
     assert build_cum_trend([], now_bt) is None
+    assert cum_trend_axis([], now_bt) is None
     _no_reset = [{"t": now_bt, "pct": 10.0, "burn": 1.0, "reset": None}]
     assert build_cum_trend(_no_reset, now_bt) is None  # no numeric reset -> collecting
+    assert cum_trend_axis(_no_reset, now_bt) is None
     _cr = 100000  # reset epoch
     _cstart = _cr - WIN5
     _cum_recs = [
         {"t": _cstart - 100, "pct": 99.0, "burn": 1.0, "reset": _cr},  # before window -> no bucket
-        {"t": _cstart + 100, "pct": 10.0, "burn": 1.0, "reset": _cr},  # bucket 0
-        {"t": _cstart + CUM_TREND_INTERVAL * 5 + 100, "pct": 30.0, "burn": 1.0, "reset": _cr},  # bucket 5, newest kept sample (rise 20, kept)
-        {"t": _cstart + CUM_TREND_INTERVAL * 10 + 100, "pct": 30.0 + RISE_MAX + 1, "burn": 1.0, "reset": _cr},  # rise 26 -> spike, newest record overall
+        # ponytail: offset within-bucket is +10, not +100 -- CUM_TREND_INTERVAL is now
+        # 60s (this task), so a +100 offset would overflow into the NEXT bucket instead
+        # of landing in the one the comment names.
+        {"t": _cstart + 10, "pct": 10.0, "burn": 1.0, "reset": _cr},  # bucket 0
+        {"t": _cstart + CUM_TREND_INTERVAL * 5 + 10, "pct": 30.0, "burn": 1.0, "reset": _cr},  # bucket 5, newest kept sample (rise 20, kept) -- the series' own observed peak
+        {"t": _cstart + CUM_TREND_INTERVAL * 10 + 10, "pct": 30.0 + RISE_MAX + 1, "burn": 1.0, "reset": _cr},  # rise 26 -> spike, newest record overall
     ]
     _cum = build_cum_trend(_cum_recs, now_bt)
     assert _cum is not None and len(_cum) == 2
     assert len(_cum[0]) == WIN5 // CUM_TREND_INTERVAL
-    assert _cum[0][0] == SPARK_GLYPHS[round(10.0 / 100.0 * (len(SPARK_GLYPHS) - 1))]
-    assert _cum[0][5] == SPARK_GLYPHS[round(30.0 / 100.0 * (len(SPARK_GLYPHS) - 1))]
+    # Bucket 5 (pct 30.0) IS the series' own observed peak after despike -> top row,
+    # not the old fixed-100-ceiling level. Bucket 0 scales relative to that SAME peak.
+    assert _cum[0][0] == SPARK_GLYPHS[round(10.0 / 30.0 * (len(SPARK_GLYPHS) - 1))]
+    assert _cum[0][5] == SPARK_GLYPHS[len(SPARK_GLYPHS) - 1]
     assert _cum[0][10] == SPARK_GAP  # spike > RISE_MAX above ref 30 -> despiked, stays a gap
     assert _cum[0][2] == SPARK_GAP  # untouched bucket in between
     # Text row reads the newest record's own raw pct (the spike), independent of
     # despike() dropping that same bucket from the sparkline above.
     assert _cum[1] == "now %d%%  %s" % (round(30.0 + RISE_MAX + 1), fmt_countdown(_cr - now_bt))
-    assert CUM_TREND_AXIS == ["100%", "", "", "57%", "", "", "", "0"]
-    assert len(CUM_TREND_AXIS) == len(SPARK_GLYPHS)
+    _axis = cum_trend_axis(_cum_recs, now_bt)
+    assert _axis is not None and len(_axis) == len(SPARK_GLYPHS)
+    assert _axis[0] == "30%"
+    assert _axis[3] == "%d%%" % round(30.0 * 4 / 7)
+    assert _axis[-1] == "0"
+    assert [t for t in _axis if t] == [_axis[0], _axis[3], _axis[-1]]  # exactly three ticks
+
+    # Bucket-vs-series discriminator: a third sample whose bucket index is exactly
+    # `columns` (one past the last valid index) must never be written into `buckets`
+    # and must NOT become the peak either function scales against, even though despike
+    # keeps it (rise 20 from ref 30 is within RISE_MAX).
+    _stale_recs = [_cum_recs[1], _cum_recs[2]] + [
+        {"t": _cr, "pct": 50.0, "burn": 1.0, "reset": _cr},  # bucket idx == columns, out of range
+    ]
+    _stale_cum = build_cum_trend(_stale_recs, now_bt)
+    assert _stale_cum[0][5] == SPARK_GLYPHS[len(SPARK_GLYPHS) - 1]
+    assert cum_trend_axis(_stale_recs, now_bt)[0] == "30%"
 
     # --- dashboard logic ---
     # Math.min/max applied via .apply(null, arr) throw "Maximum call stack size

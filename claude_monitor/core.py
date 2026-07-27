@@ -1001,19 +1001,15 @@ GAP_MAX = 300  # seconds; a hole wider than this is a data gap, not a trend
 # rise by `burn` * elapsed instead of a constant.
 RISE_MAX = 25.0
 
-# ponytail: fixed 5-minute sampling interval for the cumulative-window sparkline
-# (WIN5 // CUM_TREND_INTERVAL == 60 columns), deliberately not a config knob -- upgrade
-# path is a config surface if a different interval is ever wanted, YAGNI until then.
-CUM_TREND_INTERVAL = 300  # seconds; 5 minutes
-
-# Fixed y-axis for the cum_trend graph, TOP ROW FIRST -- mirrors trend_axis's own tick
-# convention (rows = len(SPARK_GLYPHS) == 8, ticked = {top, rows // 2, 0} = {7, 4, 0})
-# but as a plain constant, not a function: the ceiling here is a FIXED 100 (a %-of-window
-# bar always means the same thing), never a locally observed peak, so there is nothing
-# to recompute at render time. 57% is round(100 * 4 / 7), the honest value for row 4 --
-# "50%" would mislabel which row is drawn where, exactly the mislabeling trend_axis's own
-# docstring says it avoids.
-CUM_TREND_AXIS = ["100%", "", "", "57%", "", "", "", "0"]
+# ponytail: fixed 1-minute sampling interval for the cumulative-window sparkline
+# (WIN5 // CUM_TREND_INTERVAL == 300 columns), deliberately not a config knob -- upgrade
+# path is a config surface if a different interval is ever wanted, YAGNI until then. Now
+# matches TREND_INTERVAL's own 1-minute recompute cadence, so every column is a real new
+# sample, not an interpolated one. Safe only because draw_trends's clip-to-newest fix
+# (260727-mki, same task) always keeps the trailing/newest columns when 300 exceeds the
+# panel's actual width -- the extra resolution shows up as history spilling off the left
+# edge, never as a corrupted or truncated-from-the-wrong-end view.
+CUM_TREND_INTERVAL = 60  # seconds; 1 minute
 
 
 def with_gaps(series, max_gap=GAP_MAX):
@@ -1063,10 +1059,13 @@ def build_cum_trend(records, now):
     while there is nothing to draw yet (collecting state), same convention
     build_trend_rows and trend_axis already use.
 
-    Scaled against a FIXED 0..100% ceiling, unlike trend_sparkline's peak-relative
-    scale: a %-of-window bar has to mean the same thing every time it is drawn to be
-    comparable window over window, whereas trend_sparkline's own-peak scale is
-    deliberately NOT comparable across days.
+    Scaled against the series' OWN observed peak, exactly like trend_sparkline scales
+    hourly_tokens -- NOT a fixed ceiling. This REVERSES 260727-krn's original "a
+    %-of-window bar has to mean the same thing every time it is drawn, comparable
+    window over window" rationale: pinned to a fixed 100, a realistic ~20-30% usage
+    level only ever lights the bottom 2-3 of 8 rows, which reads as a flat plateau, not
+    a trend -- the exact failure trend_sparkline's own docstring already explains its
+    own-peak scale avoids. cum_trend_axis (below) is the matching y-axis.
     """
     records = history_numeric(records)
     if not records:
@@ -1087,14 +1086,72 @@ def build_cum_trend(records, now):
         if 0 <= idx < columns:
             buckets[idx] = pct  # last write per bucket: series is time-ordered
     top = len(SPARK_GLYPHS) - 1
-    chars = [
-        SPARK_GAP if v is None
-        else SPARK_GLYPHS[round(max(0.0, min(100.0, v)) / 100.0 * top)]
-        for v in buckets
-    ]
+    hi = max((max(0.0, v) for v in buckets if v is not None), default=None)
+    if hi is None:
+        chars = [SPARK_GAP] * columns
+    elif hi == 0:
+        chars = [SPARK_GAP if v is None else SPARK_GLYPHS[0] for v in buckets]
+    else:
+        chars = [
+            SPARK_GAP if v is None else SPARK_GLYPHS[round(max(0.0, v) / hi * top)]
+            for v in buckets
+        ]
     pct = max(0.0, min(100.0, newest["pct"]))
     text = "now %d%%  %s" % (round(pct), fmt_countdown(newest["reset"] - now))
     return ["".join(chars), text]
+
+
+def cum_trend_axis(records, now):
+    """Y-axis tick labels for the cum_trend graph, one per row, TOP ROW FIRST. None
+    without data -- the same convention trend_axis and build_cum_trend already share.
+
+    Scales against the SAME bucket-derived peak build_cum_trend computes (not the raw
+    despiked series -- a sample whose bucket index falls outside [0, columns) is a
+    stale/past-reset record that never gets a bar, so it must not inflate the axis tick
+    beyond what the sparkline actually draws). Reverses 260727-krn's fixed-ceiling
+    design for the exact reason build_cum_trend's own docstring now gives.
+
+    A tick is a bare "NN%" (no tokens to ride alongside, unlike trend_axis's
+    "tokens/share" label -- the series already IS a percentage); the floor is a bare
+    "0", matching trend_axis's own floor convention.
+
+    # ponytail: recomputes the windowed/despiked/bucketed series independently of
+    # build_cum_trend rather than sharing state -- the same duplication trend_axis
+    # already accepts for hourly_tokens instead of sharing state with trend_sparkline.
+    # Upgrade path is a shared helper only if a third consumer ever needs this exact
+    # shape.
+    """
+    records = history_numeric(records)
+    if not records:
+        return None
+    newest = max(records, key=lambda r: r["t"])
+    if not _is_num(newest.get("reset")):
+        return None
+    start = newest["reset"] - WIN5
+    columns = WIN5 // CUM_TREND_INTERVAL
+    series = despike([[r["t"], r["pct"]] for r in records if r["t"] >= start])
+    if not series:
+        return None
+    buckets = [None] * columns
+    for t, pct in series:
+        idx = int((t - start) // CUM_TREND_INTERVAL)
+        if 0 <= idx < columns:
+            buckets[idx] = pct
+    hi = max((max(0.0, v) for v in buckets if v is not None), default=None)
+    if hi is None:
+        return None
+    rows = len(SPARK_GLYPHS)
+    top = rows - 1
+    ticked = {top, rows // 2, 0}
+
+    def label(row):
+        if row not in ticked:
+            return ""
+        if row == 0:
+            return "0"
+        return "%d%%" % round(hi * row / top)
+
+    return [label(row) for row in reversed(range(rows))]
 
 
 def usage7_series(records):
