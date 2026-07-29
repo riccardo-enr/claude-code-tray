@@ -71,8 +71,6 @@ class Monitor:
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
         self.trends = None  # cached trend row strings, or None (collecting state)
         self.trend_axis = None  # cached graph y-axis tick labels (top row first), or None
-        self.cum_trend = None  # cached cumulative-window-usage sparkline, or None (collecting state)
-        self.cum_trend_axis = None  # cached y-axis for cum_trend (autoscaled to the window's own observed peak), or None (collecting state)
         self.heatmap = None  # cached 7x24 usage-rise grid, or None until history is read
         self.dash_ready = False  # gates the menu item until the first dashboard write
 
@@ -387,8 +385,6 @@ class Monitor:
         # ponytail: single list rebind, read-only in the Gtk redraw -- no lock.
         self.trends = core.build_trend_rows(records, now)
         self.trend_axis = core.trend_axis(records, now)
-        self.cum_trend = core.build_cum_trend(records, now)
-        self.cum_trend_axis = core.cum_trend_axis(records, now)
         self.heatmap = core.heatmap_buckets(core.history_numeric(records))
 
     def write_dashboard(self, now):
@@ -673,8 +669,6 @@ def _handle_conn(mon, conn):
                         "usage": mon.usage,
                         "trends": mon.trends,
                         "trend_axis": mon.trend_axis,
-                        "cum_trend": mon.cum_trend,
-                        "cum_trend_axis": mon.cum_trend_axis,
                     }
                     conn.sendall((json.dumps(snapshot) + "\n").encode("utf-8"))
                 continue

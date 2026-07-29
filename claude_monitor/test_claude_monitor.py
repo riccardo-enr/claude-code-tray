@@ -1096,8 +1096,6 @@ def demo():
             self.heatmap = [[None] * 24 for _ in range(7)]
             self.trends = ["line1"]
             self.trend_axis = ["33.9M/12%", "", "", "", "", "", "", "0"]
-            self.cum_trend = ["cum1"]
-            self.cum_trend_axis = ["100%", "", "", "57%", "", "", "", "0"]
             self.focused = []
 
         def focus(self, pane, tmux, title, term):
@@ -1118,13 +1116,11 @@ def demo():
     _thread.join(timeout=5)
     _client_sock.close()
     _snapshot = json.loads(_resp.decode("utf-8"))
-    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_axis", "cum_trend", "cum_trend_axis"}
+    assert set(_snapshot.keys()) == {"heatmap", "sessions", "usage", "trends", "trend_axis"}
     assert _snapshot["heatmap"] == _mon.heatmap
     assert _snapshot["usage"] == _mon.usage
     assert _snapshot["trends"] == _mon.trends
     assert _snapshot["trend_axis"] == _mon.trend_axis
-    assert _snapshot["cum_trend"] == _mon.cum_trend
-    assert _snapshot["cum_trend_axis"] == _mon.cum_trend_axis
     assert _snapshot["sessions"] == build_session_snapshot(list(_mon.sessions.values()))
     assert _snapshot["sessions"][0]["term"] == ""
 
