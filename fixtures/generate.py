@@ -51,11 +51,9 @@ F["cold-start-null-sections"] = {
     "note": "What the daemon actually sends before its first usage poll. Null is "
             "legitimate absence, never malformation -- conflating the two would show a "
             "malformed-data warning at every startup.",
-    "wire": {"usage": None, "trends": None, "heatmap": None, "sessions": [],
-             "cum_trend": None, "cum_trend_axis": None},
+    "wire": {"usage": None, "trends": None, "heatmap": None, "sessions": []},
     "expect": {"usage": "absent", "trends": "absent", "heatmap": "absent",
-               "sessions": {"rejected": 0, "entries": []},
-               "cum_trend": "absent", "cum_trend_axis": "absent"},
+               "sessions": {"rejected": 0, "entries": []}},
 }
 
 F["missing-optional-fields"] = {
@@ -74,11 +72,9 @@ F["partial-sections"] = {
                        "burn_rate_per_min": 5},
              "heatmap": "not a grid",
              "trends": [42],
-             "cum_trend": [42],
              "sessions": [{"id": "a", "dir": "~/x", "status": "done", "pane": "%1"}]},
     "expect": {"usage": {"used_percentage": 91.0}, "heatmap": "malformed",
                "trends": "malformed",
-               "cum_trend": "malformed",
                "sessions": {"rejected": 0, "entries": [{"id": "a", "status": "done"}]}},
 }
 
@@ -165,58 +161,6 @@ F["hostile-controls-in-trend-rows"] = {
             "string' is not the same as 'this string is safe'.",
     "wire": {"trends": ["peak " + ESC + "]52;c;x" + BEL + "hour", ESC + "[31mred"]},
     "expect": {"trends": {"rows": ["peak ?hour", "?red"]}},
-}
-
-F["cum-trend-populated"] = {
-    "note": "cum_trend crosses the same trust boundary as trends via the shared "
-            "normalize function: a populated sparkline survives verbatim, and a row "
-            "carrying an OSC-52 clipboard-write control sequence + BEL comes back "
-            "with its control characters replaced. Also covers cum_trend_axis riding "
-            "alongside a populated cum_trend, normalizing to whatever 8-tick list the "
-            "daemon sends -- now autoscaled to the window's own observed peak rather "
-            "than a fixed ceiling, so these exact values are illustrative, not pinned "
-            "to a constant.",
-    "wire": {"cum_trend": ["▁▂▃█",
-                           "peak " + ESC + "]52;c;x" + BEL + "hour"],
-             "cum_trend_axis": ["35%", "", "", "20%", "", "", "", "0"]},
-    "expect": {"cum_trend": {"rows": ["▁▂▃█", "peak ?hour"]},
-               "cum_trend_axis": {"ticks": ["35%", "", "", "20%", "", "", "", "0"]}},
-}
-
-# 60-column sparkline climbing from level 0 to level 7 in 8-column blocks (level 7
-# reachable only by its last 4 columns) -- the SAME string rust/src/main.rs's
-# cum_trend_sparkline_clipping_keeps_the_newest_columns_not_the_oldest test uses.
-_CUM_CLIMB = (
-    "▁" * 8 + "▂" * 8 + "▃" * 8 + "▄" * 8
-    + "▅" * 8 + "▆" * 8 + "▇" * 8 + "█" * 4
-)
-assert len(_CUM_CLIMB) == 60
-
-# Trailing not-yet-sampled region: build_cum_trend's array spans the WHOLE
-# window through reset, not just up to "now", so every bucket past "now" is a
-# genuine future bucket rendered as a literal SPARK_GAP space.
-_CUM_FUTURE_BLANK = " " * 60
-_CUM_SPARKLINE = _CUM_CLIMB + _CUM_FUTURE_BLANK
-
-F["cum-trend-clipped-keeps-newest"] = {
-    "note": "Permanent regression asset for the visual autoscale check, the "
-            "width-clip check, and the 260727-nlo trailing-blank-run check: a "
-            "60-column sparkline climbing from level 0 to level 7 in 8-column "
-            "blocks (level 7 reachable only by its last 4 columns), followed by 60 "
-            "trailing blank (unsampled-future) columns modeling build_cum_trend's "
-            "actual window-through-reset shape. At a `just rust-fixture "
-            "cum-trend-clipped-keeps-newest` terminal width narrower than the "
-            "60-column real climb, the top row must still show filled cells from "
-            "the REAL data -- proving the clip found the real prefix and kept its "
-            "newest columns, not the blank future run and not the oldest real "
-            "columns either.",
-    "wire": {"trends": ["▁█", "today 1M/hr"],
-             "trend_axis": ["1M/8%", "", "", "500k/4%", "", "", "", "0"],
-             "cum_trend": [_CUM_SPARKLINE, "now 28%  resets in 3h 34m"],
-             "cum_trend_axis": ["28%", "", "", "16%", "", "", "", "0"]},
-    "expect": {"trends": {"rows": ["▁█", "today 1M/hr"]},
-               "cum_trend": {"rows": [_CUM_SPARKLINE, "now 28%  resets in 3h 34m"]},
-               "cum_trend_axis": {"ticks": ["28%", "", "", "16%", "", "", "", "0"]}},
 }
 
 F["markup-like-text-preserved"] = {
