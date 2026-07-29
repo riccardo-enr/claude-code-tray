@@ -1,7 +1,7 @@
 {
   "name": "cold-start-null-sections",
   "note": "What the daemon actually sends before its first usage poll. Null is legitimate absence, never malformation -- conflating the two would show a malformed-data warning at every startup.",
-  "wire": "{\"usage\": null, \"trends\": null, \"heatmap\": null, \"sessions\": [], \"cum_trend\": null, \"cum_trend_axis\": null}",
+  "wire": "{\"usage\": null, \"trends\": null, \"heatmap\": null, \"sessions\": []}",
   "expect": {
     "usage": "absent",
     "trends": "absent",
@@ -9,8 +9,6 @@
     "sessions": {
       "rejected": 0,
       "entries": []
-    },
-    "cum_trend": "absent",
-    "cum_trend_axis": "absent"
+    }
   }
 }
