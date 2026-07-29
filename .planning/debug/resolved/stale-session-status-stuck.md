@@ -1,8 +1,8 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "UAT gap G-07-2 (phase 07 live-session-view): 'Now I have two running session when I know one is done. Also the progress is still increasing when waiting dude.' / 'Again dude. One session is still running. It increases once per second but the status is incorrect'"
 created: 2026-07-18T00:00:00.000Z
-updated: 2026-07-18T00:00:00.000Z
+updated: 2026-07-29T00:00:00.000Z
 ---
 
 ## Current Focus
@@ -83,6 +83,20 @@ root_cause: |
   hints: it is not narrowly "done rows linger" - it is "self.sessions has no staleness/liveness
   check at all, so ANY status can get stuck forever," and the visible status depends purely on
   which hook last fired before the real process went away.
-fix: (not applied - goal is find_root_cause_only; a gap-closure plan will design the fix)
-verification: (not applicable - no fix applied)
-files_changed: []
+fix: |
+  Shipped in v1.4/Phase 07 as CR-01: `core.session_stale(alive, entered, now, max_age)`
+  (claude_monitor/core.py:191) - `alive is False` reaps immediately; `alive` True/None falls
+  through to an unconditional `now - entered > REAP_MAX_AGE` (3600s) ceiling, so a pane that
+  survives /exit or /clear in the same tmux pane still gets caught by the age check.
+  `Monitor._reap_stale`-style call site is wired into the poll loop at
+  claude-monitor.py:522-532 (`core.session_stale(...)` gating `GLib.idle_add(self._pop_stale,
+  stale)`), and `sess_notify_baseline()` (core.py:173) prevents a resurrected session from
+  re-firing a stale notification. This file was left in .planning/debug/ (not resolved/)
+  after the fix shipped; STATE.md already carried an "Acknowledged" note about this at v1.5
+  close. Moved to resolved/ during a 2026-07-29 general debug session; call site verified by
+  grep against claude-monitor.py, not just the pure-function unit tests.
+verification: |
+  claude_monitor/test_claude_monitor.py:971-992 (session_stale reap-decision matrix) +
+  `just selfcheck` (exit 0). Call site presence confirmed via
+  `grep -n "session_stale" claude-monitor.py` -> claude-monitor.py:522.
+files_changed: [claude_monitor/core.py, claude-monitor.py]
