@@ -141,8 +141,6 @@ fn check(fixture: &Fixture) -> Result<(), String> {
         match key.as_str() {
             "usage" => check_usage(&snapshot, expected)?,
             "trends" => check_trends(&snapshot.trends, expected, "trends")?,
-            "cum_trend" => check_trends(&snapshot.cum_trend, expected, "cum_trend")?,
-            "cum_trend_axis" => check_axis(&snapshot.cum_trend_axis, expected, "cum_trend_axis")?,
             "heatmap" => check_heatmap(&snapshot, expected)?,
             "sessions" => check_sessions(&snapshot, expected)?,
             other => return Err(format!("unknown expectation key {:?}", other)),
@@ -252,35 +250,6 @@ fn check_trends(section: &Section<Vec<String>>, expected: &Value, name: &str) ->
         let got = rows.get(i).map(String::as_str).unwrap_or_default();
         if got != expected_row {
             return Err(format!("{}[{}]: expected {:?}, got {:?}", name, i, expected_row, got));
-        }
-    }
-    Ok(())
-}
-
-/* Option<Vec<String>>, not a Section<T>: normalize_trend_axis collapses any bad shape
-straight to None, so only "absent" or a populated tick list are ever observable here --
-there is no "malformed" state to distinguish, unlike check_trends' Section<T>. */
-fn check_axis(got: &Option<Vec<String>>, expected: &Value, name: &str) -> Result<(), String> {
-    if expected.as_str() == Some("absent") {
-        return if got.is_none() {
-            Ok(())
-        } else {
-            Err(format!("{}: expected absent, got {:?}", name, got))
-        };
-    }
-    let want = expected
-        .get("ticks")
-        .and_then(|v| v.as_array())
-        .ok_or_else(|| format!("{}: expectation needs a `ticks` array", name))?;
-    let ticks = got.as_ref().ok_or_else(|| format!("{}: expected present, got absent", name))?;
-    if ticks.len() != want.len() {
-        return Err(format!("{}: expected {} ticks, got {}", name, want.len(), ticks.len()));
-    }
-    for (i, expected_tick) in want.iter().enumerate() {
-        let expected_tick = expected_tick.as_str().ok_or_else(|| format!("{}: ticks must be strings", name))?;
-        let got_tick = ticks.get(i).map(String::as_str).unwrap_or_default();
-        if got_tick != expected_tick {
-            return Err(format!("{}[{}]: expected {:?}, got {:?}", name, i, expected_tick, got_tick));
         }
     }
     Ok(())

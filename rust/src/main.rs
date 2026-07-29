@@ -761,16 +761,6 @@ fn snapshot_trends(app: &App) -> Option<&Vec<String>> {
     }
 }
 
-/* Same read as snapshot_trends, for the second, independent cumulative-window
-graph: only a non-empty Present section renders, everything else (absent,
-malformed, or a daemon too old to send it) is a silent no-op. */
-fn snapshot_cum_trend(app: &App) -> Option<&Vec<String>> {
-    match app.snapshot.as_ref().map(|s| &s.cum_trend) {
-        Some(Section::Present(rows)) if !rows.is_empty() => Some(rows),
-        _ => None,
-    }
-}
-
 fn snapshot_heatmap(app: &App) -> Option<Vec<Vec<Option<usize>>>> {
     match app.snapshot.as_ref().map(|s| &s.heatmap) {
         Some(Section::Present(h)) => heatmap_levels(&h.grid, HEAT_GLYPHS.len()),
@@ -784,11 +774,7 @@ fn trends_panel_height(app: &App) -> u16 {
     };
     /* The graph is TREND_ROWS tall with the remaining core-formatted rows
     below it; the heatmap is one hour-label row plus seven day rows. */
-    let mut left = TREND_ROWS + trends.len().saturating_sub(1);
-    if let Some(cum) = snapshot_cum_trend(app) {
-        /* The leading 1 is the "window usage" label row separating the two graphs. */
-        left += 1 + TREND_ROWS + cum.len().saturating_sub(1);
-    }
+    let left = TREND_ROWS + trends.len().saturating_sub(1);
     let right = if snapshot_heatmap(app).is_some() { 1 + HEAT_DAYS.len() } else { 0 };
     (left.max(right) as u16) + 2
 }
@@ -900,55 +886,6 @@ fn heatmap_lines(levels: &[Vec<Option<usize>>]) -> Vec<Line<'static>> {
     lines
 }
 
-/*
-The cum_trend sparkline (row 0) can be up to 300 characters wide; a `Paragraph`
-with no `.wrap()` drops whatever does not fit, and because columns run
-oldest-left / newest-right (`build_cum_trend` appends buckets in time order),
-an unclipped drop silently hides the most RECENT data while stale history
-stays on screen. Keep the LAST `budget` characters instead -- the newest
-columns -- dropping the FIRST ones. Only row 0 is glyph columns; any further
-rows are the already-short text line(s) and pass through untouched.
-
-`build_cum_trend` buckets the WHOLE window, `[reset - WIN5, reset)` -- window
-START to window END/reset, not "oldest sampled" to "now". Since `reset` is
-always in the future relative to "now" (the window has not finished), every
-bucket index past `(now - start) // CUM_TREND_INTERVAL` is a genuine,
-not-yet-sampled FUTURE bucket and renders as `SPARK_GAP` (a literal space) by
-design -- so an unsampled bucket reads distinctly from a genuinely-idle-but-
-sampled one (which renders at the floor glyph, not a gap). That trailing
-blank run is real, but it is never the "newest data" a raw last-N-characters
-clip assumes it is: true for the ORIGINAL hourly bar chart (its last index IS
-the current hour, no future buckets exist at all), false here. A raw
-whole-string clip (the pre-fix code) could keep nothing but that trailing
-blank run, rendering a genuinely climbing series as a totally empty graph --
-confirmed live (300-char row, ~124 real chars + 176 literal spaces,
-graph_width 136, pre-fix output 132 chars all spaces). The fix: find the end
-of the REAL (non-blank) prefix first, clip WITHIN that prefix only, and drop
-the trailing blank run unconditionally -- even when the whole real prefix
-already fits `budget`, so the display never spends width on blank future
-space it could give to real data instead.
-
-`trend_graph_lines` itself stays unmodified (still shared with the untouched
-hourly chart), so the axis-gutter width it will reserve is recomputed here
-with the IDENTICAL formula that function uses internally -- duplicated
-deliberately rather than shared, to avoid coupling this call site to that
-function's internals.
-*/
-fn clip_to_newest(rows: &[String], axis: Option<&[String]>, panel_width: u16) -> Vec<String> {
-    let gutter = axis
-        .map(|ticks| ticks.iter().map(|t| t.chars().count()).max().unwrap_or(0) + 1)
-        .unwrap_or(0);
-    let budget = (panel_width as usize).saturating_sub(gutter);
-    let mut out: Vec<String> = rows.to_vec();
-    if let Some(first) = out.first_mut() {
-        let chars: Vec<char> = first.chars().collect();
-        let real_len = chars.iter().rposition(|&c| c != ' ').map(|i| i + 1).unwrap_or(0);
-        let start = real_len.saturating_sub(budget);
-        *first = chars[start..real_len].iter().collect();
-    }
-    out
-}
-
 fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
     let block = panel("trends");
     let inner = block.inner(area);
@@ -971,26 +908,11 @@ fn draw_trends(frame: &mut Frame, area: Rect, app: &App) {
         .direction(Direction::Horizontal)
         .constraints([Constraint::Min(10), Constraint::Length(HEATMAP_WIDTH)])
         .split(inner);
-    /* The actual width the graph Paragraph below renders into -- not an
-    independently re-derived `inner.width - HEATMAP_WIDTH` that could drift
-    out of sync with the real split. */
-    let graph_width = if fits_beside_heatmap { columns[0].width } else { inner.width };
 
-    let mut graph = trend_graph_lines(
+    let graph = trend_graph_lines(
         trends,
         app.snapshot.as_ref().and_then(|s| s.trend_axis.as_deref()),
     );
-    /* Second, independent graph: cumulative usage within the current 5h window.
-    Additive only -- when absent, `graph` is exactly what it was before this
-    change, so the existing bar chart renders byte-identically. */
-    if let Some(cum) = snapshot_cum_trend(app) {
-        graph.push(Line::from(Span::styled(
-            "window usage",
-            Style::default().add_modifier(Modifier::DIM),
-        )));
-        let cum_axis = app.snapshot.as_ref().and_then(|s| s.cum_trend_axis.as_deref());
-        graph.extend(trend_graph_lines(&clip_to_newest(cum, cum_axis, graph_width), cum_axis));
-    }
 
     /* Side by side when the heatmap fits; graph alone when it does not, so a
     narrow terminal loses the heatmap rather than wrapping it into noise. */
@@ -1399,141 +1321,16 @@ mod tests {
         assert_eq!(text(&labelled[0]).chars().count(), 2 + 10);
     }
 
-    fn buffer_text(app: &App, w: u16, h: u16) -> String {
-        let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("test terminal");
-        terminal.draw(|frame| draw(frame, app)).expect("draw");
-        terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect::<String>()
-    }
-
-    fn render_trends_rows(app: &App, width: u16) -> Vec<String> {
-        let mut terminal = Terminal::new(TestBackend::new(width, 40)).expect("test terminal");
-        terminal
-            .draw(|frame| {
-                let area = frame.area();
-                draw_trends(frame, area, app);
-            })
-            .expect("draw");
-        terminal
-            .backend()
-            .buffer()
-            .content()
-            .chunks(width as usize)
-            .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
-            .collect()
-    }
-
     #[test]
-    fn cum_trend_adds_a_second_graph_below_the_hourly_bars() {
-        /* Both keys present: the original hourly bar chart's rows must render
-        byte-identically to the no-cum_trend case, and the new window-usage
-        graph must appear below it -- additive, never a replacement. */
-        let wire_with = r#"{"trends":["▁█","today 1M/hr"],"cum_trend":["▂▃"]}"#;
-        let app_with = sessions_app(wire_with);
-        let wire_without = r#"{"trends":["▁█","today 1M/hr"]}"#;
-        let app_without = sessions_app(wire_without);
-
-        let rows_with = render_trends_rows(&app_with, 60);
-        let rows_without = render_trends_rows(&app_without, 60);
-
-        /* Row 0 is the panel's top border; the original graph's content rows
-        start at row 1 and run for TREND_ROWS + trends.len() - 1 rows (trends
-        here has 2 entries: the sparkline plus "today 1M/hr"). */
-        let content_rows = TREND_ROWS + 2 - 1;
-        for i in 1..=content_rows {
-            assert_eq!(
-                rows_with[i], rows_without[i],
-                "row {} of the original bar chart changed when cum_trend was added", i
-            );
-        }
-        assert!(
-            rows_with[content_rows + 1].contains("window usage"),
-            "the new cum_trend graph label is missing"
-        );
-        assert!(
-            !rows_without[content_rows + 1].contains("window usage"),
-            "the label appeared even though cum_trend is absent"
-        );
-
-        assert!(
-            trends_panel_height(&app_with) > trends_panel_height(&app_without),
-            "a second graph must grow the panel, never shrink or leave it unchanged"
-        );
-    }
-
-    #[test]
-    fn cum_trend_absent_is_a_true_no_op_on_render_and_layout() {
-        /* Regression guard: the pre-existing formula and rendering must be exactly
-        what they were before this change whenever cum_trend never shows up. */
-        let wire_without = r#"{"trends":["▁█","today 1M/hr"]}"#;
-        let app_without = sessions_app(wire_without);
-        let text = buffer_text(&app_without, 60, 30);
-        assert!(!text.contains("window usage"), "cum_trend label leaked in with no cum_trend data");
-        let trends_len = 2; /* the two rows in wire_without's "trends" array */
+    fn trends_panel_height_matches_the_bar_chart_plus_border_formula() {
+        let wire = r#"{"trends":["▁█","today 1M/hr"]}"#;
+        let app = sessions_app(wire);
+        let trends_len = 2; /* the two rows in wire's "trends" array */
         assert_eq!(
-            trends_panel_height(&app_without),
+            trends_panel_height(&app),
             (TREND_ROWS + trends_len - 1 + 2) as u16,
-            "absent cum_trend must be a true no-op on the pre-existing height formula"
+            "panel height must match the bar-chart-plus-border formula"
         );
-    }
-
-    #[test]
-    fn cum_trend_sparkline_clipping_keeps_the_newest_columns_not_the_oldest() {
-        /* A 60-character sparkline climbing from level 0 to level 7 in 8-column
-        blocks (level 7 reachable ONLY by its last 4 characters), rendered at a
-        width narrower than the sparkline plus any axis gutter so clipping is
-        forced. If the clip kept the HEAD (the pre-fix right-truncating
-        behaviour) instead of the TAIL, the top row would show 0 filled cells --
-        the level-7 columns are exactly what right-truncation drops. */
-        let climb = "\u{2581}\u{2581}\u{2581}\u{2581}\u{2581}\u{2581}\u{2581}\u{2581}\u{2582}\u{2582}\u{2582}\u{2582}\u{2582}\u{2582}\u{2582}\u{2582}\u{2583}\u{2583}\u{2583}\u{2583}\u{2583}\u{2583}\u{2583}\u{2583}\u{2584}\u{2584}\u{2584}\u{2584}\u{2584}\u{2584}\u{2584}\u{2584}\u{2585}\u{2585}\u{2585}\u{2585}\u{2585}\u{2585}\u{2585}\u{2585}\u{2586}\u{2586}\u{2586}\u{2586}\u{2586}\u{2586}\u{2586}\u{2586}\u{2587}\u{2587}\u{2587}\u{2587}\u{2587}\u{2587}\u{2587}\u{2587}\u{2588}\u{2588}\u{2588}\u{2588}";
-        assert_eq!(climb.chars().count(), 60, "transcription error in the climbing fixture string");
-
-        let wire = format!(
-            r#"{{"trends":["▁█","today 1M/hr"],"cum_trend":["{}","now 28%  resets in 3h 34m"]}}"#,
-            climb
-        );
-        let app = sessions_app(&wire);
-        let rows = render_trends_rows(&app, 40);
-
-        /* Row 0: panel top border. Rows 1..=TREND_ROWS: hourly graph rows.
-        Next trends.len()-1 = 1 row: hourly text row (content_rows = TREND_ROWS
-        + trends.len() - 1). Next row: "window usage" label. The row after
-        THAT is the cum_trend graph's own TOP row (level 7, drawn first since
-        trend_graph_lines iterates (0..TREND_ROWS).rev()). */
-        let content_rows = TREND_ROWS + 2 - 1;
-        let top_row = content_rows + 2;
-        let filled = rows[top_row].matches('\u{2588}').count();
-        assert!(
-            (1..=4).contains(&filled),
-            "expected 1-4 filled level-7 cells (newest columns kept) in row {}, got {}: {:?}",
-            top_row, filled, rows[top_row]
-        );
-    }
-
-    #[test]
-    fn clip_to_newest_drops_the_trailing_future_blank_run_not_the_real_data() {
-        /* Shaped like the real bug: a real-data prefix shorter than the total
-        string, followed by a trailing run of spaces extending to the full
-        length -- mirrors build_cum_trend's window-through-reset array, where
-        every bucket past "now" is a genuine not-yet-sampled FUTURE bucket
-        rendered as a literal space. */
-        let real = "0123456789";
-        let sparkline = format!("{}{}", real, " ".repeat(20));
-        assert_eq!(sparkline.chars().count(), 30, "transcription error in the fixture string");
-
-        /* Case 1: budget(15) > real_len(10), budget(15) < total_len(30) --
-        exactly the live bug's own relationship. The pre-fix code returns all
-        spaces here; the fix must return the whole real prefix, trailing
-        blanks dropped. */
-        let clipped = clip_to_newest(std::slice::from_ref(&sparkline), None, 15);
-        let first = &clipped[0];
-        assert_ne!(first.chars().next(), Some(' '), "clip returned blank tail instead of real data");
-        assert_eq!(first.chars().last(), Some('9'), "clip did not keep the real prefix's own last character");
-        assert_eq!(first, real, "fits-within-budget case must return the whole real prefix, unpadded");
-
-        /* Case 2: budget(6) < real_len(10) -- slicing within the real prefix,
-        keeping its newest (rightmost) columns. */
-        let clipped_narrow = clip_to_newest(&[sparkline], None, 6);
-        assert_eq!(clipped_narrow[0], "456789");
     }
 
     fn sessions_app(wire: &str) -> App {
