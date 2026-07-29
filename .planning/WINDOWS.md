@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 0
 waived_count: 0
-fixed_count: 0
+fixed_count: 1
 total_count: 1
-last_updated: 2026-07-29T08:32:13.827Z
+last_updated: 2026-07-29T08:35:24.537Z
 ---
 
 # Broken Windows Ledger
@@ -15,7 +15,7 @@ last_updated: 2026-07-29T08:32:13.827Z
 
 | id | phase | kind | file | line | description | status | reason | recorded_at | resolved_at |
 |----|-------|------|------|------|-------------|--------|--------|-------------|-------------|
-| 1 | 260729-e37 | deviation | justfile |  | Task 3 deploy steps (just install/restart/status) deferred to main checkout post-merge -- worktree-isolated agent cannot safely repoint the live ~/.claude/hooks/claude-monitor.py symlink | open |  | 2026-07-29T08:32:13.827Z |  |
+| 1 | 260729-e37 | deviation | justfile |  | Task 3 deploy steps (just install/restart/status) deferred to main checkout post-merge -- worktree-isolated agent cannot safely repoint the live ~/.claude/hooks/claude-monitor.py symlink | fixed |  | 2026-07-29T08:32:13.827Z | 2026-07-29T08:35:24.537Z |
 
 ````json
 [
@@ -26,10 +26,10 @@ last_updated: 2026-07-29T08:32:13.827Z
     "file": "justfile",
     "line": null,
     "description": "Task 3 deploy steps (just install/restart/status) deferred to main checkout post-merge -- worktree-isolated agent cannot safely repoint the live ~/.claude/hooks/claude-monitor.py symlink",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-07-29T08:32:13.827Z",
-    "resolved_at": null
+    "resolved_at": "2026-07-29T08:35:24.537Z"
   }
 ]
 ````
