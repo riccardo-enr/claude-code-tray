@@ -6,6 +6,8 @@
 
 # Deployed entry: a symlink -> this repo's claude-monitor.py; what gnome-session launches.
 entry := env_var('HOME') / ".claude/hooks/claude-monitor.py"
+# Installed autostart entry -- the source of truth for CLAUDE_TRAY_HEADLESS.
+autostart := env_var('HOME') / ".config/autostart/claude-monitor.desktop"
 dash  := env_var_or_default('XDG_CACHE_HOME', env_var('HOME') / ".cache") / "claude-tray/dashboard.html"
 
 # List recipes.
@@ -16,13 +18,14 @@ default:
 restart:
     -pkill -f claude-monitor.py
     sleep 1
-    setsid -f /usr/bin/python3 {{entry}}
-    @echo "tray restarted"
+    @just start
 
-# Start the tray daemon (detached).
+# Start the tray daemon (detached), mirroring the autostart entry's headless setting.
 start:
+    #!/usr/bin/env bash
+    grep -q 'CLAUDE_TRAY_HEADLESS=1' "{{autostart}}" 2>/dev/null && export CLAUDE_TRAY_HEADLESS=1
     setsid -f /usr/bin/python3 {{entry}}
-    @echo "tray started"
+    echo "tray started (headless=${CLAUDE_TRAY_HEADLESS:-0})"
 
 # Stop the tray daemon.
 stop:
