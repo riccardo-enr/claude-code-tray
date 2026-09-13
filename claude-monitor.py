@@ -36,6 +36,9 @@ ICON = os.environ.get("CLAUDE_TRAY_ICON", "claude-desktop")
 GHOSTTY_CLASS = os.environ.get("CLAUDE_TRAY_WM_CLASS", "com.mitchellh.ghostty")
 # WM_CLASS fallback for Zed sessions (TERM_PROGRAM=zed); title match is tried first.
 ZED_CLASS = os.environ.get("CLAUDE_TRAY_ZED_WM_CLASS", "dev.zed.Zed")
+# CLAUDE_TRAY_HEADLESS=1 hides the tray icon; the socket, polling and notifications
+# stay up, so claude-tui and the tmux segment keep working with no icon in the bar.
+HEADLESS = os.environ.get("CLAUDE_TRAY_HEADLESS", "") not in ("", "0")
 
 # Seconds between polls (the CLI itself takes ~5-10s). Override: CLAUDE_TRAY_POLL_INTERVAL.
 try:
@@ -107,7 +110,11 @@ class Monitor:
         self.ind = AppIndicator.Indicator.new(
             "claude-monitor", ICON, AppIndicator.IndicatorCategory.APPLICATION_STATUS
         )
-        self.ind.set_status(AppIndicator.IndicatorStatus.ACTIVE)
+        self.ind.set_status(
+            AppIndicator.IndicatorStatus.PASSIVE
+            if HEADLESS
+            else AppIndicator.IndicatorStatus.ACTIVE
+        )
         self.menu = Gtk.Menu()
         self.ind.set_menu(self.menu)
         self.rebuild_menu()

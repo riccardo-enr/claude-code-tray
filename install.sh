@@ -58,12 +58,19 @@ else
   fi
 fi
 
+# Install with CLAUDE_TRAY_HEADLESS=1 to bake the no-icon mode into autostart:
+# the daemon still serves claude-tui and the tmux segment, it just shows no tray icon.
+EXEC="python3 $HOOKS/claude-monitor.py"
+if [ -n "${CLAUDE_TRAY_HEADLESS:-}" ] && [ "$CLAUDE_TRAY_HEADLESS" != "0" ]; then
+  EXEC="env CLAUDE_TRAY_HEADLESS=1 $EXEC"
+fi
+
 cat > "$AUTOSTART/claude-monitor.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Claude Code Monitor
 Comment=Tray indicator and click-to-focus for Claude Code sessions
-Exec=python3 $HOOKS/claude-monitor.py
+Exec=$EXEC
 Icon=claude-desktop
 X-GNOME-Autostart-enabled=true
 NoDisplay=true
