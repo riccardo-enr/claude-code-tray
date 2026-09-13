@@ -45,7 +45,12 @@ DEFAULT_CONFIG = {
 }
 # Maps notif_allowed's `kind` values (from Monitor.handle's `event` and poll_loop's `cap`)
 # to their DEFAULT_CONFIG / tray-config.json key.
-NOTIF_KEYS = {"waiting": "notify_waiting", "done": "notify_done", "5h": "notify_5h", "7d": "notify_7d"}
+NOTIF_KEYS = {
+    "waiting": "notify_waiting",
+    "done": "notify_done",
+    "5h": "notify_5h",
+    "7d": "notify_7d",
+}
 
 
 def parse_config(text):
@@ -188,7 +193,9 @@ def sess_notify_baseline(live_status, reaped_status):
     return live_status if live_status is not None else reaped_status
 
 
-REAP_MAX_AGE = 3600  # 1 hour; self-heal ceiling for a session SessionEnd never popped (G-07-2)
+REAP_MAX_AGE = (
+    3600  # 1 hour; self-heal ceiling for a session SessionEnd never popped (G-07-2)
+)
 
 
 def session_stale(alive, entered, now, max_age):
@@ -344,7 +351,9 @@ def model_mix(dist, top=MODEL_MIX_MAX_ENTRIES):
             continue
         if round(pct) <= 0:
             continue
-        parts.append((pct, "%s %d%%" % (_safe_cell(fam)[:EXTRA_TEXT_MAX_CHARS], round(pct))))
+        parts.append(
+            (pct, "%s %d%%" % (_safe_cell(fam)[:EXTRA_TEXT_MAX_CHARS], round(pct)))
+        )
     parts.sort(key=lambda p: -p[0])
     return " ".join(text for _, text in parts[:top]) or None
 
@@ -392,12 +401,16 @@ def parse_usage(stdout):
         }
     except Exception:
         return None
+
     def is_num(v):
         return isinstance(v, (int, float)) and not isinstance(v, bool)
 
     # None here stops round()/epoch math raising inside the Gtk redraw, which would silently
     # kill the countdown timer source.
-    if not all(is_num(u[k]) for k in ("used_percentage", "resets_at_epoch", "burn_rate_per_min")):
+    if not all(
+        is_num(u[k])
+        for k in ("used_percentage", "resets_at_epoch", "burn_rate_per_min")
+    ):
         return None
     # Token counts are legitimately null under --api (percentages only); strings are junk.
     for k in ("tokens_used", "token_limit"):
@@ -435,15 +448,8 @@ def live_pair(live, pct_key, reset_key, now):
     if not isinstance(live, dict):
         return None
 
-    def is_num(v):
-        return (
-            isinstance(v, (int, float))
-            and not isinstance(v, bool)
-            and math.isfinite(v)
-        )
-
     pct, reset = live.get(pct_key), live.get(reset_key)
-    if not (is_num(pct) and is_num(reset)):
+    if not all(_is_num(v) and math.isfinite(v) for v in (pct, reset)):
         return None
     # spend_limit legitimately exceeds 100; past LIVE_PCT_MAX it is junk, not usage.
     if not 0 <= pct <= LIVE_PCT_MAX or reset <= now:
@@ -702,6 +708,7 @@ def hourly_tokens(records, now):
     length and is credited to the sample ending it. An interval wider than GAP_MAX is a
     daemon outage, not idle time, and contributes nothing.
     """
+
     def tokens(prev, rec):
         dt = rec["t"] - prev["t"]
         return rec["burn"] * dt / 60.0 if 0 < dt <= GAP_MAX else 0.0
@@ -717,6 +724,7 @@ def hourly_pct(records, now):
     and RISE_MAX spike semantics as heatmap_buckets -- this is the share-of-the-window
     reading of the very same hours hourly_tokens measures in tokens.
     """
+
     def rise(prev, rec):
         if not 0 < rec["t"] - prev["t"] <= GAP_MAX:
             return 0.0
@@ -744,7 +752,9 @@ def trend_sparkline(records, now):
         if value is None:
             out.append(SPARK_GAP)
         elif hi == 0:
-            out.append(SPARK_GLYPHS[0])  # nothing burned all day -> floor, no ZeroDivision
+            out.append(
+                SPARK_GLYPHS[0]
+            )  # nothing burned all day -> floor, no ZeroDivision
         else:
             out.append(SPARK_GLYPHS[round(value / hi * (len(SPARK_GLYPHS) - 1))])
     return "".join(out)
@@ -892,7 +902,9 @@ def build_trend_rows(records, now):
         )
     peak = trend_peak_hour(records)
     if peak is not None:
-        rows.append("peak hour: %02d:00 (%s/hr)" % (peak[0], fmt_tokens(round(peak[1]))))
+        rows.append(
+            "peak hour: %02d:00 (%s/hr)" % (peak[0], fmt_tokens(round(peak[1])))
+        )
     return rows
 
 
@@ -913,17 +925,19 @@ def history_numeric(records):
     Rejects NaN/Infinity (json.loads accepts both) and bounds t to before 2100, so a
     far-future record -- which history_keep never prunes -- cannot break regeneration.
     """
+
     def num(v):
         return (
-            isinstance(v, (int, float))
-            and not isinstance(v, bool)
-            and math.isfinite(v)
+            isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
         )
 
     return [
-        r for r in records
-        if num(r.get("t")) and 0 < r["t"] < 4102444800
-        and num(r.get("pct")) and num(r.get("burn"))
+        r
+        for r in records
+        if num(r.get("t"))
+        and 0 < r["t"] < 4102444800
+        and num(r.get("pct"))
+        and num(r.get("burn"))
     ]
 
 
@@ -982,9 +996,7 @@ def heatmap_active_span(grid):
         hour
         for hour in range(24)
         if any(
-            isinstance(row, (list, tuple))
-            and hour < len(row)
-            and row[hour] is not None
+            isinstance(row, (list, tuple)) and hour < len(row) and row[hour] is not None
             for row in grid[:7]
         )
     ]
@@ -1009,7 +1021,11 @@ def heatmap_levels(grid, levels):
     fixed = []
     values = []
     for day in range(7):
-        source = grid[day] if day < len(grid) and isinstance(grid[day], (list, tuple)) else []
+        source = (
+            grid[day]
+            if day < len(grid) and isinstance(grid[day], (list, tuple))
+            else []
+        )
         row = []
         for hour in range(24):
             value = source[hour] if hour < len(source) else None
@@ -1028,7 +1044,12 @@ def heatmap_levels(grid, levels):
     maximum = max(1.0, max(values))
     top = levels - 1
     return [
-        [None if value is None else round(max(0.0, min(maximum, value)) / maximum * top) for value in row]
+        [
+            None
+            if value is None
+            else round(max(0.0, min(maximum, value)) / maximum * top)
+            for value in row
+        ]
         for row in fixed
     ]
 
@@ -1236,7 +1257,9 @@ below may import textual, rich, or any other third-party package.
 
 # The daemon's socket. Restates the path expression at claude-monitor.py:32 and
 # claude-send.py:17, both out of scope this phase -- change all three.
-SOCK_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.sock")
+SOCK_PATH = os.path.join(
+    os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-monitor.sock"
+)
 # D-08: socket poll cadence, deliberately independent of the daemon's usage-poll clock
 # because sessions change on hook events, not on that clock.
 TUI_FETCH_INTERVAL = 2.0
@@ -1300,7 +1323,9 @@ def query_snapshot(path=SOCK_PATH, timeout=TUI_SOCK_TIMEOUT):
         # under a "live" header (stale-as-live, Plan 09-02's first prohibition). Reject a
         # non-object here so a malformed line is a failure the degraded state machine owns.
         if not isinstance(obj, dict):
-            raise ValueError("snapshot response was %s, not an object" % type(obj).__name__)
+            raise ValueError(
+                "snapshot response was %s, not an object" % type(obj).__name__
+            )
         return obj
     finally:
         s.close()
@@ -1330,7 +1355,9 @@ def focus_tmux_cmds(pane, tmux):
     personal workspace. Sessions stay where they live; it is the desktop that travels
     to them, via the window raise in Monitor.focus.
     """
-    return [tmux_cmd(tmux, verb, "-t", pane) for verb in ("select-window", "select-pane")]
+    return [
+        tmux_cmd(tmux, verb, "-t", pane) for verb in ("select-window", "select-pane")
+    ]
 
 
 def pick_window(listing, wm_class, session):
@@ -1465,7 +1492,8 @@ def tui_usage_rows(usage, now):
     # --api carries no token counts -> percent only; the P90 path has them -> "72k / 88k".
     if usage.get("tokens_used") is not None and usage.get("token_limit") is not None:
         row.append(
-            "%s / %s" % (fmt_tokens(usage["tokens_used"]), fmt_tokens(usage["token_limit"]))
+            "%s / %s"
+            % (fmt_tokens(usage["tokens_used"]), fmt_tokens(usage["token_limit"]))
         )
     row.append(fmt_countdown(reset - now))
     row.append("burn: %s tok/hr" % fmt_tokens(round(burn * 60)))
