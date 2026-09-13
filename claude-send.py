@@ -6,6 +6,7 @@ environment, and fires it at the monitor's unix socket. Non-blocking and
 silent if the monitor is not running -- must never hold up a hook.
 
 Usage (as a hook command):  claude-send.py {running|waiting|done|end|subagent_stop}
+Usage (as a statusLine feeder): claude-send.py usage
 """
 
 import json
@@ -43,6 +44,29 @@ if __name__ == "__main__":
         data = json.load(sys.stdin)
     except Exception:
         data = {}
+
+    # statusLine feeder: the hook's rate_limits are the server's own numbers, unlike the
+    # CLI percentage the daemon polls. Absent on the first render of a session and for
+    # non-subscribers (verified in the 2.1.251 bundle's statusLine schema) -- say nothing.
+    if mode == "usage":
+        limits = data.get("rate_limits")
+        if not isinstance(limits, dict):
+            sys.exit(0)
+        five = limits.get("five_hour")
+        seven = limits.get("seven_day")
+        five = five if isinstance(five, dict) else {}
+        seven = seven if isinstance(seven, dict) else {}
+        live = {
+            "event": "usage_live",
+            "pct": five.get("used_percentage"),
+            "reset": five.get("resets_at"),
+            "pct7": seven.get("used_percentage"),
+            "reset7": seven.get("resets_at"),
+        }
+        if live["pct"] is None and live["pct7"] is None:
+            sys.exit(0)
+        send_event(live, sock)
+        sys.exit(0)
 
     msg = {
         "event": mode,

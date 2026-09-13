@@ -69,6 +69,9 @@ class Monitor:
         self.sessions_lock = threading.Lock()  # guards self.sessions: Gtk-thread mutator + query-thread readers (D-01)
         self.usage = None  # latest parse_usage() dict, or None if unavailable
         self.usage_misses = 0  # consecutive failed polls; >= threshold -> unavailable
+        # Latest statusLine rate_limits sample, or None. Single rebind from the conn
+        # thread, read once per poll -- same lock-free posture as self.usage.
+        self.live_usage = None
         self.trends = None  # cached trend row strings, or None (collecting state)
         self.trend_axis = None  # cached graph y-axis tick labels (top row first), or None
         self.heatmap = None  # cached 7x24 usage-rise grid, or None until history is read
@@ -672,6 +675,13 @@ def _handle_conn(mon, conn):
                     }
                     conn.sendall((json.dumps(snapshot) + "\n").encode("utf-8"))
                 continue
+            if msg.get("event") == "usage_live":
+                # Only the four numeric keys are ever read; copying just those bounds
+                # whatever a hook sends. core.merged_usage does the validation.
+                mon.live_usage = {
+                    k: msg.get(k) for k in ("pct", "reset", "pct7", "reset7")
+                }
+                continue
             if msg.get("action") == "focus":
                 target = [
                     msg.get("pane", ""),
@@ -735,6 +745,9 @@ def poll_loop(mon):
         try:
             usage = core.fetch_usage()
             now = time.time()
+            # The one merge site: history, alerts, menu, snapshot and the tmux segment
+            # all read what comes out of here, so none of them needs to know the source.
+            usage = core.merged_usage(usage, mon.live_usage, now)
             mon.reap_stale(now)
             if usage is not None:
                 core.append_history(core.history_record(usage, now))
@@ -774,6 +787,9 @@ def poll_loop(mon):
                             ("dash",),
                             URGENCY_NORMAL,  # informational; it need not block the screen
                         )
+                        # ponytail: a source flip (the statusLine overlay expiring, or
+                        # resuming) changes `reset` and re-arms this cap -- one extra
+                        # alert per flip, only when already near exhaustion.
                         mon.alert_armed[cap] = reset  # silent until this reset changes
             # After the append (fresh record counts) and before the idle_add (redraw sees it).
             if now - last_trend >= TREND_INTERVAL:

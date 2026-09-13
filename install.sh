@@ -110,6 +110,13 @@ echo
 echo "Start it now without logging out:"
 echo "  setsid python3 $HOOKS/claude-monitor.py >/tmp/claude-monitor.log 2>&1 < /dev/null &"
 echo
+echo "For authoritative usage (server percentages AND real reset times, no polling),"
+echo "append this to your \"statusLine\" command in ~/.claude/settings.json --"
+echo "keep whatever it already runs, this only adds a silent feeder:"
+echo "  ; printf \"%s\" \"\$i\" | \"\$HOME/.claude/hooks/claude-send.py\" usage >/dev/null 2>&1 &"
+echo "  (the command must capture stdin once, e.g. 'i=\$(cat);' at the front)"
+
+echo
 echo "Open the dashboard in a tmux popup (tmux 3.2+), from inside tmux:"
 echo "  tmux popup -E -w 90% -h 85% -T ' claude-tui ' claude-tui"
 echo

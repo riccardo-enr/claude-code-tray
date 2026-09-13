@@ -27,6 +27,9 @@ POLL_TIMEOUT = 15  # subprocess seconds
 # via ~/.claude/tray-config.json and the tray's Badge threshold menu (CFG-05), not via an
 # env var, which stays out of this phase's scope (D-01).
 USAGE_THRESHOLD = 80
+# Ceiling for a statusLine percentage. spend_limit reports above 100 once exceeded, so this
+# rejects junk without rejecting a legitimately over-cap window.
+LIVE_PCT_MAX = 1000
 
 
 # Sibling to HISTORY_PATH; "tray-" matches the existing CLAUDE_TRAY_* env var family (D-02).
@@ -418,6 +421,55 @@ def parse_usage(stdout):
         else None
     )
     return u
+
+
+def live_pair(live, pct_key, reset_key, now):
+    """One validated (pct, reset) pair from a statusLine sample, or None.
+
+    Returned as a pair on purpose: a server percentage carries the phase of the server's
+    window, so pairing it with the CLI's own differently-phased reset would put the number
+    next to the wrong countdown. Validity ends when the reset it names passes -- which
+    bounds staleness with no magic constant, and since a percentage only grows inside its
+    window, a stale sample can only ever undercount.
+    """
+    if not isinstance(live, dict):
+        return None
+
+    def is_num(v):
+        return (
+            isinstance(v, (int, float))
+            and not isinstance(v, bool)
+            and math.isfinite(v)
+        )
+
+    pct, reset = live.get(pct_key), live.get(reset_key)
+    if not (is_num(pct) and is_num(reset)):
+        return None
+    # spend_limit legitimately exceeds 100; past LIVE_PCT_MAX it is junk, not usage.
+    if not 0 <= pct <= LIVE_PCT_MAX or reset <= now:
+        return None
+    return float(pct), int(reset)
+
+
+def merged_usage(usage, live, now):
+    """Overlay the statusLine hook's authoritative pct+reset pairs onto the CLI dict.
+
+    The CLI's 5h percentage is a local estimate against a cap it re-guesses and a window
+    it phases itself; the hook's numbers come from the server. Each window overlays on its
+    own, so a missing 7d pair never costs the 5h one. Token/burn/cost are left alone --
+    nothing else reports them -- so tokens_used/token_limit can disagree with an overlaid
+    percentage. That is display-only, and deliberate: see D-05 in the plan notes.
+    """
+    if usage is None or not isinstance(live, dict):
+        return usage
+    out = dict(usage)
+    five = live_pair(live, "pct", "reset", now)
+    if five is not None:
+        out["used_percentage"], out["resets_at_epoch"] = five
+    seven = live_pair(live, "pct7", "reset7", now)
+    if seven is not None:
+        out["seven_day_pct"], out["seven_day_reset"] = seven
+    return out
 
 
 def fetch_usage():

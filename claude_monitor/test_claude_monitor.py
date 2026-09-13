@@ -77,6 +77,7 @@ from .core import (
     sess_status_band,
     session_stale,
     spark_levels,
+    merged_usage,
     statusline_text,
     hourly_pct,
     hourly_tokens,
@@ -1472,5 +1473,52 @@ def demo():
     assert [dict(s) for s in _srows_in] == _srows_before
     assert sess_rows(_srows_in, _unow) == _srows_out
     assert sess_rows(_srows_in, _unow) is not sess_rows(_srows_in, _unow)
+
+    # merged_usage: the statusLine overlay. now=1000; a reset in the future keeps a pair
+    # live, a reset at or before now has expired.
+    _cli = {
+        "used_percentage": 0.7, "resets_at_epoch": 1000 + 17000,
+        "seven_day_pct": 33.0, "seven_day_reset": 1000 + 400000,
+        "tokens_used": 82826, "token_limit": 314364, "burn_rate_per_min": 1.5,
+    }
+    _live = {"pct": 47.0, "reset": 1000 + 9000, "pct7": 17.0, "reset7": 1000 + 500000}
+    _m = merged_usage(_cli, _live, 1000)
+    # Both pairs overlay together: percentage AND reset, never one without the other.
+    assert (_m["used_percentage"], _m["resets_at_epoch"]) == (47.0, 1000 + 9000)
+    assert (_m["seven_day_pct"], _m["seven_day_reset"]) == (17.0, 1000 + 500000)
+    # Token/burn fields stay the CLI's -- nothing else reports them.
+    assert (_m["tokens_used"], _m["burn_rate_per_min"]) == (82826, 1.5)
+    # An expired pair is dropped whole, leaving the CLI's pair intact rather than pairing
+    # a server percentage with the CLI's differently-phased reset.
+    _exp = merged_usage(_cli, {"pct": 47.0, "reset": 1000, "pct7": 17.0, "reset7": 1000 + 5}, 1000)
+    assert (_exp["used_percentage"], _exp["resets_at_epoch"]) == (0.7, 1000 + 17000)
+    assert (_exp["seven_day_pct"], _exp["seven_day_reset"]) == (17.0, 1000 + 5)
+    # Each window is independent: a junk 7d pair never costs the 5h overlay.
+    _half = merged_usage(_cli, {"pct": 47.0, "reset": 1000 + 9000, "pct7": None}, 1000)
+    assert _half["used_percentage"] == 47.0 and _half["seven_day_pct"] == 33.0
+    # Junk rejected the same way parse_usage rejects it: non-finite, bool, wrong type,
+    # negative, or past the ceiling -- each leaves the CLI value standing.
+    for _bad in (
+        {"pct": float("inf"), "reset": 1000 + 9000},
+        {"pct": float("nan"), "reset": 1000 + 9000},
+        {"pct": True, "reset": 1000 + 9000},
+        {"pct": "47", "reset": 1000 + 9000},
+        {"pct": -1, "reset": 1000 + 9000},
+        {"pct": 1001, "reset": 1000 + 9000},
+        {"pct": 47.0, "reset": "soon"},
+        {"pct": 47.0, "reset": float("inf")},
+    ):
+        assert merged_usage(_cli, _bad, 1000)["used_percentage"] == 0.7
+    # spend_limit legitimately exceeds 100, so an over-cap percentage must survive.
+    assert merged_usage(_cli, {"pct": 137.0, "reset": 1000 + 9000}, 1000)["used_percentage"] == 137.0
+    # No sample / no CLI dict: pass through untouched, never invent a payload.
+    assert merged_usage(_cli, None, 1000) == _cli
+    assert merged_usage(_cli, {}, 1000) == _cli
+    assert merged_usage(None, _live, 1000) is None
+    # Purity: the caller's dicts are never mutated, and the result is a fresh dict.
+    _cli_before, _live_before = dict(_cli), dict(_live)
+    merged_usage(_cli, _live, 1000)
+    assert _cli == _cli_before and _live == _live_before
+    assert merged_usage(_cli, _live, 1000) is not merged_usage(_cli, _live, 1000)
 
     print("ok")
