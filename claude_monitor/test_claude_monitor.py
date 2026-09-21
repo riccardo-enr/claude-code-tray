@@ -80,10 +80,8 @@ from .core import (
     merged_usage,
     statusline_text,
     hourly_pct,
-    hourly_tokens,
-    trend_burn,
     trend_axis,
-    trend_spent,
+    trend_consumed,
     trend_peak_hour,
     trend_sparkline,
     trend_text,
@@ -485,16 +483,16 @@ def demo():
     current_hour = oldest_hour + 23 * 3600
     now_sp = current_hour + 300
     recs_sp = [
-        {"t": oldest_hour, "burn": 0.0},
-        {"t": oldest_hour + 60, "burn": 100.0},  # bucket 0: 100 tokens
-        {"t": current_hour, "burn": 500.0},  # data gap: no inferred usage
-        {"t": current_hour + 60, "burn": 900.0},  # bucket 23: 900 tokens
+        {"t": oldest_hour, "pct": 0.0},
+        {"t": oldest_hour + 60, "pct": 1.0},  # bucket 0: 1% of the window
+        {"t": current_hour, "pct": 5.0},  # data gap: no inferred usage
+        {"t": current_hour + 60, "pct": 14.0},  # bucket 23: 9%
     ]
     spark = trend_sparkline(recs_sp, now_sp)
     assert len(spark) == 24
-    # Scaled 0..peak, not min..max: 100 tokens against a 900-token peak sits just off
-    # the floor. Under min..max scaling the quietest sampled hour was always the floor,
-    # which made it indistinguishable from an idle one and left the axis unlabelable.
+    # Scaled 0..peak, not min..max: 1% against a 9% peak sits just off the floor. Under
+    # min..max scaling the quietest sampled hour was always the floor, which made it
+    # indistinguishable from an idle one and left the axis unlabelable.
     assert spark[0] == SPARK_GLYPHS[1]
     assert spark[23] == SPARK_GLYPHS[-1]
     assert spark[12] == SPARK_GAP  # interior empty hour stays a gap
@@ -502,12 +500,12 @@ def demo():
     # Equal usage in consecutive clock hours must render equal bars: a steady burn rate
     # over three full hours is three identical columns, not a staircase.
     hour_start = int(datetime.datetime(2024, 1, 2, 1).timestamp())
-    hourly = [{"t": hour_start - 300, "burn": 200.0}]  # seeds a full 5-min interval
+    hourly = [{"t": hour_start - 300, "pct": 0.0}]  # seeds a full 5-min interval
     for hour in range(3):
         for minute in range(0, 60, 5):
             hourly.append({
                 "t": hour_start + hour * 3600 + minute * 60,
-                "burn": 200.0,
+                "pct": (hour * 12 + minute // 5 + 1) * 1.0,
             })
     hourly_spark = trend_sparkline(hourly, hour_start + 3 * 3600 - 1)
     assert hourly_spark[21] == hourly_spark[22] == hourly_spark[23]
@@ -515,28 +513,27 @@ def demo():
     boundary = int(datetime.datetime(2024, 1, 2, 2).timestamp())
     boundary_spark = trend_sparkline(
         [
-            {"t": boundary + 49 * 60, "burn": 0.0},
-            {"t": boundary + 50 * 60, "burn": 500.0},
-            {"t": boundary + 55 * 60, "burn": 0.0},
-            {"t": boundary + 60 * 60, "burn": 0.0},
+            {"t": boundary + 49 * 60, "pct": 0.0},
+            {"t": boundary + 50 * 60, "pct": 5.0},  # hour 2 ate 5%
+            {"t": boundary + 55 * 60, "pct": 5.0},
+            {"t": boundary + 60 * 60, "pct": 5.0},  # hour 3 sampled, ate nothing
         ],
         boundary + 90 * 60,
     )
     assert boundary_spark[22] == SPARK_GLYPHS[-1]
     assert boundary_spark[23] == SPARK_GLYPHS[0]
-    flat = [{"t": now_sp - h * 3600, "burn": 42.0} for h in range(24)]
+    flat = [{"t": now_sp - h * 3600, "pct": 42.0} for h in range(24)]
     fspark = trend_sparkline(flat, now_sp)
     assert all(c == SPARK_GLYPHS[0] for c in fspark)
-    burn_recs = [{"t": 100, "burn": 100.0}, {"t": 200, "burn": 200.0}]
-    assert trend_burn(burn_recs, 0, 1000) == 9000.0
-    assert trend_burn(burn_recs, 1000, 2000) is None
     base_ph = datetime.datetime(2024, 1, 1)
     ep = lambda h: int(base_ph.replace(hour=h).timestamp())
+    # Busiest hour-of-day by quota eaten, not by a burn rate that never decays: hour 15
+    # rises 4%, hour 3 rises 1%, and the first sample of each hour seeds no rise.
     peak_recs = [
-        {"t": ep(3), "burn": 10.0}, {"t": ep(3) + 60, "burn": 20.0},   # hour 3, mean 15
-        {"t": ep(15), "burn": 100.0}, {"t": ep(15) + 60, "burn": 200.0},  # hour 15, mean 150
+        {"t": ep(3), "pct": 0.0, "burn": 0.0}, {"t": ep(3) + 60, "pct": 1.0, "burn": 0.0},
+        {"t": ep(15), "pct": 1.0, "burn": 0.0}, {"t": ep(15) + 60, "pct": 5.0, "burn": 0.0},
     ]
-    assert trend_peak_hour(peak_recs) == (15, 9000.0)
+    assert trend_peak_hour(peak_recs) == (15, 4.0)
     assert trend_peak_hour([]) is None
     # `now` must be real, so local_bounds' day/week windows contain the records.
     now_bt = time.time()
@@ -552,61 +549,45 @@ def demo():
     ]
     rows_clean = build_trend_rows(clean_bt, now_bt)
     assert rows_clean is not None and len(rows_clean) == 3
-    assert rows_clean[1].startswith("today ") and "nan" not in rows_clean[1]
+    assert rows_clean[1].startswith("today ") and rows_clean[1].endswith(" win")
     assert rows_clean[2].startswith("peak hour: ")
     mixed_bt = [clean_bt[0], corrupt_bt[0], clean_bt[1], corrupt_bt[1], clean_bt[2], corrupt_bt[2]]
     assert build_trend_rows(mixed_bt, now_bt) == rows_clean
     assert build_trend_rows(corrupt_bt, now_bt) is None
     assert build_trend_rows([], now_bt) is None
-    # trend_spent integrates burn (tok/min) over sub-GAP_MAX intervals only. burn is a
-    # trailing estimate, so each interval takes the burn of the sample ENDING it: two
-    # 60s steps at 200 and 300 tok/min -> 200 + 300 = 500. The 9599s hole is a daemon
-    # outage, not idle time, so it contributes 0 rather than 400 * 9599/60.
+    # trend_consumed sums the trusted pct rise over sub-GAP_MAX intervals only: 2 + 3
+    # = 5% of a window. The 9779s hole is a daemon outage, not idle time, so the 40-point
+    # jump across it books nothing.
     spend_recs = [
-        {"t": 100, "burn": 100.0},
-        {"t": 160, "burn": 200.0},
-        {"t": 220, "burn": 300.0},
-        {"t": 9999, "burn": 400.0},  # spans a > GAP_MAX hole -> not counted
+        {"t": 100, "pct": 10.0},
+        {"t": 160, "pct": 12.0},
+        {"t": 220, "pct": 15.0},
+        {"t": 9999, "pct": 55.0},  # spans a > GAP_MAX hole -> not counted
     ]
-    assert trend_spent(spend_recs, 0, 1e10) == 500.0
-    assert trend_spent(spend_recs, 500, 600) is None  # no interval in window
-    assert trend_spent([{"t": 1, "burn": 5.0}], 0, 10) is None  # single sample
-    # 14 samples 300s apart: spans TREND_MIN_SPAN, every interval within GAP_MAX.
-    # 13 intervals * 60 tok/min * 5 min = 3900 -> "4k".
-    spent_bt = [
-        {"t": now_bt - i * 300, "pct": 10.0, "burn": 60.0} for i in reversed(range(14))
-    ]
-    rows_spent = build_trend_rows(spent_bt, now_bt)
-    # Row presence and position, not the totals: now_bt is real, so the 3900s span can
-    # straddle local midnight (or Monday 00:00) and book part of itself to the prior
-    # period. trend_spent's own asserts above pin the arithmetic.
-    assert len(rows_spent) == 4 and rows_spent[2].startswith("spent today ")
+    assert trend_consumed(spend_recs, 0, 1e10) == 5.0
+    assert trend_consumed(spend_recs, 500, 600) is None  # no interval in window
+    assert trend_consumed([{"t": 1, "pct": 5.0}], 0, 10) is None  # single sample
     assert fmt_tokens(2.1e9) == "2.1G"
     # One tick per graph row, TOP ROW FIRST, "" where there is no tick. Formatted by the
     # daemon (D-05) so the axis cannot drift from the rows under it.
     assert trend_axis([], now_bt) is None
     assert trend_axis([{"t": now_bt - 5 * 86400, "pct": 1.0, "burn": 99.0}], now_bt) is None
-    # Tokens alone are unanchored, so a tick also carries what that much costs as a
-    # share of one 5h window. 9 intervals x 300s x 60 tok/min = 2700 tokens, pct 10->19.
+    # A tick is the share of one 5h window that hour ate: 9 rises of 1 point -> 9%.
     _hour = int(datetime.datetime(2024, 1, 2, 5).timestamp())
     _one = [{"t": _hour + i * 300, "pct": 10.0 + i, "burn": 60.0} for i in range(10)]
-    _buckets = hourly_tokens(_one, _hour + 3000)
-    assert _buckets[23] == 2700.0 and _buckets[22] is None  # sampled hour vs unsampled
+    _buckets = hourly_pct(_one, _hour + 3000)
+    assert _buckets[23] == 9.0 and _buckets[22] is None  # sampled hour vs unsampled
     _axis = trend_axis(_one, _hour + 3000)
     assert len(_axis) == len(SPARK_GLYPHS)
-    assert _axis[0] == "3k/9%" and _axis[-1] == "0"
+    assert _axis[0] == "9%" and _axis[-1] == "0"
     # The middle tick is the value of the ROW it sits on (4/7 of the peak), not half the
     # number at the top -- a bar reaching that row really is worth this much.
-    assert _axis[len(SPARK_GLYPHS) - 1 - 4] == "%s/%d%%" % (
-        fmt_tokens(round(2700 * 4 / 7)), round(9 * 4 / 7)
-    )
+    assert _axis[len(SPARK_GLYPHS) - 1 - 4] == "%d%%" % round(9 * 4 / 7)
     assert [t for t in _axis if t] == [_axis[0], _axis[3], "0"]  # exactly three ticks
-    # The percentage must come from the bucket the TALLEST BAR is in, not from a
-    # separately-argmaxed pct peak: hour 5 burns the most tokens, hour 6 eats the most
-    # quota, and the axis describes hour 5.
+    # The axis tops out at the busiest bucket, whichever hour that is.
     _next = int(datetime.datetime(2024, 1, 2, 6).timestamp())
     _two = _one + [{"t": _next + i * 300, "pct": 30.0 + 3 * i, "burn": 6.0} for i in range(10)]
-    assert trend_axis(_two, _next + 3000)[0] == "3k/9%"
+    assert trend_axis(_two, _next + 3000)[0] == "27%"
     # hourly_pct keeps heatmap_buckets' semantics: a window roll (drop) and an
     # implausible spike are both 0, so neither can inflate the share on the axis.
     _rolled = [
@@ -707,15 +688,29 @@ def demo():
         {"t": tue + 60, "pct": 6.0},   # +5
     ])
     assert hm[1][9] == 9.0  # 4 + 5, not 40+32+36+1+6
-    # upstream pins pct at 100 for a stretch then falls back: not 98% burned in 15s
+    # upstream pins pct at 100 for a stretch then falls back: not 98% burned in 15s.
+    # despike drops the pinned samples outright, so the real ones either side connect
+    # and the 1.4 between them is not lost to a fall that never happened.
     hm = heatmap_buckets([
         {"t": tue, "pct": 1.6},
-        {"t": tue + 15, "pct": 100.0},  # rise > RISE_MAX -> untrusted, contributes 0
+        {"t": tue + 15, "pct": 100.0},  # rise > RISE_MAX -> dropped, never the peak
         {"t": tue + 30, "pct": 100.0},
-        {"t": tue + 45, "pct": 3.0},    # back to reality
+        {"t": tue + 45, "pct": 3.0},    # back to reality: +1.4 on 1.6
         {"t": tue + 60, "pct": 5.0},    # +2
     ])
-    assert hm[1][9] == 2.0
+    assert round(hm[1][9], 10) == 3.4
+    # pct is merged from two sources: a poll that misses the statusLine overlay reads
+    # back low, and the recovery to a level already seen is not fresh usage. The peak
+    # only restarts when `reset` says the window rolled.
+    hm = heatmap_buckets([
+        {"t": tue, "pct": 40.0, "reset": 1},
+        {"t": tue + 15, "pct": 52.0, "reset": 1},  # +12
+        {"t": tue + 30, "pct": 46.0, "reset": 1},  # stale source, not a roll
+        {"t": tue + 45, "pct": 59.0, "reset": 1},  # +7 over the peak, not +13
+        {"t": tue + 60, "pct": 2.0, "reset": 2},   # reset moved: the window rolled
+        {"t": tue + 75, "pct": 5.0, "reset": 2},   # +3
+    ])
+    assert hm[1][9] == 22.0  # 12 + 7 + 3
     # a rise spanning a data gap belongs to hours we never sampled -- do not attribute it
     hm = heatmap_buckets([
         {"t": tue, "pct": 10.0},

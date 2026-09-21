@@ -670,14 +670,58 @@ def local_bounds(now):
     return int(day_start.timestamp()), int(week_start.timestamp())
 
 
-def hourly_buckets(records, now, contribution):
-    """24 buckets by clock hour; None for an hour with no samples.
+def _rolled(prev, rec):
+    """True when the 5h window rolled between two samples: `reset` moved, or -- on
+    legacy records that carry no reset -- pct fell.
+    """
+    before, after = prev.get("reset"), rec.get("reset")
+    if _is_num(before) and _is_num(after):
+        return before != after
+    return rec["pct"] < prev["pct"]
 
-    `contribution(prev, rec)` returns what the interval between two consecutive samples
-    adds, and is credited to the hour of `rec` -- the sample ENDING the interval. Bucket
-    0 is 23 clock hours ago and bucket 23 is the current clock hour. An hour that saw
-    samples but no usage is 0.0, never None: an idle hour and an unsampled one are
-    different facts and the renderers draw them differently.
+
+def pct_rises(records):
+    """[(record, % of the 5h window consumed since the previous sample)], time-ordered.
+
+    Usage is the growth of the running MAX of pct inside a window, not the step between
+    adjacent samples. `pct` is merged from two sources (the polled --api value and the
+    statusLine hook's) and a poll that misses the overlay reads back low, so adjacent
+    steps book each recovery from such a dip as fresh usage -- 32% against a true 19%
+    in an observed hour.
+
+    despike runs first so an upstream 100%-pin can never become the peak and swallow
+    the window that follows it. A rise across a data gap resyncs the peak but is
+    credited to nobody: it may belong to hours nobody sampled.
+    """
+    ordered = sorted(records, key=lambda r: r["t"])
+    # Index in despike's t slot: it only ever reads pct, and indices cannot collide the
+    # way two records sharing a timestamp would.
+    ordered = [ordered[i] for i, _ in despike([[i, r["pct"]] for i, r in enumerate(ordered)])]
+    out = []
+    peak = None
+    prev = None
+    for rec in ordered:
+        pct = rec["pct"]
+        rise = 0.0
+        if prev is None or _rolled(prev, rec):
+            peak = pct
+        elif peak < pct <= peak + RISE_MAX:
+            if 0 < rec["t"] - prev["t"] <= GAP_MAX:
+                rise = pct - peak
+            peak = pct
+        out.append((rec, rise))
+        prev = rec
+    return out
+
+
+def hourly_pct(records, now):
+    """24 buckets of 5h-QUOTA PERCENT consumed per clock hour; None for an hour with no
+    samples. Bucket 0 is 23 clock hours ago, bucket 23 the current clock hour.
+
+    A rise is credited to the hour of the sample ENDING it. An hour that saw samples but
+    no usage is 0.0, never None: an idle hour and an unsampled one are different facts
+    and the renderers draw them differently. Percent, not tokens: `burn` is the CLI's
+    local-transcript rate and holds its last value while nothing runs.
     """
     current_hour = int(
         datetime.datetime.fromtimestamp(now)
@@ -685,11 +729,7 @@ def hourly_buckets(records, now, contribution):
         .timestamp()
     )
     buckets = [None] * 24
-    prev = None
-    for rec in sorted(records, key=lambda r: r["t"]):
-        value = 0.0 if prev is None else contribution(prev, rec)
-        prev = rec
-
+    for rec, rise in pct_rises(records):
         rec_hour = int(
             datetime.datetime.fromtimestamp(rec["t"])
             .replace(minute=0, second=0, microsecond=0)
@@ -697,53 +737,20 @@ def hourly_buckets(records, now, contribution):
         )
         bucket = 23 - int((current_hour - rec_hour) // 3600)
         if 0 <= bucket <= 23:
-            buckets[bucket] = (buckets[bucket] or 0.0) + value
+            buckets[bucket] = (buckets[bucket] or 0.0) + rise
     return buckets
 
 
-def hourly_tokens(records, now):
-    """24 buckets of TOKENS burned per clock hour -- what trend_spent sums, split by hour.
-
-    `burn` is a tok/min trailing estimate, so an interval is worth `burn` times its own
-    length and is credited to the sample ending it. An interval wider than GAP_MAX is a
-    daemon outage, not idle time, and contributes nothing.
-    """
-
-    def tokens(prev, rec):
-        dt = rec["t"] - prev["t"]
-        return rec["burn"] * dt / 60.0 if 0 < dt <= GAP_MAX else 0.0
-
-    return hourly_buckets(records, now, tokens)
-
-
-def hourly_pct(records, now):
-    """24 buckets of 5h-QUOTA PERCENT consumed per clock hour.
-
-    `pct` is cumulative inside the rolling 5h window, so only its per-sample RISE is
-    usage; a drop is a window roll or upstream jitter and is worth 0. Same reset, gap
-    and RISE_MAX spike semantics as heatmap_buckets -- this is the share-of-the-window
-    reading of the very same hours hourly_tokens measures in tokens.
-    """
-
-    def rise(prev, rec):
-        if not 0 < rec["t"] - prev["t"] <= GAP_MAX:
-            return 0.0
-        delta = rec["pct"] - prev["pct"]
-        return 0.0 if delta < 0 or delta > RISE_MAX else delta
-
-    return hourly_buckets(records, now, rise)
-
-
 def trend_sparkline(records, now):
-    """24-char block sparkline of hourly_tokens, scaled 0..peak.
+    """24-char block sparkline of hourly_pct, scaled 0..peak.
 
     The floor is 0, not the quietest hour: the y-axis label the TUI draws beside this
-    (trend_axis) reads "0 to <peak>", so a column's height must be proportional to its
-    tokens. Scaling from min..max instead would make the quietest sampled hour render
-    identically to a genuinely idle one and put the axis at a value nobody can see.
-    A sampled zero-token hour renders at floor; an unsampled hour stays a gap.
+    (trend_axis) reads "0 to <peak>", so a column's height must be proportional to the
+    quota that hour ate. Scaling from min..max instead would make the quietest sampled
+    hour render identically to a genuinely idle one and put the axis at a value nobody
+    can see. A sampled 0% hour renders at floor; an unsampled hour stays a gap.
     """
-    buckets = hourly_tokens(records, now)
+    buckets = hourly_pct(records, now)
     hi = max((value for value in buckets if value is not None), default=None)
     if hi is None:
         return SPARK_GAP * 24
@@ -763,33 +770,24 @@ def trend_sparkline(records, now):
 def trend_axis(records, now):
     """Y-axis tick labels for the graph, one per row, TOP ROW FIRST. None without data.
 
-    A label reads "60.0M/18%": tokens, and what that costs as a share of one full 5h
-    window. Tokens alone are unanchored -- 60M means nothing without knowing what a
-    window holds -- and a percentage alone loses the absolute number, so both ride
-    along. The share is read at the tallest bar's OWN bucket, never at a separately
-    argmaxed pct peak, or the top label would describe a different hour than the bar
-    it sits above.
+    A label is a bare "NN%" -- share of one full 5h window burned in that hour, the same
+    unit the bars and the heatmap carry. It used to read "60.0M/18%", but the token half
+    came from integrating `burn` over wall-clock time and was off by orders of magnitude
+    (see hourly_pct), so the two halves of every tick disagreed.
 
     The graph has len(SPARK_GLYPHS) rows and a bar reaching row r stands for r/(rows-1)
     of the peak, so every tick is computed from the row it sits on rather than by
     halving the number at the top -- the middle tick is then true wherever it is put.
     Rows without a tick are "", which the TUI renders as gutter padding. The floor is a
-    bare "0": zero tokens is zero percent, and saying so twice is clutter.
+    bare "0", no percent sign: zero is zero in any unit.
 
     Formatted here, not in the TUI, so the axis and the rows under it cannot drift apart
     in units or rounding (D-05: the daemon owns every rendered string).
     """
     records = [rec for rec in history_numeric(records) if history_keep(rec, now, 1)]
-    tokens = hourly_tokens(records, now)
-    peak = max(
-        (i for i, v in enumerate(tokens) if v is not None),
-        key=lambda i: tokens[i],
-        default=None,
-    )
-    if peak is None:
+    hi = max((v for v in hourly_pct(records, now) if v is not None), default=None)
+    if hi is None:
         return None
-    hi = tokens[peak]
-    share = hourly_pct(records, now)[peak]
     rows = len(SPARK_GLYPHS)
     top = rows - 1
     ticked = {top, rows // 2, 0}
@@ -797,10 +795,7 @@ def trend_axis(records, now):
     def label(row):
         if row not in ticked:
             return ""
-        if row == 0:
-            return "0"
-        text = fmt_tokens(round(hi * row / top))
-        return text if not share else "%s/%d%%" % (text, round(share * row / top))
+        return "0" if row == 0 else "%d%%" % round(hi * row / top)
 
     return [label(row) for row in reversed(range(rows))]
 
@@ -824,51 +819,34 @@ def spark_levels(sparkline):
     return [_SPARK_LEVEL.get(ch) for ch in sparkline]
 
 
-def trend_burn(records, start, end):
-    """Mean burn rate in tok/hr over [start, end), or None. Converts per-min -> per-hr."""
-    vals = [rec["burn"] for rec in records if start <= rec["t"] < end]
-    if not vals:
-        return None
-    return sum(vals) / len(vals) * 60
+def trend_consumed(records, start, end):
+    """Percent of a 5h window consumed over [start, end), or None when nothing is
+    measurable. 420.0 means four and a fifth full windows.
 
-
-def trend_spent(records, start, end):
-    """Tokens consumed over [start, end), or None when no interval is measurable.
-
-    Integrates `burn` (tok/min) over the gap between consecutive samples. It does NOT
-    read `tokens_used`: since the --api switch that field is None on every record, so
-    the cumulative-counter reading would silently report ~0 forever.
-
-    An interval wider than GAP_MAX is a data gap, not idle time, and is skipped --
-    the daemon was down, and the burn on either side says nothing about what happened
-    in between. So this is "tokens seen burned", a floor, never an extrapolation.
+    Sums pct_rises. Not tokens: `tokens_used` is None on every record since the --api
+    switch. A gap contributes 0, so this is a floor, never an extrapolation.
     """
-    prev = None
     total = None
-    for rec in sorted(records, key=lambda r: r["t"]):
-        if prev is not None and start <= rec["t"] < end:
-            dt = rec["t"] - prev
-            if 0 < dt <= GAP_MAX:
-                # burn is a trailing estimate: the interval ENDING at this sample
-                total = (total or 0.0) + rec["burn"] * dt / 60.0
-        prev = rec["t"]
+    for rec, rise in pct_rises(records)[1:]:
+        if start <= rec["t"] < end:
+            total = (total or 0.0) + rise
     return total
 
 
 def trend_peak_hour(records):
-    """(hour, tok/hr) for the busiest local hour-of-day, or None. Ties -> lowest hour."""
-    if not records:
-        return None
-    hours = {}
-    for rec in records:
-        h = datetime.datetime.fromtimestamp(rec["t"]).hour
-        hours.setdefault(h, []).append(rec["burn"])
-    best_hour, best_rate = None, None
-    for h in sorted(hours):
-        rate = sum(hours[h]) / len(hours[h])
-        if best_rate is None or rate > best_rate:
-            best_hour, best_rate = h, rate
-    return best_hour, best_rate * 60
+    """(hour, mean % of a window burned in it) for the busiest local hour-of-day, or
+    None. Ties -> lowest hour.
+
+    Read off heatmap_buckets rather than recomputed, so this row and the heatmap beside
+    it can never name different hours.
+    """
+    grid = heatmap_buckets(records)
+    best = None
+    for hour in range(24):
+        cells = [grid[dow][hour] for dow in range(7) if grid[dow][hour] is not None]
+        if cells and (best is None or sum(cells) / len(cells) > best[1]):
+            best = (hour, sum(cells) / len(cells))
+    return best
 
 
 def build_trend_rows(records, now):
@@ -881,30 +859,18 @@ def build_trend_rows(records, now):
         return None  # not enough data yet -> collecting state
     rows = [trend_sparkline([r for r in records if history_keep(r, now, 1)], now)]
     day_start, week_start = local_bounds(now)
-    today = trend_burn(records, day_start, now)
-    week = trend_burn(records, week_start, now)
+    today = trend_consumed(records, day_start, now)
+    week = trend_consumed(records, week_start, now)
     rows.append(
-        "today %s/hr | wk %s/hr"
+        "today %s win | wk %s win"
         % (
-            fmt_tokens(round(today)) if today is not None else "-",
-            fmt_tokens(round(week)) if week is not None else "-",
+            "%.1f" % (today / 100) if today is not None else "-",
+            "%.1f" % (week / 100) if week is not None else "-",
         )
     )
-    spent_today = trend_spent(records, day_start, now)
-    spent_week = trend_spent(records, week_start, now)
-    if spent_today is not None or spent_week is not None:
-        rows.append(
-            "spent today %s | wk %s"
-            % (
-                fmt_tokens(round(spent_today)) if spent_today is not None else "-",
-                fmt_tokens(round(spent_week)) if spent_week is not None else "-",
-            )
-        )
     peak = trend_peak_hour(records)
     if peak is not None:
-        rows.append(
-            "peak hour: %02d:00 (%s/hr)" % (peak[0], fmt_tokens(round(peak[1])))
-        )
+        rows.append("peak hour: %02d:00 (%d%%/hr)" % (peak[0], round(peak[1])))
     return rows
 
 
@@ -944,38 +910,16 @@ def history_numeric(records):
 def heatmap_buckets(records):
     """7x24 grid (dow Mon..Sun x hour 0..23) of mean quota % *consumed in that hour*.
 
-    `pct` is cumulative within the rolling 5h window, so averaging it directly measures
-    how late in a window a sample landed, not how hard that hour was worked. We sum the
-    per-sample RISE in `pct` instead, per calendar day, then average each (dow, hour)
-    across the days it actually saw data.
-
-    Only rises count; a drop contributes 0. A drop is either upstream jitter (`pct` is a
-    recomputed estimate and does wobble down mid-window) or a genuine 5h roll, and we do
-    not need to tell them apart: at POLL_INTERVAL granularity the first sample after a
-    roll is still near 0%, so there is no real consumption to recover from the drop
-    itself -- the rises that follow pick it up. Reading a drop as "the window rolled, so
-    this pct is all fresh usage" instead re-adds the whole cumulative value on every
-    jitter blip, and reports impossible >100%/hour buckets.
-
-    A rise is trusted only if it can honestly be attributed to this hour: it must not
-    span a data gap (the usage may belong to hours we never sampled) and must be
-    physically plausible (see RISE_MAX). An untrusted rise contributes 0 rather than a
-    clamped value -- clamping would still book usage that never happened.
+    `pct` is cumulative within the 5h window, so averaging it directly measures how late
+    in a window a sample landed, not how hard that hour was worked. We sum pct_rises per
+    calendar day instead, then average each (dow, hour) across the days it saw data.
 
     Empty buckets stay None so "no data" stays distinct from a genuine 0%.
     """
     grid = [[None] * 24 for _ in range(7)]
     acc = {}  # (dow, hour) -> {date: % consumed that hour, that day}
-    prev = None  # (t, pct) of the previous sample
-    for rec in sorted(records, key=lambda r: r["t"]):
+    for rec, rise in pct_rises(records):
         dt = datetime.datetime.fromtimestamp(rec["t"])
-        pct = rec["pct"]
-        rise = 0.0
-        if prev is not None and rec["t"] - prev[0] <= GAP_MAX:
-            rise = pct - prev[1]
-            if rise < 0 or rise > RISE_MAX:
-                rise = 0.0
-        prev = (rec["t"], pct)
         day = acc.setdefault((dt.weekday(), dt.hour), {})
         day[dt.date()] = day.get(dt.date(), 0.0) + rise
     for (dow, hour), days in acc.items():
@@ -1133,7 +1077,7 @@ def build_cum_trend(records, now):
     build_trend_rows and trend_axis already use.
 
     Scaled against the series' OWN observed peak, exactly like trend_sparkline scales
-    hourly_tokens -- NOT a fixed ceiling. This REVERSES 260727-krn's original "a
+    hourly_pct -- NOT a fixed ceiling. This REVERSES 260727-krn's original "a
     %-of-window bar has to mean the same thing every time it is drawn, comparable
     window over window" rationale: pinned to a fixed 100, a realistic ~20-30% usage
     level only ever lights the bottom 2-3 of 8 rows, which reads as a flat plateau, not
@@ -1190,7 +1134,7 @@ def cum_trend_axis(records, now):
 
     # ponytail: recomputes the windowed/despiked/bucketed series independently of
     # build_cum_trend rather than sharing state -- the same duplication trend_axis
-    # already accepts for hourly_tokens instead of sharing state with trend_sparkline.
+    # already accepts for hourly_pct instead of sharing state with trend_sparkline.
     # Upgrade path is a shared helper only if a third consumer ever needs this exact
     # shape.
     """
