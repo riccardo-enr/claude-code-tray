@@ -42,9 +42,9 @@ HEADLESS = os.environ.get("CLAUDE_TRAY_HEADLESS", "") not in ("", "0")
 
 # Seconds between polls (the CLI itself takes ~5-10s). Override: CLAUDE_TRAY_POLL_INTERVAL.
 try:
-    POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "15"))
+    POLL_INTERVAL = int(os.environ.get("CLAUDE_TRAY_POLL_INTERVAL", "120"))
 except ValueError:
-    POLL_INTERVAL = 15  # bad env -> default
+    POLL_INTERVAL = 120  # bad env -> default
 
 # lookup_app(appId + ".desktop") and drops the notification when none is installed.
 NOTIF_BUS = "org.freedesktop.Notifications"
@@ -854,7 +854,7 @@ def main():
         mon.rebuild_menu()
         return True
 
-    GLib.timeout_add_seconds(POLL_INTERVAL, tick)
+    GLib.timeout_add_seconds(15, tick)
 
     Gtk.main()
 

@@ -10,7 +10,7 @@ state pulls the eye (the same idiom the user's own git_status.sh segment uses).
 Data comes from the tray daemon that is already running, so this adds no polling and no
 second source of truth. The live socket is tried first; when it is not there -- daemon
 stopped, or never started -- the history file the daemon already maintains is read instead,
-which is at most one poll interval (15s) stale. This never calls core.fetch_usage(): that
+which is at most one poll interval (120s) stale. This never calls core.fetch_usage(): that
 shells out to the CLI for 5-10 seconds and belongs to the daemon alone. A status bar that
 blocked that long would simply stop updating.
 
