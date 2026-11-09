@@ -669,6 +669,26 @@ def _handle_conn(mon, conn):
                 continue
             if "query" in msg:
                 if msg.get("query") == "snapshot":
+                    if msg.get("quota_only") is True:
+                        live = mon.live_usage
+                        now = time.time()
+                        usage = {}
+                        for pct, reset, pct_field, reset_field in (
+                            ("pct", "reset", "used_percentage", "resets_at_epoch"),
+                            ("pct7", "reset7", "seven_day_pct", "seven_day_reset"),
+                        ):
+                            pair = core.live_pair(live, pct, reset, now)
+                            if pair is not None:
+                                usage[pct_field], usage[reset_field] = pair
+                        snapshot = {"usage": mon.usage}
+                        if usage:
+                            snapshot = {
+                                "usage": usage,
+                                "updated_at": live["received_at"],
+                                "quota_source": "Claude Code status line",
+                            }
+                        conn.sendall((json.dumps(snapshot) + "\n").encode("utf-8"))
+                        continue
                     with mon.sessions_lock:
                         sessions = core.build_session_snapshot(list(mon.sessions.values()))
                     # mon.usage/mon.trends: single-reference rebinds, same no-lock
@@ -686,7 +706,8 @@ def _handle_conn(mon, conn):
                 # Only the four numeric keys are ever read; copying just those bounds
                 # whatever a hook sends. core.merged_usage does the validation.
                 mon.live_usage = {
-                    k: msg.get(k) for k in ("pct", "reset", "pct7", "reset7")
+                    **{k: msg.get(k) for k in ("pct", "reset", "pct7", "reset7")},
+                    "received_at": time.time(),
                 }
                 continue
             if msg.get("action") == "focus":
