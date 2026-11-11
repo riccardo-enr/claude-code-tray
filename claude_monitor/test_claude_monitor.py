@@ -1516,4 +1516,31 @@ def demo():
     assert _cli == _cli_before and _live == _live_before
     assert merged_usage(_cli, _live, 1000) is not merged_usage(_cli, _live, 1000)
 
+    from unittest.mock import patch
+    from types import SimpleNamespace
+
+    quota_data = {
+        "captured_at_epoch": 1000, "stale": False,
+        "five_hour": {"used_percentage": 13, "resets_at_epoch": 2000},
+        "seven_day": {"used_percentage": 74, "resets_at_epoch": 9000},
+    }
+    with patch.object(core.subprocess, "run", return_value=SimpleNamespace(stdout=json.dumps(quota_data))) as run:
+        api = core.fetch_quota()
+        assert run.call_args.args[0][1:3] == ["-I", "-c"]
+    snapshot = core.quota_snapshot(None, None, api, 1100)
+    assert snapshot["usage"]["used_percentage"] == 13
+    assert snapshot["usage"]["seven_day_pct"] == 74
+    assert snapshot["usage"]["five_hour_updated_at"] == 1000
+    newer = {"pct": 17, "reset": 2000, "received_at": 1050}
+    mixed = core.quota_snapshot(None, newer, api, 1100)["usage"]
+    assert mixed["used_percentage"] == 17
+    assert mixed["seven_day_pct"] == 74
+    assert mixed["five_hour_updated_at"] == 1050
+    assert mixed["seven_day_updated_at"] == 1000
+    assert core.quota_snapshot(None, newer, api, 10000)["usage"] is None
+    assert core.quota_snapshot(_cli, None, None, 1100)["usage"] == _cli
+    quota_data["stale"] = True
+    with patch.object(core.subprocess, "run", return_value=SimpleNamespace(stdout=json.dumps(quota_data))):
+        assert core.fetch_quota() is None
+
     print("ok")

@@ -75,6 +75,7 @@ class Monitor:
         # Latest statusLine rate_limits sample, or None. Single rebind from the conn
         # thread, read once per poll -- same lock-free posture as self.usage.
         self.live_usage = None
+        self.api_quota = None
         self.trends = None  # cached trend row strings, or None (collecting state)
         self.trend_axis = None  # cached graph y-axis tick labels (top row first), or None
         self.heatmap = None  # cached 7x24 usage-rise grid, or None until history is read
@@ -670,23 +671,9 @@ def _handle_conn(mon, conn):
             if "query" in msg:
                 if msg.get("query") == "snapshot":
                     if msg.get("quota_only") is True:
-                        live = mon.live_usage
-                        now = time.time()
-                        usage = {}
-                        for pct, reset, pct_field, reset_field in (
-                            ("pct", "reset", "used_percentage", "resets_at_epoch"),
-                            ("pct7", "reset7", "seven_day_pct", "seven_day_reset"),
-                        ):
-                            pair = core.live_pair(live, pct, reset, now)
-                            if pair is not None:
-                                usage[pct_field], usage[reset_field] = pair
-                        snapshot = {"usage": mon.usage}
-                        if usage:
-                            snapshot = {
-                                "usage": usage,
-                                "updated_at": live["received_at"],
-                                "quota_source": "Claude Code status line",
-                            }
+                        snapshot = core.quota_snapshot(
+                            mon.usage, mon.live_usage, mon.api_quota, time.time()
+                        )
                         conn.sendall((json.dumps(snapshot) + "\n").encode("utf-8"))
                         continue
                     with mon.sessions_lock:
@@ -756,6 +743,15 @@ def serve(mon):
     while True:
         conn, _ = srv.accept()
         threading.Thread(target=_handle_conn, args=(mon, conn), daemon=True).start()
+
+
+def quota_poll_loop(mon):
+    while True:
+        try:
+            mon.api_quota = core.fetch_quota()
+        except Exception:
+            traceback.print_exc()
+        time.sleep(POLL_INTERVAL)
 
 
 def poll_loop(mon):
@@ -868,6 +864,7 @@ def main():
     mon = Monitor()
     threading.Thread(target=serve, args=(mon,), daemon=True).start()
     threading.Thread(target=poll_loop, args=(mon,), daemon=True).start()
+    threading.Thread(target=quota_poll_loop, args=(mon,), daemon=True).start()
     threading.Thread(target=watch_focus, args=(mon,), daemon=True).start()
 
     # Keeps the countdown live between polls without re-shelling the CLI.

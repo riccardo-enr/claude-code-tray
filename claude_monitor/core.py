@@ -478,6 +478,62 @@ def merged_usage(usage, live, now):
     return out
 
 
+def fetch_quota():
+    interpreter = os.path.join(os.path.dirname(os.path.realpath(USAGE_CLI)), "python")
+    code = (
+        "import json; from claude_monitor.output.api_usage import read_api_limits; "
+        "print(json.dumps(read_api_limits(enabled=True)))"
+    )
+    try:
+        result = subprocess.run(
+            [interpreter, "-I", "-c", code], capture_output=True,
+            text=True, timeout=12, cwd=tempfile.gettempdir(),
+        )
+        data = json.loads(result.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    if not isinstance(data, dict) or data.get("stale"):
+        return None
+    captured = data.get("captured_at_epoch")
+    if not _is_num(captured) or not math.isfinite(captured):
+        return None
+    quota = {"received_at": captured}
+    for window, pct, reset in (("five_hour", "pct", "reset"), ("seven_day", "pct7", "reset7")):
+        values = data.get(window)
+        if isinstance(values, dict):
+            quota[pct] = values.get("used_percentage")
+            quota[reset] = values.get("resets_at_epoch")
+    return quota
+
+
+def quota_snapshot(usage, live, api, now):
+    readings = [
+        (live, "Claude Code status line"),
+        (api, "Claude quota API"),
+    ]
+    readings = [(sample, source) for sample, source in readings
+                if isinstance(sample, dict) and _is_num(sample.get("received_at"))
+                and math.isfinite(sample["received_at"])]
+    readings.sort(key=lambda row: row[0]["received_at"], reverse=True)
+    result = {}
+    sources = []
+    for pct, reset, pct_field, reset_field, updated in (
+        ("pct", "reset", "used_percentage", "resets_at_epoch", "five_hour_updated_at"),
+        ("pct7", "reset7", "seven_day_pct", "seven_day_reset", "seven_day_updated_at"),
+    ):
+        for sample, source in readings:
+            pair = live_pair(sample, pct, reset, now)
+            if pair is not None:
+                result[pct_field], result[reset_field] = pair
+                result[updated] = sample["received_at"]
+                if source not in sources:
+                    sources.append(source)
+                break
+    if result:
+        return {"usage": result, "quota_source": " + ".join(sources)}
+    return {"usage": usage}
+
+
 def fetch_usage():
     """Shell out to the CLI (fixed arg list, never shell=True) and parse stdout.
     None on any subprocess/OS error, so the daemon poll thread can never die.
